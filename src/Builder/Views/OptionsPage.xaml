@@ -66,8 +66,8 @@
                                         <ComboBoxItem x:Uid="OptionQuietOn" />
                                         <ComboBoxItem x:Uid="OptionQuietOff" />
                                     </ComboBox>
-                                    <TextBox x:Uid="OptionLabelBox" Grid.Row="1" Grid.ColumnSpan="2" Text="{x:Bind LabelText, Mode=TwoWay}" AcceptsReturn="True"
-                                             MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    <TextBox x:Uid="OptionLabelBox" Grid.Row="1" Grid.ColumnSpan="2" Text="{x:Bind LabelText, Mode=TwoWay}"
+                                             MinHeight="64" Style="{StaticResource LinesBoxStyle}" />
                                     <CheckBox x:Uid="OptionDefaultCheck" Grid.Row="2" IsChecked="{x:Bind Default, Mode=TwoWay}" />
                                     <CheckBox x:Uid="OptionRequiredCheck" Grid.Row="2" Grid.Column="1" IsChecked="{x:Bind Required, Mode=TwoWay}" />
                                 </Grid>
@@ -77,8 +77,8 @@
                                     <Grid ColumnSpacing="24" Visibility="{x:Bind HasStartup, Mode=OneWay}" Margin="28,0,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                         <TextBox x:Uid="OptionStartupNameBox" Text="{x:Bind StartupName, Mode=TwoWay}" IsSpellCheckEnabled="False" VerticalAlignment="Top" />
-                                        <TextBox x:Uid="OptionStartupArgsBox" Grid.Column="1" Text="{x:Bind StartupArgumentsText, Mode=TwoWay}" AcceptsReturn="True"
-                                                 MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                        <TextBox x:Uid="OptionStartupArgsBox" Grid.Column="1" Text="{x:Bind StartupArgumentsText, Mode=TwoWay}"
+                                                 MinHeight="64" Style="{StaticResource LinesBoxStyle}" />
                                     </Grid>
                                 </StackPanel>
 
@@ -151,10 +151,10 @@
                                         <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <local:ProgramBox x:Uid="ActionRunCombo" Grid.ColumnSpan="2" Choices="{x:Bind ExecutableChoices}" Text="{x:Bind Run, Mode=TwoWay}" />
-                                    <TextBox x:Uid="ActionArgumentsBox" Grid.Row="1" Text="{x:Bind ArgumentsText, Mode=TwoWay}" AcceptsReturn="True"
-                                             MinHeight="80" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                                    <TextBox x:Uid="ActionNameBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind NameText, Mode=TwoWay}" AcceptsReturn="True"
-                                             MinHeight="80" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    <TextBox x:Uid="ActionArgumentsBox" Grid.Row="1" Text="{x:Bind ArgumentsText, Mode=TwoWay}"
+                                             MinHeight="80" Style="{StaticResource LinesBoxStyle}" />
+                                    <TextBox x:Uid="ActionNameBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind NameText, Mode=TwoWay}"
+                                             MinHeight="80" Style="{StaticResource LinesBoxStyle}" />
                                     <ComboBox x:Uid="ActionWhenCombo" Grid.Row="2" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind WhenIndex, Mode=TwoWay}">
                                         <ComboBoxItem x:Uid="ActionWhenAfterInstall" />
                                         <ComboBoxItem x:Uid="ActionWhenBeforeUninstall" />
@@ -197,8 +197,8 @@
 
                                 <StackPanel Spacing="8">
                                     <CheckBox x:Uid="ActionFallbackArgsCheck" IsChecked="{x:Bind HasFallbackArguments, Mode=TwoWay}" />
-                                    <TextBox x:Uid="ActionFallbackArgsBox" Text="{x:Bind FallbackArgumentsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64"
-                                             FontFamily="Consolas" IsSpellCheckEnabled="False" Visibility="{x:Bind HasFallbackArguments, Mode=OneWay}" Margin="28,0,0,0" />
+                                    <TextBox x:Uid="ActionFallbackArgsBox" Text="{x:Bind FallbackArgumentsText, Mode=TwoWay}" MinHeight="64"
+                                             Style="{StaticResource LinesBoxStyle}" Visibility="{x:Bind HasFallbackArguments, Mode=OneWay}" Margin="28,0,0,0" />
                                 </StackPanel>
 
                                 <StackPanel Spacing="8">
@@ -206,8 +206,8 @@
                                     <Grid ColumnSpacing="24" Visibility="{x:Bind HasFallbackRunValue, Mode=OneWay}" Margin="28,0,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                         <TextBox x:Uid="ActionFallbackRunNameBox" Text="{x:Bind FallbackRunValueName, Mode=TwoWay}" IsSpellCheckEnabled="False" VerticalAlignment="Top" />
-                                        <TextBox x:Uid="ActionFallbackRunArgsBox" Grid.Column="1" Text="{x:Bind FallbackRunValueArgumentsText, Mode=TwoWay}" AcceptsReturn="True"
-                                                 MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                        <TextBox x:Uid="ActionFallbackRunArgsBox" Grid.Column="1" Text="{x:Bind FallbackRunValueArgumentsText, Mode=TwoWay}"
+                                                 MinHeight="64" Style="{StaticResource LinesBoxStyle}" />
                                     </Grid>
                                 </StackPanel>
 

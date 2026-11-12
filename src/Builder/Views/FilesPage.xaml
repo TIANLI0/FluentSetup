@@ -36,9 +36,9 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBox x:Uid="FilesIncludeBox" Text="{x:Bind VM.IncludeText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                    <TextBox x:Uid="FilesExcludeBox" Grid.Column="1" Text="{x:Bind VM.ExcludeText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                    <TextBox x:Uid="FilesEmptyDirsBox" Grid.Row="1" Text="{x:Bind VM.EmptyDirectoriesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                    <TextBox x:Uid="FilesIncludeBox" Text="{x:Bind VM.IncludeText, Mode=TwoWay}" MinHeight="96" Style="{StaticResource LinesBoxStyle}" />
+                    <TextBox x:Uid="FilesExcludeBox" Grid.Column="1" Text="{x:Bind VM.ExcludeText, Mode=TwoWay}" MinHeight="96" Style="{StaticResource LinesBoxStyle}" />
+                    <TextBox x:Uid="FilesEmptyDirsBox" Grid.Row="1" Text="{x:Bind VM.EmptyDirectoriesText, Mode=TwoWay}" MinHeight="64" Style="{StaticResource LinesBoxStyle}" />
                     <TextBlock x:Uid="FilesPatternHelp" Grid.Row="1" Grid.Column="1" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Top" Margin="0,28,0,0" />
                     <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Spacing="8">
                         <Grid>
@@ -117,8 +117,8 @@
                                         <TextBox x:Uid="VariantSourceBox" Text="{x:Bind Source, Mode=TwoWay}" IsSpellCheckEnabled="False" />
                                         <Button x:Uid="FilesBrowse" Grid.Column="1" Command="{x:Bind BrowseCommand}" VerticalAlignment="Bottom" />
                                     </Grid>
-                                    <TextBox x:Uid="VariantLabelBox" Grid.Row="2" Text="{x:Bind LabelText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                                    <TextBox x:Uid="VariantDescriptionBox" Grid.Row="2" Grid.Column="1" Text="{x:Bind DescriptionText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    <TextBox x:Uid="VariantLabelBox" Grid.Row="2" Text="{x:Bind LabelText, Mode=TwoWay}" MinHeight="64" Style="{StaticResource LinesBoxStyle}" />
+                                    <TextBox x:Uid="VariantDescriptionBox" Grid.Row="2" Grid.Column="1" Text="{x:Bind DescriptionText, Mode=TwoWay}" MinHeight="64" Style="{StaticResource LinesBoxStyle}" />
                                 </Grid>
                                 <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
                             </StackPanel>

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Screenshots of every Builder page (all cards expanded, scrolled screen by screen) for a project that uses every
   setting, in the given themes. Drives the app through UI Automation only: no mouse or keyboard input.

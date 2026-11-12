@@ -26,6 +26,19 @@
             <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
                 <Setter Property="Margin" Value="1,28,0,8" />
             </Style>
+            <!-- One entry per line (globs, names, arguments): monospace text under a header in the normal UI font. -->
+            <Style x:Key="LinesBoxStyle" TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
+                <Setter Property="AcceptsReturn" Value="True" />
+                <Setter Property="FontFamily" Value="Consolas" />
+                <Setter Property="IsSpellCheckEnabled" Value="False" />
+                <Setter Property="HeaderTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontFamily="{ThemeResource ContentControlThemeFontFamily}" TextWrapping="Wrap" />
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
             <Style x:Key="RowCardStyle" TargetType="Border">
                 <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
                 <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />

@@ -112,11 +112,11 @@
                     <Grid ColumnSpacing="24">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                         <StackPanel Spacing="4">
-                            <TextBox x:Uid="InstallPathBox" Text="{x:Bind VM.AddToPathText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="InstallPathBox" Text="{x:Bind VM.AddToPathText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
                             <TextBlock x:Uid="InstallPathHelp" Style="{StaticResource RowDescriptionStyle}" />
                         </StackPanel>
                         <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBox x:Uid="InstallNgenBox" Text="{x:Bind VM.NgenText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="InstallNgenBox" Text="{x:Bind VM.NgenText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
                             <TextBlock x:Uid="InstallNgenHelp" Style="{StaticResource RowDescriptionStyle}" />
                         </StackPanel>
                     </Grid>

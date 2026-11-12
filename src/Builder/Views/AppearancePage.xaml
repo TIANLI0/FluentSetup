@@ -118,10 +118,10 @@
                 </Border>
                 <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
                     <StackPanel Spacing="16">
-                        <TextBox x:Uid="AppearanceLicensesBox" Text="{x:Bind VM.LicensesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="AppearanceLicensesBox" Text="{x:Bind VM.LicensesText, Mode=TwoWay}" MinHeight="64" Style="{StaticResource LinesBoxStyle}" />
                         <TextBlock Text="{x:Bind VM.Errors.UiLicenses, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UiLicenses), Mode=OneWay}" />
                         <StackPanel Spacing="4">
-                            <TextBox x:Uid="AppearanceStringsBox" Text="{x:Bind VM.StringsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="AppearanceStringsBox" Text="{x:Bind VM.StringsText, Mode=TwoWay}" MinHeight="96" Style="{StaticResource LinesBoxStyle}" />
                             <TextBlock x:Uid="AppearanceStringsHelp" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />
                         </StackPanel>
                         <TextBlock Text="{x:Bind VM.Errors.UiStrings, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UiStrings), Mode=OneWay}" />

@@ -33,11 +33,11 @@
                     <Grid ColumnSpacing="24" RowSpacing="16">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                        <TextBox x:Uid="UninstallDataBox" Text="{x:Bind VM.UninstallDataText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="UninstallRegistryBox" Grid.Column="1" Text="{x:Bind VM.UninstallRegistryKeysText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="UninstallTasksBox" Grid.Row="1" Text="{x:Bind VM.UninstallScheduledTasksText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="UninstallRunValuesBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind VM.UninstallRunValuesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="UninstallShortcutsBox" Grid.Row="2" Text="{x:Bind VM.UninstallShortcutsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="UninstallDataBox" Text="{x:Bind VM.UninstallDataText, Mode=TwoWay}" MinHeight="96" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="UninstallRegistryBox" Grid.Column="1" Text="{x:Bind VM.UninstallRegistryKeysText, Mode=TwoWay}" MinHeight="96" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="UninstallTasksBox" Grid.Row="1" Text="{x:Bind VM.UninstallScheduledTasksText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="UninstallRunValuesBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind VM.UninstallRunValuesText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="UninstallShortcutsBox" Grid.Row="2" Text="{x:Bind VM.UninstallShortcutsText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
                         <TextBlock x:Uid="UninstallPathsHelp" Grid.Row="2" Grid.Column="1" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Top" Margin="0,28,0,0" IsTextSelectionEnabled="True" />
                     </Grid>
                     <TextBlock Text="{x:Bind VM.Errors.UninstallCleanup, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UninstallCleanup), Mode=OneWay}" />
@@ -50,7 +50,7 @@
                 <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
                     <StackPanel Spacing="16">
                         <TextBlock x:Uid="UninstallUserDataDescription" Style="{StaticResource RowDescriptionStyle}" />
-                        <TextBox x:Uid="UninstallUserDataBox" Text="{x:Bind VM.UserDataPathsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="UninstallUserDataBox" Text="{x:Bind VM.UserDataPathsText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
                         <TextBlock Text="{x:Bind VM.Errors.UninstallUserData, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UninstallUserData), Mode=OneWay}" />
                     </StackPanel>
                 </Border>
@@ -75,11 +75,11 @@
                     <Grid ColumnSpacing="24" RowSpacing="16">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                        <TextBox x:Uid="ElevatedIfExistsBox" Text="{x:Bind VM.ElevatedIfExistsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="ElevatedDataBox" Grid.Column="1" Text="{x:Bind VM.ElevatedDataText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="ElevatedTasksBox" Grid.Row="1" Text="{x:Bind VM.ElevatedScheduledTasksText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="ElevatedTraceBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind VM.ElevatedTraceSessionsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="ElevatedRegistryBox" Grid.Row="2" Text="{x:Bind VM.ElevatedRegistryKeysText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="ElevatedIfExistsBox" Text="{x:Bind VM.ElevatedIfExistsText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="ElevatedDataBox" Grid.Column="1" Text="{x:Bind VM.ElevatedDataText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="ElevatedTasksBox" Grid.Row="1" Text="{x:Bind VM.ElevatedScheduledTasksText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="ElevatedTraceBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind VM.ElevatedTraceSessionsText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="ElevatedRegistryBox" Grid.Row="2" Text="{x:Bind VM.ElevatedRegistryKeysText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
                     </Grid>
                     <TextBlock Text="{x:Bind VM.Errors.UninstallElevated, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UninstallElevated), Mode=OneWay}" />
 

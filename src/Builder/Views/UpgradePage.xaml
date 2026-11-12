@@ -52,7 +52,7 @@
                 <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
                     <StackPanel Spacing="12">
                         <TextBlock x:Uid="UpgradeLegacyKeysDescription" Style="{StaticResource RowDescriptionStyle}" />
-                        <TextBox x:Uid="UpgradeLegacyKeysBox" Text="{x:Bind VM.LegacyUninstallKeysText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="UpgradeLegacyKeysBox" Text="{x:Bind VM.LegacyUninstallKeysText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
                         <TextBlock Text="{x:Bind VM.Errors.InstallLegacy, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallLegacy), Mode=OneWay}" />
                     </StackPanel>
                 </Border>
@@ -62,17 +62,17 @@
             <TextBlock x:Uid="UpgradeRunningSection" Style="{StaticResource SectionHeaderStyle}" />
             <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
                 <StackPanel Spacing="16">
-                    <TextBox x:Uid="UpgradeCloseProcessesBox" Text="{x:Bind VM.CloseProcessesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                    <TextBox x:Uid="UpgradeCloseProcessesBox" Text="{x:Bind VM.CloseProcessesText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
                     <StackPanel Spacing="8">
                         <ToggleSwitch x:Uid="UpgradeCloseCommandToggle" IsOn="{x:Bind VM.HasCloseCommand, Mode=TwoWay}" />
                         <Grid ColumnSpacing="24" Visibility="{x:Bind VM.HasCloseCommand, Mode=OneWay}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                             <local:ProgramBox x:Uid="UpgradeCloseRunCombo" VerticalAlignment="Top" Choices="{x:Bind VM.ExecutableChoices}" Text="{x:Bind VM.CloseCommandRun, Mode=TwoWay}" />
-                            <TextBox x:Uid="UpgradeCloseArgsBox" Grid.Column="1" Text="{x:Bind VM.CloseCommandArgumentsText, Mode=TwoWay}" AcceptsReturn="True"
-                                     MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="UpgradeCloseArgsBox" Grid.Column="1" Text="{x:Bind VM.CloseCommandArgumentsText, Mode=TwoWay}"
+                                     MinHeight="64" Style="{StaticResource LinesBoxStyle}" />
                         </Grid>
                     </StackPanel>
-                    <TextBox x:Uid="UpgradeRelaunchBox" Text="{x:Bind VM.RelaunchArgumentsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                    <TextBox x:Uid="UpgradeRelaunchBox" Text="{x:Bind VM.RelaunchArgumentsText, Mode=TwoWay}" MinHeight="64" Style="{StaticResource LinesBoxStyle}" />
                     <TextBlock Text="{x:Bind VM.Errors.InstallRunning, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallRunning), Mode=OneWay}" />
                 </StackPanel>
             </Border>
@@ -85,11 +85,11 @@
                     <Grid ColumnSpacing="24" RowSpacing="16">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                        <TextBox x:Uid="CleanupTasksBox" Text="{x:Bind VM.CleanupScheduledTasksText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="CleanupRunValuesBox" Grid.Column="1" Text="{x:Bind VM.CleanupRunValuesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="CleanupShortcutsBox" Grid.Row="1" Text="{x:Bind VM.CleanupShortcutsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="CleanupUninstallKeysBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind VM.CleanupUninstallKeysText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="CleanupFilesBox" Grid.Row="2" Text="{x:Bind VM.CleanupFilesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="CleanupTasksBox" Text="{x:Bind VM.CleanupScheduledTasksText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="CleanupRunValuesBox" Grid.Column="1" Text="{x:Bind VM.CleanupRunValuesText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="CleanupShortcutsBox" Grid.Row="1" Text="{x:Bind VM.CleanupShortcutsText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="CleanupUninstallKeysBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind VM.CleanupUninstallKeysText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        <TextBox x:Uid="CleanupFilesBox" Grid.Row="2" Text="{x:Bind VM.CleanupFilesText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
                     </Grid>
                     <TextBlock Text="{x:Bind VM.Errors.InstallCleanup, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallCleanup), Mode=OneWay}" />
                 </StackPanel>
@@ -99,7 +99,7 @@
             <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
                 <StackPanel Spacing="12">
                     <TextBlock x:Uid="UpgradePreserveDescription" Style="{StaticResource RowDescriptionStyle}" />
-                    <TextBox x:Uid="UpgradePreserveBox" Text="{x:Bind VM.PreserveText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                    <TextBox x:Uid="UpgradePreserveBox" Text="{x:Bind VM.PreserveText, Mode=TwoWay}" MinHeight="96" Style="{StaticResource LinesBoxStyle}" />
                 </StackPanel>
             </Border>
         </StackPanel>

@@ -11,8 +11,8 @@
         <Grid ColumnSpacing="24" RowSpacing="16">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
             <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-            <TextBox x:Uid="SourceArgumentsBox" Grid.RowSpan="3" Text="{x:Bind Source.ArgumentsText, Mode=TwoWay}" AcceptsReturn="True"
-                     MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+            <TextBox x:Uid="SourceArgumentsBox" Grid.RowSpan="3" Text="{x:Bind Source.ArgumentsText, Mode=TwoWay}"
+                     MinHeight="96" Style="{StaticResource LinesBoxStyle}" />
             <ComboBox x:Uid="SourceOnFailureCombo" Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind Source.OnFailureIndex, Mode=TwoWay}">
                 <ComboBoxItem x:Uid="SourceOnFailureWarn" />
                 <ComboBoxItem x:Uid="SourceOnFailureFail" />
