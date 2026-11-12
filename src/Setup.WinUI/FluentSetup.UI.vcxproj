@@ -1,0 +1,210 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FluentSetup.UI.exe - the WinUI 3 installer front end.
+  C++/WinRT, unpackaged, framework-dependent on the Windows App Runtime.
+  The runtime is bound explicitly in main.cpp (MddBootstrapInitialize2) so that a missing or incompatible runtime is
+  reported to the bootstrapper through the handshake pipe instead of crashing before wWinMain.
+-->
+<Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PkgDir>$(MSBuildThisFileDirectory)..\..\packages\</PkgDir>
+    <FsCppWinRTPkg>$(PkgDir)Microsoft.Windows.CppWinRT.3.0.260818.1\</FsCppWinRTPkg>
+    <SdkBuildToolsPackage>$(PkgDir)Microsoft.Windows.SDK.BuildTools.10.0.26100.4654\</SdkBuildToolsPackage>
+    <SdkBuildToolsMsixPackage>$(PkgDir)Microsoft.Windows.SDK.BuildTools.MSIX.1.7.251221100\</SdkBuildToolsMsixPackage>
+    <WasBasePackage>$(PkgDir)Microsoft.WindowsAppSDK.Base.2.0.4\</WasBasePackage>
+    <WasFoundationPackage>$(PkgDir)Microsoft.WindowsAppSDK.Foundation.2.3.12\</WasFoundationPackage>
+    <WasIxpPackage>$(PkgDir)Microsoft.WindowsAppSDK.InteractiveExperiences.2.1.9\</WasIxpPackage>
+    <WasWinUIPackage>$(PkgDir)Microsoft.WindowsAppSDK.WinUI.2.3.9\</WasWinUIPackage>
+    <WasRuntimePackage>$(PkgDir)Microsoft.WindowsAppSDK.Runtime.2.5.1\</WasRuntimePackage>
+    <WebView2Package>$(PkgDir)Microsoft.Web.WebView2.1.0.3719.77\</WebView2Package>
+  </PropertyGroup>
+
+  <Import Project="$(FsCppWinRTPkg)build\native\Microsoft.Windows.CppWinRT.props" />
+  <Import Project="$(SdkBuildToolsPackage)build\Microsoft.Windows.SDK.BuildTools.props" />
+  <Import Project="$(SdkBuildToolsMsixPackage)build\Microsoft.Windows.SDK.BuildTools.MSIX.props" Condition="Exists('$(SdkBuildToolsMsixPackage)build\Microsoft.Windows.SDK.BuildTools.MSIX.props')" />
+  <Import Project="$(WasBasePackage)build\native\Microsoft.WindowsAppSDK.Base.props" />
+  <Import Project="$(WasIxpPackage)build\native\Microsoft.WindowsAppSDK.InteractiveExperiences.props" />
+  <Import Project="$(WasFoundationPackage)build\native\Microsoft.WindowsAppSDK.Foundation.props" />
+  <Import Project="$(WasWinUIPackage)build\native\Microsoft.WindowsAppSDK.WinUI.props" />
+  <Import Project="$(WasRuntimePackage)build\native\Microsoft.WindowsAppSDK.Runtime.props" />
+
+  <PropertyGroup Label="Globals">
+    <CppWinRTOptimized>true</CppWinRTOptimized>
+    <CppWinRTRootNamespaceAutoMerge>true</CppWinRTRootNamespaceAutoMerge>
+    <MinimalCoreWin>true</MinimalCoreWin>
+    <ProjectGuid>{6C0B7E1A-2F8E-4C51-9B3A-4F1D2E6A7B10}</ProjectGuid>
+    <ProjectName>FluentSetup.UI</ProjectName>
+    <RootNamespace>FluentSetupUI</RootNamespace>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <MinimumVisualStudioVersion>17.0</MinimumVisualStudioVersion>
+    <AppContainerApplication>false</AppContainerApplication>
+    <AppxPackage>false</AppxPackage>
+    <ApplicationType>Windows Store</ApplicationType>
+    <ApplicationTypeRevision>10.0</ApplicationTypeRevision>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformMinVersion>10.0.17763.0</WindowsTargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+    <!-- Runtime binding is done by hand in main.cpp; none of the auto-initializers may run before wWinMain. -->
+    <WindowsAppSdkBootstrapInitialize>false</WindowsAppSdkBootstrapInitialize>
+    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
+    <WindowsAppSdkUndockedRegFreeWinRTInitialize>false</WindowsAppSdkUndockedRegFreeWinRTInitialize>
+    <WindowsAppSdkAutoInitialize>false</WindowsAppSdkAutoInitialize>
+    <WindowsAppSDKVerifyKitVersion>false</WindowsAppSDKVerifyKitVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64"><Configuration>Debug</Configuration><Platform>ARM64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64"><Configuration>Release</Configuration><Platform>ARM64</Platform></ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <DesktopCompatible>true</DesktopCompatible>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'!='Debug'">false</UseDebugLibraries>
+    <WholeProgramOptimization Condition="'$(Configuration)'!='Debug'">true</WholeProgramOptimization>
+    <!-- Static VC runtime: the UI must not require the VC++ redistributable or the VCLibs framework package. -->
+    <UseCrtSDKReference>false</UseCrtSDKReference>
+    <UseCrtSDKReferenceStaticWarning>false</UseCrtSDKReferenceStaticWarning>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <PropertyGroup>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))\</RepoRoot>
+    <OutDir>$(RepoRoot)out\bin\$(Platform)\$(Configuration)\ui\</OutDir>
+    <IntDir>$(RepoRoot)out\obj\$(Platform)\$(Configuration)\$(MSBuildProjectName)\</IntDir>
+    <TargetName>FluentSetup.UI</TargetName>
+    <LinkIncremental Condition="'$(Configuration)'!='Debug'">false</LinkIncremental>
+    <GeneratedFilesDir>$(IntDir)Generated Files\</GeneratedFilesDir>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>$(IntDir)pch.pch</PrecompiledHeaderOutputFile>
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <SDLCheck>true</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj /utf-8</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(RepoRoot)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>DISABLE_XAML_GENERATED_MAIN;WIN32_LEAN_AND_MEAN;NOMINMAX;_WIN32_WINNT=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary Condition="'$(Configuration)'!='Debug'">MultiThreaded</RuntimeLibrary>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+    </ClCompile>
+    <ClCompile Condition="'$(Configuration)'=='Debug'">
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Condition="'$(Configuration)'!='Debug'">
+      <Optimization>MinSpace</Optimization>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <StringPooling>true</StringPooling>
+      <AdditionalOptions>%(AdditionalOptions) /Gw</AdditionalOptions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>user32.lib;kernel32.lib;advapi32.lib;shell32.lib;ole32.lib;shcore.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Link Condition="'$(Configuration)'=='Debug'">
+      <IgnoreSpecificDefaultLibraries>libucrtd.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <AdditionalOptions>%(AdditionalOptions) /DEFAULTLIB:ucrtd.lib</AdditionalOptions>
+    </Link>
+    <Link Condition="'$(Configuration)'!='Debug'">
+      <IgnoreSpecificDefaultLibraries>libucrt.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <AdditionalOptions>%(AdditionalOptions) /DEFAULTLIB:ucrt.lib</AdditionalOptions>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+    </Link>
+    <Manifest>
+      <AdditionalManifestFiles>$(MSBuildThisFileDirectory)app.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml">
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <Page Include="MainWindow.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="App.xaml.h">
+      <DependentUpon>App.xaml</DependentUpon>
+    </ClInclude>
+    <ClInclude Include="MainWindow.xaml.h">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+    </ClInclude>
+    <ClInclude Include="UiChannel.h" />
+    <ClInclude Include="Strings.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="App.xaml.cpp">
+      <DependentUpon>App.xaml</DependentUpon>
+    </ClCompile>
+    <ClCompile Include="MainWindow.xaml.cpp">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+    </ClCompile>
+    <ClCompile Include="UiChannel.cpp" />
+    <ClCompile Include="Strings.cpp" />
+    <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
+    <!-- Shared native helpers compiled straight into the UI (no separate lib: different CRT/precompiled-header settings). -->
+    <ClCompile Include="..\Common\json.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="..\Common\text.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="..\IPC\pipe.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="MainWindow.idl">
+      <SubType>Code</SubType>
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+    </Midl>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Metadata only: Microsoft.UI.Xaml.winmd mentions WebView2 types. Nothing from WebView2 is linked or shipped. -->
+    <Reference Include="$(WebView2Package)lib\Microsoft.Web.WebView2.Core.winmd">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+    <None Include="app.manifest" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(FsCppWinRTPkg)build\native\Microsoft.Windows.CppWinRT.targets" />
+  <Import Project="$(SdkBuildToolsPackage)build\Microsoft.Windows.SDK.BuildTools.targets" />
+  <Import Project="$(SdkBuildToolsMsixPackage)build\Microsoft.Windows.SDK.BuildTools.MSIX.targets" Condition="Exists('$(SdkBuildToolsMsixPackage)build\Microsoft.Windows.SDK.BuildTools.MSIX.targets')" />
+  <Import Project="$(WasBasePackage)build\native\Microsoft.WindowsAppSDK.Base.targets" />
+  <Import Project="$(WasIxpPackage)build\native\Microsoft.WindowsAppSDK.InteractiveExperiences.targets" />
+  <Import Project="$(WasFoundationPackage)build\native\Microsoft.WindowsAppSDK.Foundation.targets" />
+  <Import Project="$(WasWinUIPackage)build\native\Microsoft.WindowsAppSDK.WinUI.targets" />
+  <Import Project="$(WasRuntimePackage)build\native\Microsoft.WindowsAppSDK.Runtime.targets" />
+</Project>
+
+
+
+

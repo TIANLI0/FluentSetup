@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Build with: msbuild DemoApp.vcxproj /p:Configuration=Release /p:Platform=x64 /p:DemoVersion=1.2.3 /p:DemoOut=<dir> -->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{0E2B8C61-4D0E-4C8B-8A4B-0C1F5A1B2D01}</ProjectGuid>
+    <ProjectName>DemoApp</ProjectName>
+    <ConfigurationType>Application</ConfigurationType>
+    <DemoVersion Condition="'$(DemoVersion)' == ''">1.0.0</DemoVersion>
+  </PropertyGroup>
+  <Import Project="..\..\build\native.props" />
+  <PropertyGroup>
+    <OutDir Condition="'$(DemoOut)' != ''">$(DemoOut)\</OutDir>
+    <OutDir Condition="'$(DemoOut)' == ''">$(MSBuildThisFileDirectory)out\$(DemoVersion)\</OutDir>
+    <IntDir>$(RepoRoot)out\obj\$(Platform)\$(Configuration)\DemoApp-$(DemoVersion)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>DEMO_VERSION=L"$(DemoVersion)";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <Import Project="..\..\build\native.targets" />
+</Project>

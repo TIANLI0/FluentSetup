@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FluentSetup.Stub.exe: the bootstrapper + install engine + Win32 fallback UI + elevated worker, in one native PE.
+  FluentSetup.CLI turns a copy of it into Setup.exe by replacing the icon/version resources and appending the package.
+-->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{0E2B8C61-4D0E-4C8B-8A4B-0C1F5A1B2C10}</ProjectGuid>
+    <ProjectName>FluentSetup.Stub</ProjectName>
+    <ConfigurationType>Application</ConfigurationType>
+    <FsEmbedOwnManifest>true</FsEmbedOwnManifest>
+  </PropertyGroup>
+  <Import Project="..\..\build\native.props" />
+  <PropertyGroup>
+    <TargetName>FluentSetup.Stub</TargetName>
+    <GenerateManifest>false</GenerateManifest>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(RepoRoot)third_party\zstd;$(RepoRoot)packages\Microsoft.WindowsAppSDK.Runtime.2.5.1\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>comctl32.lib;uxtheme.lib;dwmapi.lib;wintrust.lib;bcrypt.lib;shell32.lib;ole32.lib;oleaut32.lib;advapi32.lib;user32.lib;gdi32.lib;shcore.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- Not KnownDLLs: delay-load them so they are resolved after SetDefaultDllDirectories(SYSTEM32), never from the
+           download folder Setup.exe runs in. -->
+      <DelayLoadDLLs>comctl32.dll;uxtheme.dll;dwmapi.dll;wintrust.dll;bcrypt.dll;shcore.dll;oleaut32.dll</DelayLoadDLLs>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="args.h" />
+    <ClInclude Include="controller.h" />
+    <ClInclude Include="elevation.h" />
+    <ClInclude Include="localization.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="runtime_probe.h" />
+    <ClInclude Include="winui_host.h" />
+    <ClInclude Include="..\Setup.Win32\fallback_ui.h" />
+    <ClInclude Include="..\Setup.Win32\theme.h" />
+    <ClInclude Include="..\Install.Worker\worker.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="args.cpp" />
+    <ClCompile Include="controller.cpp" />
+    <ClCompile Include="elevation.cpp" />
+    <ClCompile Include="localization.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="runtime_probe.cpp" />
+    <ClCompile Include="winui_host.cpp" />
+    <ClCompile Include="..\Setup.Win32\fallback_ui.cpp" />
+    <ClCompile Include="..\Setup.Win32\theme.cpp" />
+    <ClCompile Include="..\Install.Worker\worker.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="stub.rc" />
+    <None Include="stub.manifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Common\FluentSetup.Common.vcxproj">
+      <Project>{0E2B8C61-4D0E-4C8B-8A4B-0C1F5A1B2C01}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Archive\FluentSetup.Archive.vcxproj">
+      <Project>{0E2B8C61-4D0E-4C8B-8A4B-0C1F5A1B2C02}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Install.Core\FluentSetup.Install.Core.vcxproj">
+      <Project>{0E2B8C61-4D0E-4C8B-8A4B-0C1F5A1B2C03}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="..\..\build\native.targets" />
+</Project>

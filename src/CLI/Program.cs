@@ -1,0 +1,340 @@
+using System.Reflection;
+using System.Text.Json;
+using FluentSetup.Builder.Core.Model;
+using FluentSetup.Builder.Core.Packaging;
+using FluentSetup.Builder.Core.Validation;
+
+namespace FluentSetup.Cli;
+
+/// <summary>
+/// fluentsetup - command-line front end of FluentSetup.
+/// Exit codes: 0 success, 1 validation or build failure, 2 usage error, 3 unexpected error, 4 cancelled.
+/// </summary>
+public static class Program
+{
+    private const string Usage = """
+        FluentSetup - build Windows installers.
+
+        Usage:
+          fluentsetup build <project.json> [options]   Build Setup.exe
+              -o, --output <dir>        Output folder (default: project output.directory)
+              --arch x64|arm64          Target architecture (default: project output.architecture)
+              --sign | --no-sign        Override the project's signing setting
+              --report <file.json>      Write a machine-readable build report
+              --runtime <dir>           Use another installer runtime folder
+              -v, --verbose             Detailed log
+              --json                    Print the build report as JSON instead of text
+              --non-interactive         Never prompt (the default; accepted for CI scripts)
+          fluentsetup validate <project.json> [--json]
+          fluentsetup inspect <Setup.exe> [--verify] [--json]
+          fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
+          fluentsetup --version | --help
+
+        Exit codes: 0 success, 1 validation/build failure, 2 usage error, 3 unexpected error, 4 cancelled.
+        """;
+
+    public static async Task<int> Main(string[] args)
+    {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        using var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            cts.Cancel();
+        };
+        try
+        {
+            if (args.Length == 0 || args[0] is "-h" or "--help" or "/?" or "help")
+            {
+                Console.WriteLine(Usage);
+                return args.Length == 0 ? 2 : 0;
+            }
+            if (args[0] is "--version" or "-V")
+            {
+                Console.WriteLine(Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "1.0.0");
+                return 0;
+            }
+            var parsed = ParsedArgs.Parse(args.Skip(1).ToArray());
+            return args[0] switch
+            {
+                "build" => await BuildAsync(parsed, cts.Token),
+                "validate" => Validate(parsed),
+                "inspect" => Inspect(parsed),
+                "init" => Init(parsed),
+                _ => UsageError($"Unknown command '{args[0]}'."),
+            };
+        }
+        catch (UsageException ex)
+        {
+            return UsageError(ex.Message);
+        }
+        catch (OperationCanceledException)
+        {
+            Console.Error.WriteLine("Cancelled.");
+            return 4;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException)
+        {
+            Console.Error.WriteLine($"error: {ex.Message}");
+            return 1;
+        }
+    }
+
+    private static int UsageError(string message)
+    {
+        Console.Error.WriteLine($"error: {message}");
+        Console.Error.WriteLine("Run 'fluentsetup --help' for usage.");
+        return 2;
+    }
+
+    private static SetupProject LoadProject(string path)
+    {
+        if (!File.Exists(path)) throw new UsageException($"Project file not found: {path}");
+        return ProjectSerializer.Load(path);
+    }
+
+    private static async Task<int> BuildAsync(ParsedArgs a, CancellationToken ct)
+    {
+        var projectPath = Path.GetFullPath(a.Positional(0, "project file"));
+        var project = LoadProject(projectPath);
+        var verbose = a.Flag("verbose", "v");
+        var json = a.Flag("json");
+        var options = new BuildOptions
+        {
+            OutputDirectory = a.Value("output", "o") is { } o ? Path.GetFullPath(o) : null,
+            Architecture = a.Value("arch"),
+            RuntimeRoot = a.Value("runtime"),
+            Sign = a.Flag("sign") ? true : a.Flag("no-sign") ? false : null,
+            Log = verbose && !json ? m => Console.WriteLine($"  {m}") : null,
+        };
+        a.Flag("non-interactive");
+        var reportPath = a.Value("report");
+        a.EnsureAllUsed();
+        if (options.Architecture is not null and not ("x64" or "arm64")) throw new UsageException("--arch must be x64 or arm64.");
+
+        var lastStage = (BuildStage)(-1);
+        var progress = new SyncProgress<BuildProgress>(p =>
+        {
+            if (json || p.Stage == lastStage) return;
+            lastStage = p.Stage;
+            Console.WriteLine($"> {p.Message}");
+        });
+        var builder = new PackageBuilder();
+        var report = await builder.BuildAsync(project, projectPath, options, progress, ct);
+
+        if (reportPath is not null)
+        {
+            File.WriteAllText(Path.GetFullPath(reportPath), JsonSerializer.Serialize(report, ReportJson));
+        }
+        if (json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(report, ReportJson));
+        }
+        else
+        {
+            PrintDiagnostics(report.Diagnostics, verbose);
+            if (report.Success)
+            {
+                var s = report.Sizes;
+                Console.WriteLine();
+                Console.WriteLine($"Built {report.OutputPath}");
+                Console.WriteLine($"  {report.FileCount:N0} files, {PackageBuilder.Format(s.PayloadRaw)} -> {PackageBuilder.Format(s.PayloadCompressed)} compressed");
+                Console.WriteLine($"  Setup.exe {PackageBuilder.Format(s.Total)} (installer overhead {PackageBuilder.Format(s.InstallerOverhead)}: " +
+                                  $"stub {PackageBuilder.Format(s.Stub)}, WinUI {PackageBuilder.Format(s.WinUiFrontEnd)}, header {PackageBuilder.Format(s.Header)}" +
+                                  (s.Signature > 0 ? $", signature {PackageBuilder.Format(s.Signature)}" : "") + ")");
+                Console.WriteLine($"  SHA-256 {report.Sha256}");
+                Console.WriteLine($"  {report.DurationSeconds:F1} s{(report.Signed ? ", signed" : "")}{(report.IncludesWinUI ? "" : ", Win32 interface only")}");
+            }
+            else
+            {
+                Console.Error.WriteLine($"Build failed: {report.Error}");
+            }
+        }
+        return report.Success ? 0 : 1;
+    }
+
+    private static int Validate(ParsedArgs a)
+    {
+        var projectPath = Path.GetFullPath(a.Positional(0, "project file"));
+        var json = a.Flag("json");
+        a.EnsureAllUsed();
+        var project = LoadProject(projectPath);
+        var dir = Path.GetDirectoryName(projectPath)!;
+        var bag = ProjectValidator.Validate(project, dir);
+        var files = FileCollector.Collect(project, dir);
+        bag.AddRange(files.Diagnostics.Items);
+        if (json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { valid = !bag.HasErrors, files = files.Files.Count, bytes = files.TotalSize, diagnostics = bag.Items }, ReportJson));
+        }
+        else
+        {
+            PrintDiagnostics(bag.Items, verbose: true);
+            Console.WriteLine(bag.HasErrors ? "Project has errors." : $"Project is valid: {files.Files.Count:N0} files, {PackageBuilder.Format(files.TotalSize)}.");
+        }
+        return bag.HasErrors ? 1 : 0;
+    }
+
+    private static int Inspect(ParsedArgs a)
+    {
+        var path = Path.GetFullPath(a.Positional(0, "Setup.exe"));
+        var verify = a.Flag("verify");
+        var json = a.Flag("json");
+        a.EnsureAllUsed();
+        if (!File.Exists(path)) throw new UsageException($"File not found: {path}");
+        var info = PackageInspector.Inspect(path, verify);
+        if (json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                path = info.Path, fileSize = info.FileSize, signed = info.Signed, overlayStart = info.OverlayStart,
+                payloadFiles = info.PayloadFiles, payloadRawBytes = info.PayloadRawBytes, payloadStoredBytes = info.PayloadStoredBytes,
+                frontendFiles = info.FrontendFiles, frontendStoredBytes = info.FrontendStoredBytes, streamsVerified = info.StreamsVerified,
+                problems = info.Problems, header = info.Header?.RootElement,
+            }, ReportJson));
+        }
+        else
+        {
+            Console.WriteLine($"{info.Path} ({PackageBuilder.Format(info.FileSize)})");
+            if (info.Header is not null)
+            {
+                var app = info.Header.RootElement.GetProperty("app");
+                Console.WriteLine($"  {app.GetProperty("name").GetString()} {app.GetProperty("version").GetString()} ({app.GetProperty("id").GetString()}, {app.GetProperty("architecture").GetString()})");
+                Console.WriteLine($"  kind: {info.Header.RootElement.GetProperty("kind").GetString()}, scope: {info.Header.RootElement.GetProperty("install").GetProperty("scope").GetString()}");
+            }
+            Console.WriteLine($"  stub/PE part: {PackageBuilder.Format(info.OverlayStart)}");
+            Console.WriteLine($"  WinUI front end: {info.FrontendFiles} files, {PackageBuilder.Format(info.FrontendStoredBytes)} stored");
+            Console.WriteLine($"  payload: {info.PayloadFiles:N0} files, {PackageBuilder.Format(info.PayloadRawBytes)} -> {PackageBuilder.Format(info.PayloadStoredBytes)}");
+            Console.WriteLine($"  signed: {(info.Signed ? "yes" : "no")}");
+            Console.WriteLine(info.Problems.Count == 0 ? $"  OK{(verify ? " (all stream checksums verified)" : "")}" : "  PROBLEMS: " + string.Join("; ", info.Problems));
+        }
+        return info.Problems.Count == 0 ? 0 : 1;
+    }
+
+    private static int Init(ParsedArgs a)
+    {
+        var folder = Path.GetFullPath(a.PositionalOrDefault(0) ?? ".");
+        var name = a.Value("name") ?? throw new UsageException("--name is required.");
+        var id = a.Value("id") ?? throw new UsageException("--id is required.");
+        var source = a.Value("source") ?? throw new UsageException("--source is required.");
+        var publisher = a.Value("publisher") ?? "";
+        a.EnsureAllUsed();
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, "fluentsetup.json");
+        if (File.Exists(path)) throw new UsageException($"{path} already exists.");
+        var sourceFull = Path.GetFullPath(source);
+        var exe = Directory.Exists(sourceFull) ? Directory.EnumerateFiles(sourceFull, "*.exe").Select(Path.GetFileName).FirstOrDefault() : null;
+        var project = new SetupProject
+        {
+            App = new AppInfo { Id = id, Name = name, Publisher = publisher, MainExecutable = exe ?? "" },
+            Files = new FileSettings { Source = Path.GetRelativePath(folder, sourceFull) },
+        };
+        ProjectSerializer.Save(project, path);
+        Console.WriteLine($"Created {path}");
+        return 0;
+    }
+
+    private static void PrintDiagnostics(IEnumerable<Diagnostic> diagnostics, bool verbose)
+    {
+        foreach (var d in diagnostics)
+        {
+            if (d.Severity == Severity.Info && !verbose) continue;
+            var w = d.Severity == Severity.Error ? Console.Error : Console.Out;
+            w.WriteLine(d.ToString());
+        }
+    }
+
+    private static readonly JsonSerializerOptions ReportJson = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+    };
+
+    /// <summary>Progress that reports synchronously on the calling thread (no SynchronizationContext in a console app).</summary>
+    private sealed class SyncProgress<T>(Action<T> handler) : IProgress<T>
+    {
+        private readonly object _lock = new();
+        public void Report(T value)
+        {
+            lock (_lock) handler(value);
+        }
+    }
+}
+
+internal sealed class UsageException(string message) : Exception(message);
+
+/// <summary>Minimal strict argument parser: "--name value", "--name=value", "-x value", flags, positionals.</summary>
+internal sealed class ParsedArgs
+{
+    private readonly List<string> _positional = [];
+    private readonly Dictionary<string, string?> _options = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _used = [];
+    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive"];
+
+    public static ParsedArgs Parse(string[] args)
+    {
+        var p = new ParsedArgs();
+        for (var i = 0; i < args.Length; i++)
+        {
+            var a = args[i];
+            if (a.StartsWith('-') && a.Length > 1)
+            {
+                var name = a.TrimStart('-');
+                string? value = null;
+                var eq = name.IndexOf('=');
+                if (eq >= 0) { value = name[(eq + 1)..]; name = name[..eq]; }
+                else if (!Flags.Contains(name))
+                {
+                    if (i + 1 >= args.Length) throw new UsageException($"Missing value for {a}.");
+                    value = args[++i];
+                }
+                if (p._options.ContainsKey(name)) throw new UsageException($"{a} given twice.");
+                p._options[name] = value;
+            }
+            else
+            {
+                p._positional.Add(a);
+            }
+        }
+        return p;
+    }
+
+    public string Positional(int index, string what) =>
+        index < _positional.Count ? _positional[index] : throw new UsageException($"Missing {what}.");
+
+    public string? PositionalOrDefault(int index) => index < _positional.Count ? _positional[index] : null;
+
+    public string? Value(string name, string? alias = null)
+    {
+        foreach (var n in alias is null ? [name] : new[] { name, alias })
+        {
+            if (_options.TryGetValue(n, out var v))
+            {
+                _used.Add(n);
+                return v ?? throw new UsageException($"--{n} needs a value.");
+            }
+        }
+        return null;
+    }
+
+    public bool Flag(string name, string? alias = null)
+    {
+        foreach (var n in alias is null ? [name] : new[] { name, alias })
+        {
+            if (_options.TryGetValue(n, out var v))
+            {
+                _used.Add(n);
+                if (v is not null) throw new UsageException($"--{n} does not take a value.");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void EnsureAllUsed()
+    {
+        var unknown = _options.Keys.Where(k => !_used.Contains(k)).ToList();
+        if (unknown.Count > 0) throw new UsageException($"Unknown option(s): {string.Join(", ", unknown.Select(u => "--" + u))}");
+    }
+}

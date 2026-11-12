@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="FluentSetupUI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid x:Name="RootGrid">
+        <Grid.Resources>
+            <Style x:Key="PageHeadingStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}">
+                <Setter Property="FontSize" Value="18" />
+                <Setter Property="LineHeight" Value="24" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style x:Key="FieldLabelStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+                <Setter Property="Margin" Value="0,0,0,8" />
+            </Style>
+            <Style x:Key="SecondaryTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style x:Key="FooterButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="MinWidth" Value="{StaticResource FooterButtonMinWidth}" />
+            </Style>
+            <Style x:Key="FooterAccentButtonStyle" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+                <Setter Property="MinWidth" Value="{StaticResource FooterButtonMinWidth}" />
+            </Style>
+        </Grid.Resources>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TitleBar x:Name="AppTitleBar" Grid.Row="0" IsBackButtonVisible="False" IsPaneToggleButtonVisible="False">
+            <TitleBar.IconSource>
+                <ImageIconSource x:Name="TitleBarIcon" />
+            </TitleBar.IconSource>
+        </TitleBar>
+
+        <!-- Product header: icon, name, publisher and version. -->
+        <Grid Grid.Row="1" Margin="32,4,32,20" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Image x:Name="AppIcon" Width="48" Height="48" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                <TextBlock x:Name="AppNameText" Style="{StaticResource SubtitleTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="AppMetaText" Style="{StaticResource SecondaryTextStyle}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Content layer. -->
+        <Border Grid.Row="2" Grid.RowSpan="2"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0" />
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
+            <Grid Padding="32,24,32,24">
+                <Grid.ChildrenTransitions>
+                    <TransitionCollection>
+                        <EntranceThemeTransition FromVerticalOffset="12" IsStaggeringEnabled="False" />
+                    </TransitionCollection>
+                </Grid.ChildrenTransitions>
+
+                <!-- Welcome -->
+                <StackPanel x:Name="WelcomePage" Spacing="12" Visibility="Collapsed">
+                    <TextBlock x:Name="WelcomeHeading" Style="{StaticResource PageHeadingStyle}" AutomationProperties.HeadingLevel="Level1" />
+                    <TextBlock x:Name="WelcomeBody" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" />
+                    <InfoBar x:Name="WelcomeInfo" IsClosable="False" IsOpen="False" Margin="0,4,0,0" />
+                    <InfoBar x:Name="WelcomeDirError" Severity="Error" IsClosable="False" IsOpen="False" />
+                    <StackPanel x:Name="WelcomeLocationPanel" Spacing="4" Margin="0,8,0,0">
+                        <TextBlock x:Name="WelcomeLocationLabel" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock x:Name="WelcomeLocationText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                        <TextBlock x:Name="WelcomeSpaceText" Style="{StaticResource SecondaryTextStyle}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Options -->
+                <StackPanel x:Name="OptionsPage" Spacing="20" Visibility="Collapsed">
+                    <TextBlock x:Name="OptionsHeading" Style="{StaticResource PageHeadingStyle}" AutomationProperties.HeadingLevel="Level1" />
+
+                    <StackPanel x:Name="ScopePanel">
+                        <TextBlock x:Name="ScopeLabel" Style="{StaticResource FieldLabelStyle}" />
+                        <RadioButtons x:Name="ScopeRadios" SelectionChanged="OnScopeChanged" MaxColumns="1">
+                            <RadioButton x:Name="ScopeUserRadio" />
+                            <RadioButton x:Name="ScopeMachineRadio" />
+                        </RadioButtons>
+                    </StackPanel>
+
+                    <StackPanel x:Name="LocationPanel">
+                        <TextBlock x:Name="LocationLabel" Style="{StaticResource FieldLabelStyle}" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="LocationBox" TextChanged="OnLocationChanged" IsSpellCheckEnabled="False" />
+                            <Button x:Name="BrowseButton" Grid.Column="1" Click="OnBrowseClick" />
+                        </Grid>
+                        <TextBlock x:Name="LocationSpaceText" Style="{StaticResource SecondaryTextStyle}" Margin="0,6,0,0" />
+                        <InfoBar x:Name="LocationError" Severity="Error" IsClosable="False" IsOpen="False" Margin="0,8,0,0" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="ShortcutPanel">
+                        <TextBlock x:Name="ShortcutLabel" Style="{StaticResource FieldLabelStyle}" />
+                        <CheckBox x:Name="DesktopCheck" />
+                        <CheckBox x:Name="StartMenuCheck" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- License -->
+                <Grid x:Name="LicensePage" RowSpacing="12" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="LicenseHeading" Style="{StaticResource PageHeadingStyle}" AutomationProperties.HeadingLevel="Level1" />
+                    <TextBlock x:Name="LicenseSubtitle" Grid.Row="1" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" />
+                    <TextBox x:Name="LicenseText" Grid.Row="2" Height="156" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto" FontSize="12" />
+                    <CheckBox x:Name="LicenseAccept" Grid.Row="3" Checked="OnLicenseChanged" Unchecked="OnLicenseChanged" />
+                </Grid>
+
+                <!-- Progress -->
+                <StackPanel x:Name="ProgressPage" Spacing="12" Visibility="Collapsed">
+                    <TextBlock x:Name="ProgressHeading" Style="{StaticResource PageHeadingStyle}" AutomationProperties.HeadingLevel="Level1" />
+                    <TextBlock x:Name="ProgressStage" Style="{StaticResource BodyTextBlockStyle}" AutomationProperties.LiveSetting="Polite" />
+                    <ProgressBar x:Name="ProgressBarControl" Minimum="0" Maximum="100" Margin="0,8,0,0" />
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="ProgressDetail" Style="{StaticResource SecondaryTextStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="ProgressPercent" Grid.Column="1" Style="{StaticResource SecondaryTextStyle}" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Result (success / failure / cancelled) -->
+                <StackPanel x:Name="ResultPage" Spacing="12" Visibility="Collapsed">
+                    <FontIcon x:Name="ResultIcon" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="40" HorizontalAlignment="Left" Margin="0,0,0,4" AutomationProperties.AccessibilityView="Raw" />
+                    <TextBlock x:Name="ResultHeading" Style="{StaticResource PageHeadingStyle}" AutomationProperties.HeadingLevel="Level1" />
+                    <TextBlock x:Name="ResultBody" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                    <CheckBox x:Name="LaunchCheck" Margin="0,4,0,0" />
+                    <TextBlock x:Name="ResultCode" Style="{StaticResource SecondaryTextStyle}" IsTextSelectionEnabled="True" />
+                    <Expander x:Name="ResultDetails" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                        <TextBlock x:Name="ResultDetailText" Style="{StaticResource SecondaryTextStyle}" IsTextSelectionEnabled="True" FontFamily="Consolas" />
+                    </Expander>
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="-12,0,0,0">
+                        <HyperlinkButton x:Name="OpenFolderLink" Click="OnOpenFolderClick" />
+                        <HyperlinkButton x:Name="ViewLogLink" Click="OnViewLogClick" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Footer: secondary action on the left, primary + cancel on the right (Windows dialog order). -->
+        <Grid Grid.Row="3" Padding="32,16,32,24" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button x:Name="SecondaryButton" Style="{StaticResource FooterButtonStyle}" Click="OnSecondaryClick" />
+            <Button x:Name="PrimaryButton" Grid.Column="2" Style="{StaticResource FooterAccentButtonStyle}" Click="OnPrimaryClick">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon x:Name="PrimaryShield" Glyph="&#xEA18;" FontSize="14" Visibility="Collapsed" />
+                    <TextBlock x:Name="PrimaryText" />
+                </StackPanel>
+            </Button>
+            <Button x:Name="CancelButton" Grid.Column="3" Style="{StaticResource FooterButtonStyle}" Click="OnCancelClick">
+                <Button.KeyboardAccelerators>
+                    <KeyboardAccelerator Key="Escape" />
+                </Button.KeyboardAccelerators>
+            </Button>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{0E2B8C61-4D0E-4C8B-8A4B-0C1F5A1B2C02}</ProjectGuid>
+    <ProjectName>FluentSetup.Archive</ProjectName>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+  </PropertyGroup>
+  <Import Project="..\..\build\native.props" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(RepoRoot)third_party\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- Decoder only, portable C (no x64 assembly), no legacy formats, no error strings in release. -->
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_LEGACY_SUPPORT=0;ZSTD_NO_TRACE;XXH_NAMESPACE=FSETUP_;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="container.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="container.cpp" />
+  </ItemGroup>
+  <ItemGroup Label="zstd (BSD-3-Clause), decompression only">
+    <ClCompile Include="..\..\third_party\zstd\common\debug.c" />
+    <ClCompile Include="..\..\third_party\zstd\common\entropy_common.c" />
+    <ClCompile Include="..\..\third_party\zstd\common\error_private.c" />
+    <ClCompile Include="..\..\third_party\zstd\common\fse_decompress.c" />
+    <ClCompile Include="..\..\third_party\zstd\common\xxhash.c" />
+    <ClCompile Include="..\..\third_party\zstd\common\zstd_common.c" />
+    <ClCompile Include="..\..\third_party\zstd\decompress\huf_decompress.c" />
+    <ClCompile Include="..\..\third_party\zstd\decompress\zstd_ddict.c" />
+    <ClCompile Include="..\..\third_party\zstd\decompress\zstd_decompress.c" />
+    <ClCompile Include="..\..\third_party\zstd\decompress\zstd_decompress_block.c" />
+  </ItemGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <!-- Third-party C sources are compiled with their own warning level and are not part of /WX. -->
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <Import Project="..\..\build\native.targets" />
+  <ItemGroup>
+    <ClCompile Update="..\..\third_party\zstd\**\*.c">
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <SDLCheck>false</SDLCheck>
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+  </ItemGroup>
+</Project>

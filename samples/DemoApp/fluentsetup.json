@@ -1,0 +1,51 @@
+{
+  "$schema": "../../shared/schemas/fluentsetup.project.schema.json",
+  "schemaVersion": 1,
+  "app": {
+    "id": "FluentSetup.DemoApp",
+    "name": "FluentSetup Demo",
+    "publisher": "FluentSetup Samples",
+    "version": "1.0.0",
+    "description": "Sample app used to test FluentSetup end to end.",
+    "website": "https://example.com/fluentsetup-demo",
+    "icon": "",
+    "mainExecutable": "DemoApp.exe"
+  },
+  "files": {
+    "source": "out/staging",
+    "include": ["**/*"],
+    "exclude": ["**/*.pdb", "**/*.ilk"],
+    "preserve": ["config/user-settings.json"],
+    "emptyDirectories": ["logs"]
+  },
+  "install": {
+    "scope": "userOrMachine",
+    "defaultScope": "user",
+    "userDir": "{LocalAppData}\\Programs\\{AppName}",
+    "machineDir": "{ProgramFiles}\\{AppName}",
+    "allowCustomDir": true,
+    "desktopShortcut": "optionalOff",
+    "startMenuShortcut": "on",
+    "launchAfterInstall": "optionalOn",
+    "allowDowngrade": false,
+    "minWindowsBuild": 17763
+  },
+  "ui": {
+    "theme": "system",
+    "backdrop": "mica",
+    "useSystemAccent": true,
+    "license": "LICENSE.txt",
+    "defaultLanguage": "auto",
+    "strings": {}
+  },
+  "output": {
+    "directory": "out/dist",
+    "fileName": "{AppName}-{Version}-Setup.exe",
+    "architecture": "x64",
+    "compression": "normal",
+    "includeWinUI": true
+  },
+  "signing": {
+    "enabled": false
+  }
+}

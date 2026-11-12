@@ -1,0 +1,12 @@
+out/
+dist/
+packages/
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.aps
+Generated Files/
+TestResults/
+*.binlog

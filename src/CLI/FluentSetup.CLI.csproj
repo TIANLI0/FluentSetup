@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <AssemblyName>fluentsetup</AssemblyName>
+    <RootNamespace>FluentSetup.Cli</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Native installer runtime built by FluentSetup.sln (native projects). -->
+    <FsNativeOut>$(MSBuildThisFileDirectory)..\..\out\bin\</FsNativeOut>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Builder.Core\FluentSetup.Builder.Core.csproj" />
+  </ItemGroup>
+  <!-- Runtime assets that get embedded into every Setup.exe. -->
+  <ItemGroup>
+    <None Include="$(FsNativeOut)x64\Release\FluentSetup.Stub.exe" Link="runtime\x64\FluentSetup.Stub.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(FsNativeOut)x64\Release\FluentSetup.Stub.exe')" />
+    <None Include="$(FsNativeOut)x64\Release\ui\*.exe;$(FsNativeOut)x64\Release\ui\*.dll;$(FsNativeOut)x64\Release\ui\*.pri;$(FsNativeOut)x64\Release\ui\*.xbf" LinkBase="runtime\x64\ui" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(FsNativeOut)ARM64\Release\FluentSetup.Stub.exe" Link="runtime\arm64\FluentSetup.Stub.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(FsNativeOut)ARM64\Release\FluentSetup.Stub.exe')" />
+    <None Include="$(FsNativeOut)ARM64\Release\ui\*.exe;$(FsNativeOut)ARM64\Release\ui\*.dll;$(FsNativeOut)ARM64\Release\ui\*.pri;$(FsNativeOut)ARM64\Release\ui\*.xbf" LinkBase="runtime\arm64\ui" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\shared\localization\*.json" LinkBase="runtime\localization" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\shared\schemas\*.json" LinkBase="schemas" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\assets\default-app.ico" Link="runtime\default-app.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

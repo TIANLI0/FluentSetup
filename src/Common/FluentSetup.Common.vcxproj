@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{0E2B8C61-4D0E-4C8B-8A4B-0C1F5A1B2C01}</ProjectGuid>
+    <ProjectName>FluentSetup.Common</ProjectName>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+  </PropertyGroup>
+  <Import Project="..\..\build\native.props" />
+  <ItemGroup>
+    <ClInclude Include="error.h" />
+    <ClInclude Include="fs.h" />
+    <ClInclude Include="hash.h" />
+    <ClInclude Include="json.h" />
+    <ClInclude Include="log.h" />
+    <ClInclude Include="path.h" />
+    <ClInclude Include="security.h" />
+    <ClInclude Include="text.h" />
+    <ClInclude Include="version.h" />
+    <ClInclude Include="win.h" />
+    <ClInclude Include="..\IPC\pipe.h" />
+    <ClInclude Include="..\IPC\protocol.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="fs.cpp" />
+    <ClCompile Include="hash.cpp" />
+    <ClCompile Include="json.cpp" />
+    <ClCompile Include="log.cpp" />
+    <ClCompile Include="path.cpp" />
+    <ClCompile Include="security.cpp" />
+    <ClCompile Include="text.cpp" />
+    <ClCompile Include="version.cpp" />
+    <ClCompile Include="..\IPC\pipe.cpp" />
+  </ItemGroup>
+  <Import Project="..\..\build\native.targets" />
+</Project>
