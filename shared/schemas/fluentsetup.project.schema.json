@@ -66,6 +66,9 @@
     "uninstall": {
       "$ref": "#/$defs/uninstall"
     },
+    "update": {
+      "$ref": "#/$defs/update"
+    },
     "ui": {
       "$ref": "#/$defs/ui"
     },
@@ -1166,6 +1169,59 @@
                 "pattern": "^HK(LM|CU)\\\\Software\\\\[^\\\\]+(\\\\[^\\\\]+)*$"
               }
             }
+          }
+        }
+      }
+    },
+    "update": {
+      "type": "object",
+      "description": "Built-in updates. The installed uninstall.exe looks for a newer Setup.exe of the same app: 'uninstall.exe /check-update' only reports (exit code 0 = up to date, 18 = an update is available), 'uninstall.exe /install-update' asks the user, downloads, verifies and runs it (/passive: progress only, /quiet: no UI). The download must be https, match its published SHA-256, be a FluentSetup package of the same app id and be newer than the installed version. Off unless github or feed is set.",
+      "properties": {
+        "github": {
+          "type": "string",
+          "default": "",
+          "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$",
+          "description": "GitHub repository 'owner/name' whose releases carry Setup.exe (the latest release, or pre-releases too with prerelease)."
+        },
+        "feed": {
+          "type": "string",
+          "default": "",
+          "pattern": "^$|^https://",
+          "description": "Instead of github: an https URL of a JSON document { \"version\": \"1.2.0\", \"url\": \"https://.../Setup.exe\", \"sha256\": \"<64 hex digits>\", \"size\": 12345678, \"notes\": \"https://...\" } (size and notes optional)."
+        },
+        "asset": {
+          "type": "string",
+          "default": "",
+          "description": "github: file name of Setup.exe in a release, e.g. \"MyApp-{Version}-Setup.exe\"; {Version} is the release's version (tag without 'v'). Empty = output.fileName."
+        },
+        "prerelease": {
+          "type": "boolean",
+          "default": false,
+          "description": "github: also offer pre-releases."
+        },
+        "checksums": {
+          "type": "string",
+          "default": "",
+          "description": "github: a release asset with '<sha256>  <file name>' lines (sha256sum format), e.g. \"SHA256SUMS.txt\". Empty = GitHub's own SHA-256 digest of the asset (both must agree when both exist)."
+        },
+        "signer": {
+          "type": "string",
+          "default": "",
+          "maxLength": 256,
+          "description": "If set, an update is only run when its Authenticode signature is valid and the signing certificate is issued to this name (subject common name, e.g. \"Contoso Ltd\")."
+        }
+      },
+      "not": {
+        "required": [
+          "github",
+          "feed"
+        ],
+        "properties": {
+          "github": {
+            "minLength": 1
+          },
+          "feed": {
+            "minLength": 1
           }
         }
       }

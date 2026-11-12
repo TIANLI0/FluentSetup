@@ -30,6 +30,9 @@ with a Fluent WinUI 3 interface and no .NET, VC++ redistributable, WebView2 or n
 - **Declarative extensions.** Close running processes, required (locked) and optional components, payload programs
   after install or before uninstall with fallbacks, NGen, PATH, and cleanup of legacy tasks, Run entries, shortcuts,
   files, registry keys and uninstall keys.
+- **Built-in updates.** Point the project at GitHub releases or a JSON feed and the installed app can update itself:
+  `uninstall.exe /install-update` checks, asks, downloads, verifies (SHA-256, same app, newer version, optional
+  signer) and installs; `/check-update` only reports. No updater code in the app.
 - **Variants.** One package can carry a self-contained and a framework-dependent build of the same app (shared files
   stored once); the user picks at install time, or `--variant` builds a single-variant package.
 - **Accessible and localized.** English, Simplified Chinese, Japanese and Korean built in, following the Windows display
@@ -125,6 +128,7 @@ What your users and their administrators can run:
 Setup.exe [/quiet | /S | /passive] [/uninstall] [/dir <path>] [/scope user|machine] [/relaunch]
           [/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no]
           [/log <file>] [/lang en-US|zh-CN|ja-JP|ko-KR] [/ui auto|winui|win32]
+uninstall.exe /check-update | /install-update [/passive | /quiet] [/relaunch]   (with an update source)
 ```
 
 Exit code 0 means success. All other codes are listed in [docs/diagnostics.md](docs/diagnostics.md). Inno Setup and

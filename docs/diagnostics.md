@@ -33,6 +33,8 @@ sentence comes from the localization key `error.<Name>` in `shared/localization/
 | 15 | `UnsafePath` | The location is not safe to use. | Install location rejected for any `path.*` reason other than space or writability (see section 6.3); a link or junction inside the install directory; the install directory resolves to a different path; a directory or link where a file must go; an action target outside the install directory. | `error.UnsafePath` |
 | 16 | `AlreadyRunning` | Another setup of the same app is running. | The mutex `Global\FluentSetup-<AppId>` is held (across sessions). | `error.AlreadyRunning` |
 | 17 | `PrerequisiteMissing` | A required component is missing. | A `requirements` entry (.NET Framework release, WebView2) is not satisfied and the package does not bundle an installer for it. The detail is the requirement's name. | `error.PrerequisiteMissing` |
+| 18 | `UpdateAvailable` | Not a failure. | `/check-update` found a published version newer than the installed one. | `error.UpdateAvailable` |
+| 19 | `UpdateFailed` | The update could not be checked, downloaded or used. | `/check-update`, `/install-update`: the GitHub API or the feed did not answer or answered nonsense (rate limit: HTTP 403/429); no SHA-256 is published; the download does not match it, is not a FluentSetup package, is another app or architecture, contains another version, or lacks the signature `update.signer` requires. The log (`%TEMP%\FluentSetup\<AppId>-update-<time>.log`) has the reason. | `error.UpdateFailed` |
 
 Front ends offer "Try again" only for retryable codes; codes 3, 4, 5, 10, 11 and 16 are not retryable.
 

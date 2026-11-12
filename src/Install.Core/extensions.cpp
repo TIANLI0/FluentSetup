@@ -544,50 +544,83 @@ bool RequirementSatisfied(const Requirement& r) {
 
 // ---- downloads -----------------------------------------------------------------------------------------------------
 
-bool Download(const std::string& url, const std::wstring& dest, const Sha256Digest& sha256, uint64_t expectedSize,
-              const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress, std::wstring& error) {
+namespace {
+
+struct InetHandle {
+    HINTERNET h = nullptr;
+    InetHandle() = default;
+    InetHandle(const InetHandle&) = delete;
+    InetHandle& operator=(const InetHandle&) = delete;
+    ~InetHandle() {
+        if (h) ::WinHttpCloseHandle(h);
+    }
+};
+
+// One https GET. Members close in reverse order (request, connection, session).
+struct HttpsGet {
+    InetHandle session, connect, request;
+    DWORD status = 0;
+};
+
+// Sends an https GET (TLS 1.2+, redirects only to https) and reads the status code. False with `error` when the server
+// cannot be reached; any status is returned to the caller.
+bool StartHttpsGet(const std::string& url, const wchar_t* headers, HttpsGet& r, std::wstring& error) {
     const std::wstring wurl = Utf8ToWide(url);
     URL_COMPONENTS uc{sizeof(uc)};
-    wchar_t host[256] = {}, pathBuf[2048] = {};
+    wchar_t host[256] = {}, pathBuf[2048] = {}, extra[2048] = {};
     uc.lpszHostName = host;
     uc.dwHostNameLength = ARRAYSIZE(host);
     uc.lpszUrlPath = pathBuf;
     uc.dwUrlPathLength = ARRAYSIZE(pathBuf);
+    uc.lpszExtraInfo = extra;  // "?query"
+    uc.dwExtraInfoLength = ARRAYSIZE(extra);
     if (!::WinHttpCrackUrl(wurl.c_str(), 0, 0, &uc) || uc.nScheme != INTERNET_SCHEME_HTTPS) {
         error = L"Only https downloads are allowed";
         return false;
     }
+    const std::wstring object = std::wstring(pathBuf) + extra;
     const auto fail = [&](const wchar_t* what) {
         error = std::wstring(what) + L": " + Win32Message(::GetLastError());
         return false;
     };
-    struct Inet {
-        HINTERNET h;
-        ~Inet() { if (h) ::WinHttpCloseHandle(h); }
-    };
-    Inet session{::WinHttpOpen(L"FluentSetup/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0)};
-    if (!session.h) session.h = ::WinHttpOpen(L"FluentSetup/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!session.h) return fail(L"WinHttpOpen");
+    r.session.h = ::WinHttpOpen(L"FluentSetup/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!r.session.h) r.session.h = ::WinHttpOpen(L"FluentSetup/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!r.session.h) return fail(L"WinHttpOpen");
     DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
-    if (!::WinHttpSetOption(session.h, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols))) {
+    if (!::WinHttpSetOption(r.session.h, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols))) {
         protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2;  // TLS 1.3 needs Windows 11
-        ::WinHttpSetOption(session.h, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols));
+        ::WinHttpSetOption(r.session.h, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols));
     }
     DWORD redirect = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;
-    ::WinHttpSetOption(session.h, WINHTTP_OPTION_REDIRECT_POLICY, &redirect, sizeof(redirect));
-    ::WinHttpSetTimeouts(session.h, 15000, 15000, 30000, 60000);
-    Inet connect{::WinHttpConnect(session.h, host, uc.nPort, 0)};
-    if (!connect.h) return fail(L"Cannot connect");
-    Inet request{::WinHttpOpenRequest(connect.h, L"GET", pathBuf, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE)};
-    if (!request.h) return fail(L"Cannot open the request");
-    if (!::WinHttpSendRequest(request.h, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
-        !::WinHttpReceiveResponse(request.h, nullptr)) {
+    ::WinHttpSetOption(r.session.h, WINHTTP_OPTION_REDIRECT_POLICY, &redirect, sizeof(redirect));
+    ::WinHttpSetTimeouts(r.session.h, 15000, 15000, 30000, 60000);
+    r.connect.h = ::WinHttpConnect(r.session.h, host, uc.nPort, 0);
+    if (!r.connect.h) return fail(L"Cannot connect");
+    r.request.h = ::WinHttpOpenRequest(r.connect.h, L"GET", object.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+    if (!r.request.h) return fail(L"Cannot open the request");
+    if (!::WinHttpSendRequest(r.request.h, headers ? headers : WINHTTP_NO_ADDITIONAL_HEADERS, headers ? static_cast<DWORD>(-1L) : 0,
+                              WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+        !::WinHttpReceiveResponse(r.request.h, nullptr)) {
         return fail(L"Download failed");
     }
-    DWORD status = 0, size = sizeof(status);
-    ::WinHttpQueryHeaders(request.h, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &status, &size, WINHTTP_NO_HEADER_INDEX);
-    if (status != 200) {
-        error = Printf(L"The server answered HTTP %lu", status);
+    DWORD size = sizeof(r.status);
+    ::WinHttpQueryHeaders(r.request.h, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &r.status, &size,
+                          WINHTTP_NO_HEADER_INDEX);
+    return true;
+}
+
+}  // namespace
+
+bool Download(const std::string& url, const std::wstring& dest, const Sha256Digest& sha256, uint64_t expectedSize,
+              const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress, std::wstring& error) {
+    const auto fail = [&](const wchar_t* what) {
+        error = std::wstring(what) + L": " + Win32Message(::GetLastError());
+        return false;
+    };
+    HttpsGet r;
+    if (!StartHttpsGet(url, nullptr, r, error)) return false;
+    if (r.status != 200) {
+        error = Printf(L"The server answered HTTP %lu", r.status);
         return false;
     }
     const uint64_t limit = expectedSize ? expectedSize : 512ull * 1024 * 1024;
@@ -602,7 +635,7 @@ bool Download(const std::string& url, const std::wstring& dest, const Sha256Dige
             return false;
         }
         DWORD got = 0;
-        if (!::WinHttpReadData(request.h, buffer.data(), static_cast<DWORD>(buffer.size()), &got)) return fail(L"Download interrupted");
+        if (!::WinHttpReadData(r.request.h, buffer.data(), static_cast<DWORD>(buffer.size()), &got)) return fail(L"Download interrupted");
         if (got == 0) break;
         total += got;
         if (total > limit) {
@@ -617,6 +650,34 @@ bool Download(const std::string& url, const std::wstring& dest, const Sha256Dige
     if ((expectedSize && total != expectedSize) || hash.Finish() != sha256) {
         error = L"The downloaded file does not match the expected SHA-256";
         return false;
+    }
+    return true;
+}
+
+bool HttpGetText(const std::string& url, const wchar_t* headers, size_t maxBytes, std::string& body, unsigned long& status,
+                 std::wstring& error) {
+    body.clear();
+    status = 0;
+    HttpsGet r;
+    if (!StartHttpsGet(url, headers, r, error)) return false;
+    status = r.status;
+    if (r.status != 200) {
+        error = Printf(L"The server answered HTTP %lu", r.status);
+        return false;
+    }
+    char buffer[16384];
+    for (;;) {
+        DWORD got = 0;
+        if (!::WinHttpReadData(r.request.h, buffer, sizeof(buffer), &got)) {
+            error = L"Download interrupted: " + Win32Message(::GetLastError());
+            return false;
+        }
+        if (got == 0) break;
+        if (body.size() + got > maxBytes) {
+            error = L"The server sent more data than expected";
+            return false;
+        }
+        body.append(buffer, got);
     }
     return true;
 }

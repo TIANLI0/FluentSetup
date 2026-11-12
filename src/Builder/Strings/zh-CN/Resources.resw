@@ -584,4 +584,23 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="SettingsUpdatesCheckTitle.Text" xml:space="preserve"><value>FluentSetup 版本</value></data>
   <data name="SettingsUpdatesCheck.Content" xml:space="preserve"><value>立即检查</value></data>
   <data name="SettingsUpdatesInstall.Content" xml:space="preserve"><value>更新</value></data>
+  <data name="UpdateSection.Text" xml:space="preserve"><value>内置更新</value></data>
+  <data name="UpdateSourceTitle.Text" xml:space="preserve"><value>更新来源</value></data>
+  <data name="UpdateSourceDescription.Text" xml:space="preserve"><value>已安装的应用从这里查找新版 Setup.exe。如果应用自带更新功能，保持关闭即可。</value></data>
+  <data name="UpdateSourceCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>更新来源</value></data>
+  <data name="UpdateSourceNone.Content" xml:space="preserve"><value>关闭</value></data>
+  <data name="UpdateSourceGitHub.Content" xml:space="preserve"><value>GitHub Releases</value></data>
+  <data name="UpdateSourceFeed.Content" xml:space="preserve"><value>JSON 源</value></data>
+  <data name="UpdateGitHubBox.Header" xml:space="preserve"><value>仓库</value></data>
+  <data name="UpdateGitHubBox.PlaceholderText" xml:space="preserve"><value>owner/name，例如 contoso/notes</value></data>
+  <data name="UpdateAssetBox.Header" xml:space="preserve"><value>发布中的 Setup.exe 文件名</value></data>
+  <data name="UpdateAssetBox.PlaceholderText" xml:space="preserve"><value>与输出文件名相同</value></data>
+  <data name="UpdateChecksumsBox.Header" xml:space="preserve"><value>校验和文件（可选）</value></data>
+  <data name="UpdateChecksumsBox.PlaceholderText" xml:space="preserve"><value>使用 GitHub 提供的 SHA-256</value></data>
+  <data name="UpdatePrereleaseToggle.Header" xml:space="preserve"><value>包含预发布版本</value></data>
+  <data name="UpdateFeedBox.Header" xml:space="preserve"><value>源地址（https）</value></data>
+  <data name="UpdateFeedBox.PlaceholderText" xml:space="preserve"><value>https://example.com/myapp/latest.json</value></data>
+  <data name="UpdateSignerBox.Header" xml:space="preserve"><value>要求的签名者（可选）</value></data>
+  <data name="UpdateSignerBox.PlaceholderText" xml:space="preserve"><value>证书使用者名称，例如 Contoso Ltd</value></data>
+  <data name="UpdateHowToUse.Text" xml:space="preserve"><value>在应用里，“检查更新”可运行安装目录下的“uninstall.exe /install-update /relaunch”（先弹出小窗口询问），后台检查用“uninstall.exe /check-update”（退出代码 18 = 有更新）。下载的文件必须与发布的 SHA-256 一致，且是本应用的更新版本；文件名中的 {Version} 代表发布的版本号。</value></data>
 </root>

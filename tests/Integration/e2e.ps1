@@ -528,6 +528,66 @@ if (Test-Path $nuget) {
     }
 }
 
+Write-Host '==> Built-in updates: /check-update, /install-update (verified download, refused when it is not this app)' -ForegroundColor Cyan
+Remove-Existing
+$uninstaller = Join-Path $installDir 'uninstall.exe'
+function Run-Update([string[]] $arguments, [string] $logName) {
+    $log = Join-Path $logs "$logName.log"
+    $out = Join-Path $logs "$logName.out"
+    $p = Start-Process -FilePath $uninstaller -ArgumentList (@($arguments) + @('/log', "`"$log`"")) -RedirectStandardOutput $out -Wait -PassThru
+    return [pscustomobject]@{ Code = $p.ExitCode; Log = "$(Get-Content $log -Raw -ErrorAction SilentlyContinue)"; Out = "$(Get-Content $out -Raw -ErrorAction SilentlyContinue)" }
+}
+$offline = 'Cannot connect|Download failed|Download interrupted|server answered HTTP|rate limit'
+$plain = New-Package '12.0.0' { param($s) }
+$code = Run-Setup $plain @('/quiet') 'update-none-install'
+$r = Run-Update @('/check-update') 'update-none'
+Check 'no update source in the package: /check-update exits 3' { $code -eq 0 -and $r.Code -eq 3 }
+Remove-Existing
+
+# Feeds served from this repository (tests/fixtures): the download is the LICENSE file, not a setup package.
+$fixtures = 'https://raw.githubusercontent.com/TIANLI0/FluentSetup/main/tests/fixtures'
+$feedPkg = New-Package '12.0.1' { param($s) } @{} @{ update = @{ feed = "$fixtures/update-feed.json" } }
+$code = Run-Setup $feedPkg @('/quiet') 'update-feed-setup'
+$r = Run-Update @('/check-update') 'update-feed-check'
+if ($r.Code -eq 19 -and $r.Log -match $offline) {
+    Write-Host '  [SKIP] update feed checks (no internet access, or the fixtures are not on GitHub yet)' -ForegroundColor Yellow
+} else {
+    $json = $r.Out | ConvertFrom-Json
+    Check 'feed: /check-update exits 18 and prints the versions as JSON' { $r.Code -eq 18 -and $json.updateAvailable -and $json.latestVersion -eq '99.0.0' -and $json.installedVersion -eq '12.0.1' }
+    $r = Run-Update @('/install-update', '/quiet') 'update-feed-install'
+    Check 'feed: a download that is not a setup package is refused (exit 19), the app is unchanged' {
+        $r.Code -eq 19 -and $r.Log -match 'not a valid setup package' -and (Get-ItemProperty $arpKey).DisplayVersion -eq '12.0.1' }
+    Check 'feed: the refused download was removed' { -not (Get-ChildItem $env:TEMP -Directory -Filter 'FluentSetup-upd-*' | Get-ChildItem -File) }
+    Remove-Existing
+    $badPkg = New-Package '12.0.2' { param($s) } @{} @{ update = @{ feed = "$fixtures/update-feed-badhash.json" } }
+    $code = Run-Setup $badPkg @('/quiet') 'update-badhash-setup'
+    $r = Run-Update @('/install-update', '/quiet') 'update-badhash'
+    Check 'feed: a download with another SHA-256 is refused (exit 19)' { $r.Code -eq 19 -and $r.Log -match 'SHA-256' }
+    Remove-Existing
+    $newer = New-Package '100.0.0' { param($s) } @{} @{ update = @{ feed = "$fixtures/update-feed.json" } }
+    $code = Run-Setup $newer @('/quiet') 'update-newer-setup'
+    $r = Run-Update @('/check-update') 'update-newer-check'
+    Check 'feed: installed version newer than the feed: /check-update exits 0' { $r.Code -eq 0 -and -not ($r.Out | ConvertFrom-Json).updateAvailable }
+    $r = Run-Update @('/install-update', '/quiet') 'update-newer-install'
+    Check 'feed: /install-update with nothing newer exits 0 without downloading' { $r.Code -eq 0 -and $r.Log -notmatch 'Downloading' }
+}
+Remove-Existing
+
+# GitHub releases of FluentSetup itself: found and checked, then refused because it is another app.
+$ghPkg = New-Package '0.5.0' { param($s) } @{} @{ update = @{ github = 'TIANLI0/FluentSetup'; asset = 'FluentSetup-{Version}-Setup.exe'; checksums = 'SHA256SUMS.txt' } }
+$code = Run-Setup $ghPkg @('/quiet') 'update-github-setup'
+$r = Run-Update @('/check-update') 'update-github-check'
+if ($r.Code -eq 19 -and $r.Log -match $offline) {
+    Write-Host '  [SKIP] GitHub update checks (no internet access or API rate limit)' -ForegroundColor Yellow
+} else {
+    Check 'GitHub: /check-update finds the latest FluentSetup release (exit 18)' { $r.Code -eq 18 -and ($r.Out | ConvertFrom-Json).latestVersion -match '^\d+\.\d+\.\d+' }
+    if ($env:CI) {
+        # Downloads the whole FluentSetup Setup.exe, so only on CI.
+        $r = Run-Update @('/install-update', '/quiet') 'update-github-install'
+        Check 'GitHub: the release passes SHA256SUMS.txt and the asset digest, then is refused as another app (exit 19)' {
+            $r.Code -eq 19 -and $r.Log -match 'another app: FluentSetup' }
+    }
+}
 Remove-Existing
 Check 'environment restored (no ARP entry)' { -not (Test-Path $arpKey) }
 

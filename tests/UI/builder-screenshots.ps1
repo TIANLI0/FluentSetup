@@ -75,6 +75,7 @@ $project = @'
     "userData": { "paths": ["{LocalAppData}\\Contoso Notes"], "default": false },
     "elevated": { "ifExists": ["{CommonAppData}\\Contoso\\driver.state"], "scheduledTasks": ["Contoso\\Sync"], "removeRegistryKeys": ["HKLM\\Software\\Contoso\\Notes"] }
   },
+  "update": { "github": "contoso/notes", "checksums": "SHA256SUMS.txt" },
   "ui": { "license": "LICENSE.txt", "licenseMode": "firstInstall", "defaultLanguage": "auto" },
   "output": { "directory": "dist", "fileName": "{AppName}-{Version}-Setup.exe", "compression": "max" }
 }

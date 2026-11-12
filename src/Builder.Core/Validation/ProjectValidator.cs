@@ -168,7 +168,60 @@ public static partial class ProjectValidator
             if (!string.IsNullOrEmpty(s.TimestampUrl) && !Uri.TryCreate(s.TimestampUrl, UriKind.Absolute, out _))
                 d.Error("FS1503", "signing.timestampUrl", "Timestamp URL is not valid.");
         }
+        ValidateUpdate(p, d);
         return d;
+    }
+
+    [GeneratedRegex(@"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")]
+    private static partial Regex GitHubRepositoryRegex();
+
+    private static void ValidateUpdate(SetupProject p, DiagnosticBag d)
+    {
+        var u = p.Update;
+        bool github = !string.IsNullOrWhiteSpace(u.GitHub), feed = !string.IsNullOrWhiteSpace(u.Feed);
+        if (!github && !feed)
+        {
+            if (u.Asset.Length > 0 || u.Checksums.Length > 0 || u.Signer.Length > 0 || u.Prerelease)
+                d.Warning("FS1709", "update", "Update settings have no effect until update.github or update.feed is set.");
+            return;
+        }
+        if (github && feed) d.Error("FS1701", "update", "Choose GitHub releases (update.github) or a feed (update.feed), not both.");
+        if (github && (!GitHubRepositoryRegex().IsMatch(u.GitHub) || u.GitHub.EndsWith(".git", StringComparison.OrdinalIgnoreCase)))
+            d.Error("FS1702", "update.github", $"'{u.GitHub}' is not a GitHub repository; write owner/name, e.g. contoso/notes.");
+        if (feed && !(Uri.TryCreate(u.Feed, UriKind.Absolute, out var feedUri) && feedUri.Scheme == Uri.UriSchemeHttps))
+            d.Error("FS1703", "update.feed", "The update feed must be an https URL.");
+        if (github)
+        {
+            var asset = UpdateAssetTemplate(p);
+            var sample = asset.Replace("{Version}", "1.0.0", StringComparison.Ordinal);
+            if (!PathRules.IsValidComponent(sample, out _) || sample.Contains('{') || sample.Contains('}') || !sample.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                d.Error("FS1704", "update.asset", $"'{asset}' is not a file name ending in .exe ({{Version}} is the only placeholder).");
+            else if (!asset.Contains("{Version}", StringComparison.Ordinal) && IsValidVersion(p.App.Version) && asset.Contains(p.App.Version, StringComparison.Ordinal))
+                d.Warning("FS1705", string.IsNullOrEmpty(u.Asset) ? "output.fileName" : "update.asset",
+                          $"The Setup.exe name '{asset}' contains this version ({p.App.Version}) literally, so the next release is looked for under the same name. " +
+                          "Write {Version} in update.asset (or in output.fileName) instead.");
+            if (u.Checksums.Length > 0 && !PathRules.IsValidComponent(u.Checksums, out _))
+                d.Error("FS1706", "update.checksums", "update.checksums must be the file name of a release asset, e.g. SHA256SUMS.txt.");
+        }
+        else if (u.Asset.Length > 0 || u.Checksums.Length > 0 || u.Prerelease)
+        {
+            d.Warning("FS1707", "update", "update.asset, update.checksums and update.prerelease are only used with update.github; the feed names the file and its SHA-256.");
+        }
+        if (u.Signer.Length > 0 && (u.Signer.Trim().Length != u.Signer.Length || u.Signer.Length > 256))
+            d.Error("FS1708", "update.signer", "update.signer must be the certificate's subject name without surrounding spaces (max 256 characters).");
+        else if (u.Signer.Length > 0 && !p.Signing.Enabled)
+            d.Warning("FS1710", "update.signer", "update.signer is set but this project is not signed: updates without that signature will be refused.");
+    }
+
+    /// <summary>
+    /// The name of Setup.exe in a GitHub release as the installer looks for it: update.asset, else output.fileName, with
+    /// every placeholder but {Version} replaced (the installer puts in the version of the release).
+    /// </summary>
+    public static string UpdateAssetTemplate(SetupProject p)
+    {
+        const string marker = "\u0001";
+        var template = string.IsNullOrWhiteSpace(p.Update.Asset) ? p.Output.FileName : p.Update.Asset;
+        return ExpandFileName(template.Replace("{Version}", marker, StringComparison.Ordinal), p).Replace(marker, "{Version}", StringComparison.Ordinal);
     }
 
     private static void CheckDirTemplate(DiagnosticBag d, string field, string template)

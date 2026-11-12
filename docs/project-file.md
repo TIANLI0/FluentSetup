@@ -376,6 +376,42 @@ files are removed (interactive only; silent uninstalls skip it and log a warning
 The installed files and shortcuts, the app's uninstall registration and the install folder (if it is empty) are always
 removed. Preserved files and files the installer did not create are kept.
 
+## update
+
+Built-in updates. With an update source, the installed `uninstall.exe` can look for a newer Setup.exe of the app and
+install it, so an app needs no updater of its own: a "Check for updates" menu item starts
+`uninstall.exe /install-update /relaunch`, a background check runs `uninstall.exe /check-update`.
+
+```json
+"update": { "github": "contoso/notes", "checksums": "SHA256SUMS.txt" }
+```
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `github` | string | `""` | GitHub repository `owner/name`. The latest release (`/releases/latest`) is used; with `prerelease`, the newest of the recent releases. Its version is the tag without a leading `v`. |
+| `feed` | string | `""` | Instead of `github`: an https URL of a JSON document `{ "version": "1.2.0", "url": "https://…/Setup.exe", "sha256": "<64 hex digits>", "size": 12345678, "notes": "https://…" }` (`size` and `notes` optional). For your own server or a CDN. |
+| `asset` | string | `""` | `github`: the file name of Setup.exe in a release, with `{Version}` for the release's version, e.g. `"MyApp-{Version}-Setup.exe"`. Empty = `output.fileName` (its other placeholders are filled in at build time). A name that contains the version literally (from `$(Version)`) gets warning FS1705: the next release has another name. |
+| `prerelease` | bool | `false` | `github`: also offer pre-releases. |
+| `checksums` | string | `""` | `github`: a release file with `<sha256>  <file name>` lines (`sha256sum` format), e.g. `SHA256SUMS.txt`. Empty = GitHub's own SHA-256 digest of the asset. When both exist they must agree. |
+| `signer` | string | `""` | If set, an update only runs when its Authenticode signature is valid with a trusted chain and the certificate is issued to this name (subject common name, e.g. `"Contoso Ltd"`). Use it when you sign (`signing.enabled`); FS1710 warns otherwise. |
+
+Before anything runs, the download must: come over https (redirects only to https); match the published SHA-256
+(checked while downloading and once more through a handle that keeps the file from changing); be a valid FluentSetup
+package of the same `app.id` and architecture; contain exactly the advertised version, which must be newer than the
+installed one; and carry the pinned signature if `signer` is set. The new Setup.exe then runs with `/passive` (or
+`/quiet`) and does the update like any other upgrade: journaled, rolled back on failure, closing the running app
+(`install.closeProcesses`) and, with `/relaunch`, starting it again.
+
+| Command | What it does |
+|---|---|
+| `uninstall.exe /check-update` | No UI. Exit code 0 = up to date, 18 = a newer version is published, 19 = the source could not be read. Prints one JSON line on standard output if it is redirected: `{"installedVersion":"1.0.0","updateAvailable":true,"latestVersion":"1.1.0","notes":"https://…"}`. |
+| `uninstall.exe /install-update` | A small window: checking, then "1.1.0 is available" with **Update** / **Not now** and a link to the release notes, then the download progress. Exit code 0 (up to date, or the new Setup.exe was started), 2 (Not now / cancelled) or 19. |
+| `uninstall.exe /install-update /passive` | Progress only: no question; closes by itself when there is no update. |
+| `uninstall.exe /install-update /quiet` | No UI: downloads, verifies and starts `Setup.exe /quiet`. Exit code 0 when there is no update or the new setup was started. |
+
+Add `/relaunch` to start the app again after the update, and `/lang` to choose the language. GitHub allows 60 API
+requests per hour per address without a token, enough for checks at start-up or once a day.
+
 ## ui
 
 | Property | Type | Default | Meaning |
@@ -487,6 +523,8 @@ The installed `uninstall.exe` accepts the same switches.
 | `/variant <id>` | Package variant to install (see *Variants*). |
 | `/remove-user-data` | Uninstall: also delete `uninstall.userData`. |
 | `/relaunch`, `/update` | After a quiet or passive install, start the app with `install.relaunchArguments` (for in-app updaters; `/update` is the NSIS-style spelling, `Setup.exe /S /UPDATE`). |
+| `/check-update` | Installed app with an `update` source: exit code 18 if a newer version is published, 0 if not (see *update*). |
+| `/install-update` | Download, verify and install the newest version (see *update*); with `/passive` or `/quiet` without questions. |
 | Inno / NSIS switches | `/VERYSILENT`, `/SILENT` (passive), `/DIR=`, `/LOG=`, `/LANG=english`, `/TASKS=`, `/MERGETASKS=`, `/NOICONS`, `/CURRENTUSER`, `/ALLUSERS`, `/RELAUNCH=1`, `/S`, `/D=path` (last, may contain spaces) are understood; `/SUPPRESSMSGBOXES`, `/NORESTART`, `/CLOSEAPPLICATIONS`, `/SP-`, `/NCRC`, `_?=` are accepted and have no effect. Upgrades also pre-fill choices from an adopted Inno install's saved tasks. |
 | `/option <id>=yes\|no` | Value of a package option. Can be repeated. Ids the package does not define are ignored. |
 | `/lang en-US\|zh-CN\|ja-JP\|ko-KR` | UI language. Overrides `ui.defaultLanguage`. |
@@ -520,3 +558,5 @@ Exit codes (from `src/Common/error.h`):
 | 15 | UnsafePath | Unsafe path |
 | 16 | AlreadyRunning | Another setup or uninstall of the same app is in progress |
 | 17 | PrerequisiteMissing | A required Windows component is missing |
+| 18 | UpdateAvailable | `/check-update`: a newer version is published (not a failure) |
+| 19 | UpdateFailed | `/check-update`, `/install-update`: the update source could not be read, or the download was refused |

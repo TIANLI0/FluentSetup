@@ -5,7 +5,7 @@
     "id": "FluentSetup",
     "name": "FluentSetup",
     "publisher": "TIANLI0",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "description": "Builder for native Windows 11-style installers (Builder app + fluentsetup CLI)",
     "website": "https://github.com/TIANLI0/FluentSetup",
     "icon": "../assets/default-app.ico",
@@ -63,5 +63,6 @@
     "compression": "max",
     "includeWinUI": true
   },
+  "update": { "github": "TIANLI0/FluentSetup", "checksums": "SHA256SUMS.txt" },
   "signing": { "enabled": false }
 }

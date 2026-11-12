@@ -29,6 +29,8 @@ public sealed class SetupProject
     /// <summary>Programs from the app's own files to run after install / before uninstall (no shell, no system tools).</summary>
     public List<ActionSettings> Actions { get; set; } = [];
     public UninstallSettings Uninstall { get; set; } = new();
+    /// <summary>Where installed copies find a newer Setup.exe (<c>uninstall.exe /check-update</c> and <c>/install-update</c>).</summary>
+    public UpdateSettings Update { get; set; } = new();
 
     /// <summary>Unknown properties are kept so that newer files survive a round trip through an older tool.</summary>
     [JsonExtensionData]
@@ -320,6 +322,39 @@ public sealed class RegistryVersionCondition
     public string Key { get; set; } = "";
     public string Value { get; set; } = "DisplayVersion";
     public string Version { get; set; } = "";
+}
+
+/// <summary>
+/// Built-in updates: the installed <c>uninstall.exe</c> looks for a newer Setup.exe of the same app, verifies it and runs
+/// it. Off unless <see cref="GitHub"/> or <see cref="Feed"/> is set.
+/// </summary>
+public sealed class UpdateSettings
+{
+    /// <summary>GitHub repository "owner/name" whose releases carry the new Setup.exe.</summary>
+    [JsonPropertyName("github")]
+    public string GitHub { get; set; } = "";
+    /// <summary>
+    /// Or an https URL of a JSON document describing the latest version:
+    /// <c>{ "version": "1.2.0", "url": "https://…/Setup.exe", "sha256": "…", "size": 123, "notes": "https://…" }</c>.
+    /// </summary>
+    public string Feed { get; set; } = "";
+    /// <summary>GitHub: file name of Setup.exe in a release; {Version} is the release's version. Empty = output.fileName.</summary>
+    public string Asset { get; set; } = "";
+    /// <summary>GitHub: also offer pre-releases.</summary>
+    public bool Prerelease { get; set; }
+    /// <summary>
+    /// GitHub: a release file with "&lt;sha256&gt;  &lt;file name&gt;" lines (e.g. SHA256SUMS.txt). Empty = GitHub's own
+    /// SHA-256 digest of the asset.
+    /// </summary>
+    public string Checksums { get; set; } = "";
+    /// <summary>
+    /// If set, a new Setup.exe is only run when it carries a valid Authenticode signature from a certificate issued to
+    /// this name (the certificate's subject common name, e.g. "Contoso Ltd").
+    /// </summary>
+    public string Signer { get; set; } = "";
+    [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
+
+    [JsonIgnore] public bool Enabled => !string.IsNullOrWhiteSpace(GitHub) || !string.IsNullOrWhiteSpace(Feed);
 }
 
 public sealed class UninstallSettings

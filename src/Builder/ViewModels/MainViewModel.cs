@@ -73,6 +73,7 @@ public sealed partial class FieldErrors : ObservableObject
     public string InstallStartMenuFolder => Get("install.startMenuFolder");
     public string InstallIntegration => Under("install.addToPath", "install.ngen");
     public string InstallLegacy => Under("install.adoptExistingInstall", "install.legacyUninstallKeys");
+    public string Update => Under("update");
     public string InstallRunning => Under("install.closeProcesses", "install.closeCommand", "install.relaunchArguments");
     public string InstallCleanup => Under("install.cleanup");
     public string UninstallCleanup => Under("uninstall.removeData", "uninstall.removeScheduledTasks", "uninstall.removeRunValues", "uninstall.removeShortcuts", "uninstall.removeRegistryKeys");

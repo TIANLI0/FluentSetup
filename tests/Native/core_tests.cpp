@@ -137,6 +137,21 @@ TEST(arguments_strict) {
     }
 }
 
+TEST(arguments_update_switches) {
+    std::wstring err;
+    boot::Args check;
+    CHECK(boot::ParseArgs(L"uninstall.exe /check-update", check, err) && check.checkUpdate && !check.installUpdate);
+    boot::Args install;
+    CHECK(boot::ParseArgs(L"uninstall.exe /install-update /passive /relaunch", install, err) && install.installUpdate && install.passive && install.relaunch);
+    boot::Args quiet;
+    CHECK(boot::ParseArgs(L"uninstall.exe --install-update --quiet", quiet, err) && quiet.installUpdate && quiet.quiet);
+    for (const wchar_t* bad : {L"uninstall.exe /check-update /install-update", L"uninstall.exe /install-update /uninstall",
+                               L"uninstall.exe /check-update=1"}) {
+        boot::Args c;
+        CHECK(!boot::ParseArgs(bad, c, err));
+    }
+}
+
 TEST(argument_quoting_round_trips) {
     for (const std::wstring s : {L"plain", L"with space", L"trailing\\", L"quote\"inside", L"C:\\Program Files\\", L"a\\\\\"b"}) {
         int argc = 0;

@@ -140,6 +140,12 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
         } else if (name == L"uninstall" || name == L"u") {
             if (!flag()) return false;
             out.uninstall = true;
+        } else if (name == L"check-update") {
+            if (!flag()) return false;
+            out.checkUpdate = true;
+        } else if (name == L"install-update") {
+            if (!flag()) return false;
+            out.installUpdate = true;
         } else if (name == L"help" || name == L"?" || name == L"h") {
             if (!flag()) return false;
             out.help = true;
@@ -249,6 +255,9 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
         }
     }
     if (out.worker && (out.pipe.empty() || out.parentPid == 0)) return error = L"--worker requires --pipe and --parent-pid", false;
+    if ((out.checkUpdate || out.installUpdate) && (out.checkUpdate == out.installUpdate || out.uninstall || out.worker || out.phase2)) {
+        return error = L"/check-update and /install-update cannot be combined with each other or with /uninstall", false;
+    }
     if (out.phase2 && (out.originDir.empty() || out.originProcess == 0 || out.resultPipe == 0)) {
         return error = L"--phase2 requires --origin-dir, --origin-process and --result-pipe", false;
     }

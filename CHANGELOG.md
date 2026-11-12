@@ -3,6 +3,26 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
+## [1.1.0] - 2026-11-13
+
+### Added
+
+- Built-in updates for packaged apps. A project `update` section names the source (`github` releases, or a JSON
+  `feed`); the installed `uninstall.exe` then understands `/check-update` (exit code 18 = a newer version is
+  published, one JSON line on stdout) and `/install-update` (a small window: check, ask, download with progress;
+  `/passive` and `/quiet` ask nothing). The download must come over https, match the published SHA-256 (GitHub's asset
+  digest and/or a checksums file such as `SHA256SUMS.txt`, or the feed's), be a FluentSetup package of the same app
+  id and architecture with exactly the advertised, newer version, and carry the signature `update.signer` pins. The
+  new Setup.exe then runs with `/passive` or `/quiet` and updates like any other upgrade (journaled, rolled back on
+  failure, closes and with `/relaunch` restarts the app).
+- Exit codes 18 (`UpdateAvailable`) and 19 (`UpdateFailed`); validation codes FS1701–FS1710.
+- Builder: "Built-in updates" on the Upgrades page.
+- FluentSetup's own installation has an update source, so its `uninstall.exe /install-update` works too.
+
+### Changed
+
+- Builder: the overview shows the publisher and version with `$(Name)` variables replaced.
+
 ## [1.0.1] - 2026-11-13
 
 ### Fixed

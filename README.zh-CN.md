@@ -15,6 +15,7 @@
 - **可直接替换 Inno Setup 和 NSIS**：原地接管它们的安装，并认得应用内更新已在用的命令行（`/SILENT /RELAUNCH=1`、`/S /UPDATE`、`/DIR=`、`/TASKS=` 等），应用发一个小版本即可切换。见[四个真实的迁移案例](docs/thrm.md)。
 - **前置条件版本检查**：.NET Framework、.NET 运行时、WebView2、Windows App Runtime 都可设置最低版本；缺失或版本过低时，用随包安装程序或可选的 https 下载（SHA-256 校验）安装/升级，否则停止并给出帮助链接。
 - **声明式扩展**：关闭正在运行的进程；必需（锁定）组件与可选组件；安装后或卸载前运行安装包内的程序（支持失败后的备用方式）；NGen；PATH；清理旧版本的计划任务、Run 启动项、快捷方式、文件、注册表项和卸载项。
+- **内置更新**：在项目里指定 GitHub Releases 或 JSON 源，已安装的应用即可自行更新：`uninstall.exe /install-update` 负责检查、询问、下载、校验（SHA-256、同一应用、更高版本、可选的签名者）并安装；`/check-update` 只检查。应用里无需编写更新代码。
 - **多变体**：一个安装包可同时带自包含版和依赖共享运行时的版本（相同文件只存一份），安装时由用户选择，或用 `--variant` 只打其中一种。
 - **无障碍与本地化**：内置英文、简体中文、日文、韩文，跟随 Windows 显示语言；其他语言可由安装包自行补齐（`fluentsetup locale add fr-FR`）；UI 自动化名称、键盘导航、浅色/深色/高对比度主题、按显示器 DPI 缩放。
 - **三种制作方式**：图形化 Builder 应用、`fluentsetup` 命令行（也提供 GitHub Action），或直接调用 `Builder.Core` 库。
@@ -92,6 +93,7 @@ GitHub Action 会在 Windows 构建机上安装命令行工具（下载后校验
 Setup.exe [/quiet | /S | /passive] [/uninstall] [/dir <路径>] [/scope user|machine] [/relaunch]
           [/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no]
           [/log <文件>] [/lang en-US|zh-CN|ja-JP|ko-KR] [/ui auto|winui|win32]
+uninstall.exe /check-update | /install-update [/passive | /quiet] [/relaunch]   （配置了更新来源时）
 ```
 
 退出代码 0 表示成功，其余代码见 [docs/diagnostics.md](docs/diagnostics.md)。也支持 Inno Setup 和 NSIS 的常用参数（[详情](docs/project-file.md#setupexe-command-line)）。

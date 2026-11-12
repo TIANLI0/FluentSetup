@@ -173,5 +173,20 @@
   "fallback.browse": "B&rowse…",
   "fallback.viewLog": "View log",
 
-  "usage": "Usage: Setup.exe [options]\n\n/quiet  Install without any user interface\n/passive  Show progress only, ask nothing\n/uninstall  Remove the installed app\n/dir <path>  Install location\n/scope user|machine  Install for the current user or for all users\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Turn a package-defined option on or off\n/variant <id>  Package variant (e.g. shared or self-contained runtimes)\n/remove-user-data  Uninstall: also delete settings and data\n/relaunch  Start the app after a quiet install (in-app updaters)\nInno Setup and NSIS switches (/VERYSILENT, /SUPPRESSMSGBOXES, /DIR=, /TASKS=, /D=...) are accepted.\n/log <file>  Write the log to this file\n/lang en-US|zh-CN|ja-JP|ko-KR  Interface language\n/ui auto|winui|win32  Interface technology (diagnostics)\n\nExit code 0 means success; see the documentation for the other codes."
+  "error.UpdateAvailable": "A newer version is available.",
+  "error.UpdateFailed": "The update couldn't be checked or downloaded. Check your internet connection and try again.",
+  "update.title": "{0} update",
+  "update.checking": "Checking for updates…",
+  "update.upToDate": "{0} is up to date",
+  "update.upToDate.body": "Version {0} is the latest version.",
+  "update.available": "{0} {1} is available",
+  "update.available.body": "You have version {0}. The update is downloaded, checked and installed; {1} closes while it is installed.",
+  "update.notes": "See what's new",
+  "update.later": "Not now",
+  "update.downloading": "Downloading {0} {1}…",
+  "update.verifying": "Checking the download…",
+  "update.checkFailed": "Couldn't check for updates",
+  "update.failed": "The update didn't finish",
+
+  "usage": "Usage: Setup.exe [options]\n\n/quiet  Install without any user interface\n/passive  Show progress only, ask nothing\n/uninstall  Remove the installed app\n/dir <path>  Install location\n/scope user|machine  Install for the current user or for all users\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Turn a package-defined option on or off\n/variant <id>  Package variant (e.g. shared or self-contained runtimes)\n/remove-user-data  Uninstall: also delete settings and data\n/relaunch  Start the app after a quiet install (in-app updaters)\n/check-update  Exit code 18 if a newer version is published, 0 if not\n/install-update  Download, check and install the newest version (with /passive or /quiet: no questions)\nInno Setup and NSIS switches (/VERYSILENT, /SUPPRESSMSGBOXES, /DIR=, /TASKS=, /D=...) are accepted.\n/log <file>  Write the log to this file\n/lang en-US|zh-CN|ja-JP|ko-KR  Interface language\n/ui auto|winui|win32  Interface technology (diagnostics)\n\nExit code 0 means success; see the documentation for the other codes."
 }

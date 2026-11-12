@@ -28,8 +28,10 @@ enum class ErrorCode : uint32_t {
     UnsafePath = 15,         // path escapes the install root or crosses a reparse point
     AlreadyRunning = 16,     // another setup/uninstall of the same app is in progress
     PrerequisiteMissing = 17,  // a required Windows component (.NET Framework, WebView2) is not installed
+    UpdateAvailable = 18,    // /check-update: a newer version is published (not a failure)
+    UpdateFailed = 19,       // /check-update, /install-update: no answer from the update source, or the download was refused
 };
-inline constexpr uint32_t kLastErrorCode = 17;
+inline constexpr uint32_t kLastErrorCode = 19;
 
 inline const wchar_t* ErrorCodeName(ErrorCode c) noexcept {
     switch (c) {
@@ -51,6 +53,8 @@ inline const wchar_t* ErrorCodeName(ErrorCode c) noexcept {
         case ErrorCode::UnsafePath: return L"UnsafePath";
         case ErrorCode::AlreadyRunning: return L"AlreadyRunning";
         case ErrorCode::PrerequisiteMissing: return L"PrerequisiteMissing";
+        case ErrorCode::UpdateAvailable: return L"UpdateAvailable";
+        case ErrorCode::UpdateFailed: return L"UpdateFailed";
     }
     return L"Unknown";
 }

@@ -173,6 +173,11 @@ std::wstring InstalledRequirementVersion(const Requirement& r);
 bool Download(const std::string& url, const std::wstring& dest, const Sha256Digest& sha256, uint64_t expectedSize,
               const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress, std::wstring& error);
 
+// GETs an https URL into memory (at most maxBytes). `headers`: extra request headers ("Name: value\r\n...") or null.
+// False with `error` on a transport failure or any status but 200 (`status` keeps the code, 0 if none came).
+bool HttpGetText(const std::string& url, const wchar_t* headers, size_t maxBytes, std::string& body, unsigned long& status,
+                 std::wstring& error);
+
 bool RegistryVersionAtLeast(const RegistryVersionCondition& c);
 
 struct ActionResult {

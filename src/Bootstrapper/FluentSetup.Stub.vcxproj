@@ -20,10 +20,10 @@
       <AdditionalIncludeDirectories>$(RepoRoot)third_party\zstd;$(RepoRoot)packages\Microsoft.WindowsAppSDK.Runtime.2.5.1\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>comctl32.lib;uxtheme.lib;dwmapi.lib;wintrust.lib;bcrypt.lib;shell32.lib;ole32.lib;oleaut32.lib;advapi32.lib;winhttp.lib;user32.lib;gdi32.lib;shcore.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>comctl32.lib;uxtheme.lib;dwmapi.lib;wintrust.lib;crypt32.lib;bcrypt.lib;shell32.lib;ole32.lib;oleaut32.lib;advapi32.lib;winhttp.lib;user32.lib;gdi32.lib;shcore.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <!-- Not KnownDLLs: delay-load them so they are resolved after SetDefaultDllDirectories(SYSTEM32), never from the
            download folder Setup.exe runs in. -->
-      <DelayLoadDLLs>comctl32.dll;uxtheme.dll;dwmapi.dll;wintrust.dll;bcrypt.dll;shcore.dll;oleaut32.dll;winhttp.dll;taskschd.dll</DelayLoadDLLs>
+      <DelayLoadDLLs>comctl32.dll;uxtheme.dll;dwmapi.dll;wintrust.dll;crypt32.dll;bcrypt.dll;shcore.dll;oleaut32.dll;winhttp.dll;taskschd.dll</DelayLoadDLLs>
       <!-- Linker map: scripts/size-report.ps1 attributes the stub's bytes to its components. -->
       <GenerateMapFile>true</GenerateMapFile>
       <MapFileName>$(OutDir)FluentSetup.Stub.map</MapFileName>
@@ -39,6 +39,7 @@
     <ClInclude Include="localization.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="runtime_probe.h" />
+    <ClInclude Include="updater.h" />
     <ClInclude Include="winui_host.h" />
     <ClInclude Include="..\Setup.Win32\fallback_ui.h" />
     <ClInclude Include="..\Setup.Win32\theme.h" />
@@ -51,6 +52,7 @@
     <ClCompile Include="localization.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="runtime_probe.cpp" />
+    <ClCompile Include="updater.cpp" />
     <ClCompile Include="winui_host.cpp" />
     <ClCompile Include="..\Setup.Win32\fallback_ui.cpp" />
     <ClCompile Include="..\Setup.Win32\theme.cpp" />

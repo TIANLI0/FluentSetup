@@ -37,6 +37,25 @@ public sealed partial class MainViewModel
     [ObservableProperty] public partial string CleanupUninstallKeysText { get; set; } = "";
     [ObservableProperty] public partial string CleanupFilesText { get; set; } = "";
 
+    // ---- Built-in updates (update) ------------------------------------------------------------------------------
+    [ObservableProperty] public partial int UpdateSourceIndex { get; set; }  // none, github, feed
+    [ObservableProperty] public partial string UpdateGitHub { get; set; } = "";
+    [ObservableProperty] public partial string UpdateFeed { get; set; } = "";
+    [ObservableProperty] public partial string UpdateAsset { get; set; } = "";
+    [ObservableProperty] public partial bool UpdatePrerelease { get; set; }
+    [ObservableProperty] public partial string UpdateChecksums { get; set; } = "";
+    [ObservableProperty] public partial string UpdateSigner { get; set; } = "";
+    public bool UpdateIsOn => UpdateSourceIndex != 0;
+    public bool UpdateIsGitHub => UpdateSourceIndex == 1;
+    public bool UpdateIsFeed => UpdateSourceIndex == 2;
+
+    partial void OnUpdateSourceIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(UpdateIsOn));
+        OnPropertyChanged(nameof(UpdateIsGitHub));
+        OnPropertyChanged(nameof(UpdateIsFeed));
+    }
+
     // ---- Uninstall -----------------------------------------------------------------------------------------------
     [ObservableProperty] public partial string UninstallDataText { get; set; } = "";
     [ObservableProperty] public partial string UninstallScheduledTasksText { get; set; } = "";
@@ -191,6 +210,15 @@ public sealed partial class MainViewModel
         StringsText = TextForms.Strings(p.Ui.Strings);
 
         Fill(VariableRows, Each(p.Variables).Select(kv => new VariableRow { Name = kv.Key, Value = kv.Value ?? "" }), this);
+
+        var upd = p.Update;
+        UpdateSourceIndex = !string.IsNullOrWhiteSpace(upd.GitHub) ? 1 : !string.IsNullOrWhiteSpace(upd.Feed) ? 2 : 0;
+        UpdateGitHub = upd.GitHub ?? "";
+        UpdateFeed = upd.Feed ?? "";
+        UpdateAsset = upd.Asset ?? "";
+        UpdatePrerelease = upd.Prerelease;
+        UpdateChecksums = upd.Checksums ?? "";
+        UpdateSigner = upd.Signer ?? "";
     }
 
     /// <summary>Writes the editors onto <paramref name="p"/>, a copy of the loaded project.</summary>
@@ -270,6 +298,16 @@ public sealed partial class MainViewModel
         var variables = new Dictionary<string, string>();
         foreach (var v in VariableRows.Where(v => v.Name.Trim().Length > 0)) variables[v.Name.Trim()] = v.Value;
         p.Variables = variables;
+
+        // Only the settings of the chosen source are written; the editors keep the others while switching.
+        var upd = p.Update;
+        bool github = UpdateSourceIndex == 1, feed = UpdateSourceIndex == 2;
+        upd.GitHub = github ? TextForms.Keep(UpdateGitHub, upd.GitHub) : "";
+        upd.Feed = feed ? TextForms.Keep(UpdateFeed, upd.Feed) : "";
+        upd.Asset = github ? TextForms.Keep(UpdateAsset, upd.Asset) : "";
+        upd.Prerelease = github && UpdatePrerelease;
+        upd.Checksums = github ? TextForms.Keep(UpdateChecksums, upd.Checksums) : "";
+        upd.Signer = github || feed ? TextForms.Keep(UpdateSigner, upd.Signer) : "";
     }
 
     /// <summary>Shows each list item's own validation errors on its card.</summary>

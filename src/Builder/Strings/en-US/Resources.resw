@@ -584,4 +584,23 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="SettingsUpdatesCheckTitle.Text" xml:space="preserve"><value>FluentSetup version</value></data>
   <data name="SettingsUpdatesCheck.Content" xml:space="preserve"><value>Check now</value></data>
   <data name="SettingsUpdatesInstall.Content" xml:space="preserve"><value>Update</value></data>
+  <data name="UpdateSection.Text" xml:space="preserve"><value>Built-in updates</value></data>
+  <data name="UpdateSourceTitle.Text" xml:space="preserve"><value>Update source</value></data>
+  <data name="UpdateSourceDescription.Text" xml:space="preserve"><value>Where installed copies look for a newer Setup.exe. Leave it off if the app has its own updater.</value></data>
+  <data name="UpdateSourceCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Update source</value></data>
+  <data name="UpdateSourceNone.Content" xml:space="preserve"><value>Off</value></data>
+  <data name="UpdateSourceGitHub.Content" xml:space="preserve"><value>GitHub releases</value></data>
+  <data name="UpdateSourceFeed.Content" xml:space="preserve"><value>JSON feed</value></data>
+  <data name="UpdateGitHubBox.Header" xml:space="preserve"><value>Repository</value></data>
+  <data name="UpdateGitHubBox.PlaceholderText" xml:space="preserve"><value>owner/name, e.g. contoso/notes</value></data>
+  <data name="UpdateAssetBox.Header" xml:space="preserve"><value>Setup.exe in the release</value></data>
+  <data name="UpdateAssetBox.PlaceholderText" xml:space="preserve"><value>Same as the output file name</value></data>
+  <data name="UpdateChecksumsBox.Header" xml:space="preserve"><value>Checksums file (optional)</value></data>
+  <data name="UpdateChecksumsBox.PlaceholderText" xml:space="preserve"><value>GitHub's own SHA-256</value></data>
+  <data name="UpdatePrereleaseToggle.Header" xml:space="preserve"><value>Offer pre-releases</value></data>
+  <data name="UpdateFeedBox.Header" xml:space="preserve"><value>Feed URL (https)</value></data>
+  <data name="UpdateFeedBox.PlaceholderText" xml:space="preserve"><value>https://example.com/myapp/latest.json</value></data>
+  <data name="UpdateSignerBox.Header" xml:space="preserve"><value>Required signer (optional)</value></data>
+  <data name="UpdateSignerBox.PlaceholderText" xml:space="preserve"><value>Certificate subject, e.g. Contoso Ltd</value></data>
+  <data name="UpdateHowToUse.Text" xml:space="preserve"><value>In the app, run "uninstall.exe /install-update /relaunch" from the install folder for "Check for updates" (a small window asks first), or "uninstall.exe /check-update" in the background (exit code 18 = update available). Downloads must match the published SHA-256 and be a newer version of this app; {Version} in the file name stands for the release's version.</value></data>
 </root>

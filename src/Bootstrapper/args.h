@@ -46,6 +46,8 @@ struct Args {
     bool relaunch = false;                // /relaunch, Inno /RELAUNCH=1, NSIS-style /UPDATE: start the app after a quiet or passive install
     std::optional<std::vector<std::wstring>> tasks;  // Inno /TASKS (exact) or /MERGETASKS (added): option ids, desktopicon
     bool tasksMerge = false;
+    bool checkUpdate = false;    // /check-update: report whether the update source has a newer version (exit 0 or 18)
+    bool installUpdate = false;  // /install-update: download, verify and run the newer Setup.exe
     std::wstring uiSimulate;
 
     // internal

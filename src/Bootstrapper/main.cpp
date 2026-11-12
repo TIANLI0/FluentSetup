@@ -1,9 +1,11 @@
 // FluentSetup bootstrapper: the entry point of every generated Setup.exe and of the installed uninstall.exe.
-// Native Win32 + C++20 only; no .NET, no Windows App Runtime, no WebView2, no network access.
+// Native Win32 + C++20 only; no .NET, no Windows App Runtime, no WebView2. The network is used only for prerequisite
+// downloads and for /check-update and /install-update.
 #include "Archive/container.h"
 #include "Bootstrapper/args.h"
 #include "Bootstrapper/controller.h"
 #include "Bootstrapper/localization.h"
+#include "Bootstrapper/updater.h"
 #include "Bootstrapper/winui_host.h"
 #include "Common/fs.h"
 #include "Common/log.h"
@@ -23,7 +25,7 @@ using namespace fsetup;
 
 namespace {
 
-constexpr wchar_t kProductVersion[] = L"1.0.1";
+constexpr wchar_t kProductVersion[] = L"1.1.0";
 
 DWORD OsBuild() {
     using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
@@ -154,15 +156,16 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     boot::Strings strings;
     strings.Load(argsOk ? args.language : std::wstring(), pkg.ui["defaultLanguage"].asWide(), pkg.ui["strings"]);
     const std::wstring appName = pkg.name.empty() ? path::FileName(self) : pkg.name;
-    const bool uninstallMode = argsOk && (args.uninstall || pkg.IsUninstaller());
+    const bool updateMode = argsOk && (args.checkUpdate || args.installUpdate);
+    const bool uninstallMode = argsOk && !updateMode && (args.uninstall || pkg.IsUninstaller());
 
     std::wstring logPath = argsOk ? args.logPath : std::wstring();
     if (logPath.empty()) {
         const std::wstring id = pkg.appId.empty() ? L"package" : pkg.appId;
         logPath = path::Join(path::Join(path::TempRoot(), L"FluentSetup"),
-                             id + (uninstallMode ? L"-uninstall-" : L"-install-") + Timestamp() + L".log");
+                             id + (updateMode ? L"-update-" : uninstallMode ? L"-uninstall-" : L"-install-") + Timestamp() + L".log");
     }
-    log::Open(logPath, args.worker ? L"worker" : args.phase2 ? L"uninstall" : L"setup");
+    log::Open(logPath, args.worker ? L"worker" : args.phase2 ? L"uninstall" : updateMode ? L"update" : L"setup");
     log::Info(L"FluentSetup %s (%s) started: %s", kProductVersion,
 #if defined(_M_ARM64)
               L"arm64",
@@ -200,6 +203,13 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         log::Error(L"Windows build %lu is older than the required %u", OsBuild(), pkg.minWindowsBuild);
         if (!quiet) ShowError(appName, strings.Get("error.UnsupportedSystem"), Printf(L"Windows build %lu < %u", OsBuild(), pkg.minWindowsBuild));
         return static_cast<int>(ErrorCode::UnsupportedSystem);
+    }
+    if (updateMode) {
+        // Looks for a newer Setup.exe of this app and runs it (it takes the per-app mutex itself).
+        const int code = boot::RunUpdate(pkg, args, strings);
+        log::Info(L"Exit code %d", code);
+        log::Close();
+        return code;
     }
     if (uninstallMode && pkg.IsUninstaller() && !args.phase2) {
         log::Info(L"Relocating the uninstaller to a temporary directory");

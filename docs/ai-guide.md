@@ -198,6 +198,21 @@ content and breaks the hash.
 Per-user uninstalls run without administrator rights: `uninstall.elevated` then asks once for UAC (interactive only;
 silent uninstalls skip it and log a warning). Per-machine uninstalls already run elevated and do it directly.
 
+Built-in updates (instead of writing an updater in the app):
+
+```jsonc
+"update": { "github": "owner/repo", "checksums": "SHA256SUMS.txt" }   // or "feed": "https://…/latest.json"
+```
+
+- The app runs `"<installDir>\uninstall.exe" /install-update /relaunch` for "Check for updates" (a small window asks
+  first), or `/check-update` in the background (exit 18 = update available, 0 = none, 19 = no answer; one JSON line on
+  stdout).
+- GitHub: the release's Setup.exe is found by `update.asset` (default `output.fileName`; write `{Version}`, never the
+  literal version). A SHA-256 is required: GitHub's asset digest and/or the `checksums` file.
+- Feed: `{ "version", "url", "sha256", "size"?, "notes"? }` over https.
+- The download must be the same `app.id`, the advertised (newer) version, and signed by `update.signer` if set.
+- Do not add `update` for apps that keep their own updater; their `Setup.exe /SILENT` or `/S /UPDATE` calls keep working.
+
 ## 9. Validation codes
 
 `fluentsetup validate --json` returns `{ valid, diagnostics: [{ severity, code, field, message }] }`.
@@ -211,6 +226,8 @@ silent uninstalls skip it and log a warning). Per-machine uninstalls already run
 | FS14xx | `output` |
 | FS15xx | `signing` |
 | FS16xx | requirements, options, actions, cleanup, variants filters (FS1640–FS1642: a referenced file is not in the package) |
+| FS17xx | `update` (FS1701 both sources, FS1702 repository, FS1703 feed URL, FS1704 asset name, FS1705 literal version in the name, FS1706 checksums, FS1707–FS1710 settings without effect, signer) |
+| FS18xx | `variables` |
 | FS2xxx | build (installer runtime missing, WinUI front end missing) |
 
 ## 10. Languages
@@ -230,7 +247,8 @@ silent uninstalls skip it and log a warning). Per-machine uninstalls already run
 
 `Setup.exe [/quiet | /S | /passive | /silent] [/uninstall] [/dir <path>] [/scope user|machine] [/variant <id>]
 [/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no] [/remove-user-data] [/relaunch]
-[/log <file>] [/lang <tag>] [/ui auto|winui|win32]`
+[/log <file>] [/lang <tag>] [/ui auto|winui|win32]`, and on the installed `uninstall.exe` also
+`/check-update` and `/install-update [/passive | /quiet] [/relaunch]` (see section 8).
 
 Compatible switches of other installers, so existing scripts and in-app updaters keep working:
 
@@ -266,6 +284,8 @@ Compatible switches of other installers, so existing scripts and in-app updaters
 | 15 | Unsafe path (outside the install folder, through a link, protected location) |
 | 16 | Another setup of this app is running |
 | 17 | Prerequisite missing (and not installable, or `onFailure: "fail"`) |
+| 18 | `/check-update`: a newer version is published |
+| 19 | `/check-update`, `/install-update`: no answer from the update source, or the download was refused |
 
 Uninstall entries: `"<dir>\uninstall.exe" /uninstall` (and `/quiet`). Logs default to
 `%TEMP%\FluentSetup\<AppId>-install-<time>.log`.

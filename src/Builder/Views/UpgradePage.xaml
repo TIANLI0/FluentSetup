@@ -102,6 +102,42 @@
                     <TextBox x:Uid="UpgradePreserveBox" Text="{x:Bind VM.PreserveText, Mode=TwoWay}" MinHeight="96" Style="{StaticResource LinesBoxStyle}" />
                 </StackPanel>
             </Border>
+
+            <!-- Built-in updates: the installed uninstall.exe finds, verifies and runs a newer Setup.exe -->
+            <TextBlock x:Uid="UpdateSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE777;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="UpdateSourceTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="UpdateSourceDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.UpdateSourceIndex, Mode=TwoWay}" x:Uid="UpdateSourceCombo">
+                            <ComboBoxItem x:Uid="UpdateSourceNone" />
+                            <ComboBoxItem x:Uid="UpdateSourceGitHub" />
+                            <ComboBoxItem x:Uid="UpdateSourceFeed" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20" Visibility="{x:Bind VM.UpdateIsOn, Mode=OneWay}">
+                    <StackPanel Spacing="12">
+                        <Grid ColumnSpacing="12" RowSpacing="12" Visibility="{x:Bind VM.UpdateIsGitHub, Mode=OneWay}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <TextBox x:Uid="UpdateGitHubBox" Text="{x:Bind VM.UpdateGitHub, Mode=TwoWay}" />
+                            <TextBox x:Uid="UpdateAssetBox" Grid.Column="1" Text="{x:Bind VM.UpdateAsset, Mode=TwoWay}" />
+                            <TextBox x:Uid="UpdateChecksumsBox" Grid.Row="1" Text="{x:Bind VM.UpdateChecksums, Mode=TwoWay}" />
+                            <ToggleSwitch x:Uid="UpdatePrereleaseToggle" Grid.Row="1" Grid.Column="1" IsOn="{x:Bind VM.UpdatePrerelease, Mode=TwoWay}" />
+                        </Grid>
+                        <TextBox x:Uid="UpdateFeedBox" Text="{x:Bind VM.UpdateFeed, Mode=TwoWay}" Visibility="{x:Bind VM.UpdateIsFeed, Mode=OneWay}" />
+                        <TextBox x:Uid="UpdateSignerBox" Text="{x:Bind VM.UpdateSigner, Mode=TwoWay}" />
+                        <TextBlock x:Uid="UpdateHowToUse" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />
+                        <TextBlock Text="{x:Bind VM.Errors.Update, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.Update), Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </Page>

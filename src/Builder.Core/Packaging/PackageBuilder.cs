@@ -752,6 +752,26 @@ public sealed class PackageBuilder
             w.WriteEndArray();
             w.WriteEndObject();
             w.WriteEndObject();
+
+            // Built-in updates (uninstall.exe /check-update, /install-update); the uninstaller keeps this header.
+            var u = p.Update;
+            if (u.Enabled)
+            {
+                w.WriteStartObject("update");
+                if (!string.IsNullOrWhiteSpace(u.GitHub))
+                {
+                    w.WriteString("github", u.GitHub.Trim());
+                    w.WriteString("asset", ProjectValidator.UpdateAssetTemplate(p));
+                    w.WriteBoolean("prerelease", u.Prerelease);
+                    if (u.Checksums.Length > 0) w.WriteString("checksums", u.Checksums);
+                }
+                else
+                {
+                    w.WriteString("feed", u.Feed.Trim());
+                }
+                if (u.Signer.Length > 0) w.WriteString("signer", u.Signer);
+                w.WriteEndObject();
+            }
         }
 
         private static void WriteStreams(Utf8JsonWriter w, List<StreamRecord> streams)
