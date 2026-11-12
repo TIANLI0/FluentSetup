@@ -286,6 +286,15 @@
           },
           "default": [],
           "description": "Empty folders to create below the install folder (relative paths)."
+        },
+        "variants": {
+          "type": "array",
+          "maxItems": 8,
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/variant"
+          },
+          "description": "Alternative builds (e.g. shared runtimes vs self-contained). With variants, files.source is not used; the user picks a variant at install time."
         }
       }
     },
@@ -458,6 +467,26 @@
               }
             }
           }
+        },
+        "closeCommand": {
+          "type": "object",
+          "required": [
+            "run"
+          ],
+          "description": "Asks a running copy to exit cleanly (e.g. a tray app) before files are replaced or removed; closeProcesses handles what is still running.",
+          "properties": {
+            "run": {
+              "$ref": "#/$defs/relativeExePath"
+            },
+            "arguments": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "string",
+                "maxLength": 1024
+              }
+            }
+          }
         }
       },
       "allOf": [
@@ -587,6 +616,15 @@
               ],
               "default": "warn",
               "description": "warn: install the app anyway and report it. fail: if the prerequisite is still missing or older than minVersion after its installer ran, stop and roll the installation back."
+            },
+            "variants": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,32}$"
+              },
+              "description": "Only needed for these variants (empty = always)."
             }
           }
         },
@@ -636,8 +674,36 @@
               "arguments": true,
               "download": true,
               "helpUrl": true,
-              "onFailure": true
+              "onFailure": true,
+              "variants": true
             }
+          }
+        },
+        "windowsAppRuntime": {
+          "type": "object",
+          "default": {},
+          "description": "Windows App SDK runtime (framework package) for framework-dependent WinUI 3 apps; detected per user and architecture.",
+          "allOf": [
+            {
+              "$ref": "#/$defs/prerequisiteSource"
+            }
+          ],
+          "properties": {
+            "required": {
+              "type": "boolean",
+              "default": false
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^(1\\.\\d+|[2-9]\\d*\\.\\d+(\\.\\d+){0,2})$",
+              "description": "Windows App SDK version, e.g. 2.5.1 (2.x: that version or newer); 1.6 = any 1.6 runtime."
+            },
+            "installer": true,
+            "arguments": true,
+            "download": true,
+            "helpUrl": true,
+            "onFailure": true,
+            "variants": true
           }
         }
       }
@@ -668,6 +734,28 @@
           "type": "boolean",
           "default": false,
           "description": "A component that is always installed: shown checked and locked."
+        },
+        "startup": {
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "description": "While the option is selected, start app.mainExecutable with Windows: HKCU\\...\\Run\\<name> = \"<exe>\" <arguments>. Removed when unselected and on uninstall.",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "arguments": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "string",
+                "maxLength": 1024
+              }
+            }
+          }
         }
       }
     },
@@ -1046,6 +1134,15 @@
           "type": "boolean",
           "default": true,
           "description": "Embed the WinUI 3 front end. Setup.exe falls back to the built-in Win32 interface where WinUI cannot run; false = Win32 interface only (smaller)."
+        },
+        "variants": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,32}$"
+          },
+          "description": "Variants to put into this package (empty = all). One variant = no choice at install time. CLI: --variant."
         }
       }
     },
@@ -1180,6 +1277,48 @@
           ],
           "default": "warn",
           "description": "warn: install the app anyway and report it. fail: if the prerequisite is still missing or older than minVersion after its installer ran, stop and roll the installation back."
+        },
+        "variants": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,32}$"
+          },
+          "description": "Only needed for these variants (empty = always)."
+        }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "required": [
+        "id",
+        "source"
+      ],
+      "description": "One build of the app. Files with the same path and content in every variant are stored and installed once.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "description": "Used by Setup.exe /variant, output.variants and requirements.*.variants."
+        },
+        "label": {
+          "$ref": "#/$defs/localizedText",
+          "description": "Shown as a radio button on the first page (with the size)."
+        },
+        "description": {
+          "$ref": "#/$defs/localizedText",
+          "description": "Shown below the choice."
+        },
+        "default": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pre-selected variant (else the first)."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Folder with this build, e.g. a dotnet publish output. files.include/exclude/preserve apply; files.extra is added to every variant."
         }
       }
     }

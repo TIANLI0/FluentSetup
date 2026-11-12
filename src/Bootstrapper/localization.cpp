@@ -63,16 +63,30 @@ std::wstring Resolve(const std::wstring& tag) {
 }  // namespace
 
 void Strings::Load(const std::wstring& requested, const std::wstring& packageDefault, const json::Value& overrides) {
-    std::wstring lang = Resolve(requested);
+    // Languages = the built-in tables plus any language the package brings its own strings for (ui.strings.<tag>),
+    // so a package can add e.g. fr-FR or de-DE without a new installer build. Exact tags win over language prefixes.
+    const auto resolve = [&](const std::wstring& tag) -> std::wstring {
+        if (tag.empty()) return {};
+        for (const auto& [k, v] : overrides.object()) {
+            if (v.isObject() && EqualsIgnoreCase(Utf8ToWide(k), tag)) return Utf8ToWide(k);
+        }
+        if (std::wstring builtIn = Resolve(tag); !builtIn.empty()) return builtIn;
+        const std::wstring primary = tag.substr(0, tag.find(L'-'));
+        for (const auto& [k, v] : overrides.object()) {
+            const std::wstring key = Utf8ToWide(k);
+            if (v.isObject() && EqualsIgnoreCase(key.substr(0, key.find(L'-')), primary)) return key;
+        }
+        return {};
+    };
+    std::wstring lang = resolve(requested);
     if (lang.empty() && !packageDefault.empty() && !EqualsIgnoreCase(packageDefault, L"auto")) {
         // A project can pin the installer language; otherwise follow the user's Windows display language.
-        lang = Resolve(packageDefault);
+        lang = resolve(packageDefault);
     }
     for (const auto& candidate : UserLanguages()) {
         if (!lang.empty()) break;
-        lang = Resolve(candidate);
+        lang = resolve(candidate);
     }
-    if (lang.empty()) lang = Resolve(packageDefault);
     if (lang.empty()) lang = L"en-US";
     language_ = lang;
 

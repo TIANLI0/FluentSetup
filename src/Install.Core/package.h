@@ -37,6 +37,17 @@ struct FileInfo {
     uint64_t offset = 0;  // offset inside the decoded stream
     uint32_t attributes = 0;  // FILE_ATTRIBUTE_READONLY | HIDDEN only
     bool preserve = false;    // user data: never overwritten if present, never removed
+    std::string variant;      // empty = every variant; else only installed when this variant is chosen
+};
+
+// Alternative builds of the app in one package (e.g. framework-dependent vs self-contained). Files without a variant
+// are shared; the user (or /variant) picks one variant at install time.
+struct Variant {
+    std::string id;
+    LocalizedText label;
+    LocalizedText description;
+    bool isDefault = false;
+    uint64_t bytes = 0;  // shared + variant-specific payload bytes
 };
 
 struct FileSet {
@@ -67,6 +78,7 @@ struct Package {
     json::Value ui;
 
     FileSet payload;
+    std::vector<Variant> variants;  // empty = a single build
     FileSet frontend;
     std::wstring frontendEntry;
     std::wstring iconFile;  // inside the frontend set
@@ -75,6 +87,18 @@ struct Package {
     json::Value raw;  // the full header, used to derive the uninstaller header
 
     [[nodiscard]] bool IsUninstaller() const noexcept { return kind == L"uninstaller"; }
+    [[nodiscard]] const Variant* FindVariant(const std::string& id) const noexcept {
+        for (const auto& v : variants) {
+            if (v.id == id) return &v;
+        }
+        return nullptr;
+    }
+    [[nodiscard]] std::string DefaultVariant() const {
+        for (const auto& v : variants) {
+            if (v.isDefault) return v.id;
+        }
+        return variants.empty() ? std::string() : variants.front().id;
+    }
     [[nodiscard]] bool HasFrontend() const noexcept { return !frontendEntry.empty() && !frontend.files.empty(); }
 };
 

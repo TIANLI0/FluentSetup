@@ -38,6 +38,7 @@ struct Args {
     std::wstring language;
     UiChoice ui = UiChoice::Auto;
     std::map<std::string, bool> choices;  // /option id=yes|no (package-defined options)
+    std::string variant;                  // /variant id (package variant, e.g. shared or selfContained)
     std::wstring uiSimulate;
 
     // internal

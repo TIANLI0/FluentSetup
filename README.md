@@ -27,10 +27,15 @@ with a Fluent WinUI 3 interface and no .NET, VC++ redistributable, WebView2 or n
 - **Declarative extensions.** Close running processes, required (locked) and optional components, payload programs
   after install or before uninstall with fallbacks, adoption of installs made under older product names, NGen,
   and cleanup of legacy tasks, Run entries, shortcuts and uninstall keys.
-- **Accessible and localized.** English, Simplified Chinese, Japanese and Korean, following the Windows display
-  language; package texts live in one file per language. UI Automation names, keyboard navigation,
+- **Variants.** One package can carry a self-contained and a framework-dependent build of the same app (shared files
+  stored once); the user picks at install time, or `--variant` builds a single-variant package.
+- **Accessible and localized.** English, Simplified Chinese, Japanese and Korean built in, following the Windows display
+  language; any other language can be added by a package (`fluentsetup locale add fr-FR`); package texts live in one
+  file per language. UI Automation names, keyboard navigation,
   light/dark/high-contrast themes, and per-monitor DPI.
 - **Three ways to build:** the `fluentsetup` CLI, a WinUI 3 Builder app, or the `Builder.Core` library.
+- **Made for AI-assisted authoring.** `fluentsetup guide` prints a complete authoring guide, `fluentsetup schema` the
+  JSON Schema, and `fluentsetup validate --json` machine-readable diagnostics with codes and field paths.
 
 ## Quick start
 
@@ -47,6 +52,7 @@ $fs = '.\src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe'
 & $fs validate my-app\fluentsetup.json
 & $fs build my-app\fluentsetup.json      # -> my-app\dist\My App-1.0.0-Setup.exe
 & $fs inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
+& $fs guide                              # the full authoring guide (also for AI tools)
 ```
 
 A minimal project file:

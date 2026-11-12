@@ -321,6 +321,70 @@ Check 'legacy: uninstall exit 0, Run value cleaned up' { $code -eq 0 -and $null 
 Remove-ItemProperty $runKey -Name 'FluentSetupE2E-Old', 'FluentSetupE2E-Auto' -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force $legacyDir, $legacyKey, $oldLink -ErrorAction SilentlyContinue
 
+Write-Host '==> Variants (shared vs. self-contained builds), option startup entry, close command' -ForegroundColor Cyan
+Remove-Existing
+$vbin = Join-Path $work 'bin-variants'
+& $msbuild samples\DemoApp\DemoApp.vcxproj /p:Configuration=Release /p:Platform=x64 "/p:DemoVersion=8.0.0" "/p:DemoOut=$vbin\" /nologo /v:q | Out-Null
+$va = Join-Path $work 'variant-a'; $vb = Join-Path $work 'variant-b'
+New-Item -ItemType Directory -Force $va, $vb | Out-Null
+foreach ($v in $va, $vb) { Copy-Item (Join-Path $vbin 'DemoApp.exe') $v; 'same in both' | Set-Content (Join-Path $v 'common.txt') }
+'runtime A' | Set-Content (Join-Path $va 'only-a.txt'); 'runtime B' | Set-Content (Join-Path $vb 'only-b.dll')
+'built for A' | Set-Content (Join-Path $va 'differs.txt'); 'built for B (longer)' | Set-Content (Join-Path $vb 'differs.txt')
+$vproject = Get-Content samples\DemoApp\fluentsetup.json -Raw | ConvertFrom-Json
+$vproject.app.id = $appId; $vproject.app.name = $appName; $vproject.app.version = '8.0.0'
+$vproject.files.source = ''
+$vproject.files | Add-Member -Force -NotePropertyName variants -NotePropertyValue @(
+    @{ id = 'a'; label = @{ 'en-US' = 'Build A' }; default = $true; source = 'variant-a' },
+    @{ id = 'b'; label = @{ 'en-US' = 'Build B' }; source = 'variant-b' })
+$vproject.ui.license = '..\..\samples\DemoApp\LICENSE.txt'
+$vproject.output.directory = 'dist'
+$vproject.install | Add-Member -Force -NotePropertyName closeCommand -NotePropertyValue @{ run = 'DemoApp.exe'; arguments = @('--version') }
+$vproject.install | Add-Member -Force -NotePropertyName closeProcesses -NotePropertyValue @('DemoApp.exe')  # whatever ignores the command
+$vproject | Add-Member -Force -NotePropertyName requirements -NotePropertyValue @{ dotNet = @(@{ runtime = 'core'; version = '99.0.0'; variants = @('b') }) }
+$vproject | Add-Member -Force -NotePropertyName options -NotePropertyValue @(@{ id = 'startup'; label = @{ 'en-US' = 'Start with Windows' }; default = $true; startup = @{ name = 'FluentSetupE2E-Startup'; arguments = @('--background') } })
+$vpath = Join-Path $work 'project-variants.json'
+[IO.File]::WriteAllText($vpath, ($vproject | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
+& $cli build $vpath | Out-Null
+$vsetup = Join-Path $work "dist\$appName-8.0.0-Setup.exe"
+$header = & $cli inspect $vsetup --json | ConvertFrom-Json
+Check 'variants: package built' { Test-Path $vsetup }
+$code = Run-Setup $vsetup @('/quiet', '/variant', 'b') 'variant-b'
+Check 'variant b: its prerequisite (missing .NET 99) stops setup (exit 17)' { $code -eq 17 -and -not (Test-Path $arpKey) }
+$code = Run-Setup $vsetup @('/quiet') 'variant-default'
+Check 'default variant a: installed with shared + a files only' {
+    $code -eq 0 -and (Test-Path "$installDir\common.txt") -and (Test-Path "$installDir\only-a.txt") -and -not (Test-Path "$installDir\only-b.dll") -and
+    (Get-Content "$installDir\differs.txt") -eq 'built for A' -and (Get-ItemProperty $arpKey).FluentSetupVariant -eq 'a' }
+Check 'option startup entry registered for the main executable' { (Get-ItemProperty $runKey).'FluentSetupE2E-Startup' -like "*$appName\DemoApp.exe*--background" }
+Start-Process (Join-Path $installDir 'DemoApp.exe')  # running app: the update must close it (close command, then closeProcesses)
+Start-Sleep -Seconds 1
+$vproject.requirements.dotNet[0].variants = @('a')    # now b has no missing prerequisite
+[IO.File]::WriteAllText($vpath, ($vproject | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
+& $cli build $vpath | Out-Null
+$code = Run-Setup $vsetup @('/quiet', '/variant', 'b') 'variant-switch'
+$switchLog = Get-Content (Join-Path $logs 'variant-switch.log') -Raw
+Check 'switch to variant b: a-only files removed, b files installed, shared kept' {
+    $code -eq 0 -and -not (Test-Path "$installDir\only-a.txt") -and (Test-Path "$installDir\only-b.dll") -and (Test-Path "$installDir\common.txt") -and
+    (Get-Content "$installDir\differs.txt") -eq 'built for B (longer)' -and (Get-ItemProperty $arpKey).FluentSetupVariant -eq 'b' }
+Check 'close command ran against the running app before files were replaced' { $switchLog -match 'Asking the app to exit' -and -not (Get-Process DemoApp -ErrorAction SilentlyContinue) }
+Remove-Existing
+Check 'uninstall removed the startup entry' { $null -eq (Get-ItemProperty $runKey).'FluentSetupE2E-Startup' }
+Get-Process DemoApp -ErrorAction SilentlyContinue | Stop-Process -Force
+
+Write-Host '==> A language the installer does not ship, supplied by the package' -ForegroundColor Cyan
+Remove-Existing
+New-Item -ItemType Directory -Force (Join-Path $work 'locales') | Out-Null
+[IO.File]::WriteAllText((Join-Path $work 'locales\de-DE.json'), '{ "strings": { "button.install": "Installieren", "state.Validating": "Wird geprüft" } }', [Text.UTF8Encoding]::new($false))
+$german = New-Package '9.0.0' { param($s) } @{} @{ ui = @{ license = '..\..\samples\DemoApp\LICENSE.txt'; localization = 'locales' } }
+$code = Run-Setup $german @('/quiet', '/lang', 'de-DE') 'lang-de'
+Check 'package-supplied de-DE strings are used (/lang de-DE)' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-de.log') -Raw) -match 'UI language de-DE' }
+Remove-Existing
+$code = Run-Setup $german @('/quiet', '/lang', 'de-AT') 'lang-de-at'
+Check 'de-AT falls back to the package''s de-DE' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-de-at.log') -Raw) -match 'UI language de-DE' }
+Remove-Existing
+$code = Run-Setup $german @('/quiet', '/lang', 'fr-FR') 'lang-fr'
+Check 'a language nobody supplies falls back to the Windows display language' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-fr.log') -Raw) -match 'UI language (en-US|zh-CN|ja-JP|ko-KR) ' }
+Remove-Existing
+
 Write-Host '==> Prerequisites: .NET version checks, missing runtime, verified download' -ForegroundColor Cyan
 Remove-Existing
 $netcore = Get-ChildItem "$env:ProgramFiles\dotnet\shared\Microsoft.NETCore.App" -Directory -ErrorAction SilentlyContinue |
@@ -351,7 +415,7 @@ if (Test-Path $nuget) {
     $bad = New-Package '7.0.2' { param($s) } @{} @{ requirements = @{ dotNet = @(@{ runtime = 'core'; version = '99.0.0'; arguments = @('help'); download = @{ url = $download.url; sha256 = ('0' * 64); size = 0 } }) } }
     $code = Run-Setup $bad @('/quiet') 'prereq-badhash'
     $log = Get-Content (Join-Path $logs 'prereq-badhash.log') -Raw
-    if ($log -match 'Cannot connect|Download failed|HTTP') {
+    if ($log -match 'Cannot connect|Download failed|Download interrupted|server answered HTTP') {
         Write-Host '  [SKIP] download checks (no internet access)' -ForegroundColor Yellow
     } else {
         Check 'download with the wrong SHA-256 is refused before anything is installed' { $code -eq 17 -and $log -match 'SHA-256' -and -not (Test-Path $arpKey) }

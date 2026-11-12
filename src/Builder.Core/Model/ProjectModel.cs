@@ -57,6 +57,11 @@ public sealed class FileSettings
     public List<ExtraSource> Extra { get; set; } = [];
     /// <summary>Empty folders to create below the install directory.</summary>
     public List<string> EmptyDirectories { get; set; } = [];
+    /// <summary>
+    /// Alternative builds of the app, e.g. framework-dependent ("shared") and self-contained. Each has its own source
+    /// folder; files that are identical in every variant are stored once. The user picks one at install time.
+    /// </summary>
+    public List<VariantSettings> Variants { get; set; } = [];
     [JsonExtensionData] public Dictionary<string, object>? ExtraProperties { get; set; }
 }
 
@@ -64,6 +69,17 @@ public sealed class ExtraSource
 {
     public string Source { get; set; } = "";
     public string Target { get; set; } = "";
+}
+
+public sealed class VariantSettings
+{
+    /// <summary>Letters, digits, '-' and '_' (max 32); used by /variant and requirements[].variants.</summary>
+    public string Id { get; set; } = "";
+    public Dictionary<string, string> Label { get; set; } = [];
+    public Dictionary<string, string> Description { get; set; } = [];
+    public bool Default { get; set; }
+    /// <summary>Folder with this build (e.g. a dotnet publish output). files.include/exclude/preserve apply; files.extra is added to every variant.</summary>
+    public string Source { get; set; } = "";
 }
 
 public sealed class InstallSettings
@@ -86,6 +102,8 @@ public sealed class InstallSettings
     public bool AdoptExistingInstall { get; set; }
     /// <summary>Uninstall keys of older product names: adopted (their folder is upgraded) and removed after installing.</summary>
     public List<string> LegacyUninstallKeys { get; set; } = [];
+    /// <summary>Asks a running copy to exit cleanly before files are replaced or removed, e.g. { "run": "App.exe", "arguments": ["--exit"] }; closeProcesses then handles the rest.</summary>
+    public CommandSettings? CloseCommand { get; set; }
     /// <summary>.NET Framework assemblies (relative paths) to pre-compile with ngen (queued, best effort; per-machine installs).</summary>
     public List<string> Ngen { get; set; } = [];
     /// <summary>Leftovers of earlier versions removed during installation (before afterInstall actions run).</summary>
@@ -127,6 +145,8 @@ public sealed class OutputSettings
     public string Architecture { get; set; } = "x64";
     /// <summary>fast | normal | max</summary>
     public string Compression { get; set; } = "normal";
+    /// <summary>Variants to put into the package (files.variants ids); empty = all. One variant = no choice at install time.</summary>
+    public List<string> Variants { get; set; } = [];
     /// <summary>Embed the WinUI 3 front end (falls back to Win32 automatically where it cannot run).</summary>
     public bool IncludeWinUI { get; set; } = true;
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
@@ -153,11 +173,15 @@ public sealed class RequirementSettings
     public WebView2Settings WebView2 { get; set; } = new();
     /// <summary>.NET (Core) shared runtimes, e.g. the Windows Desktop Runtime 8.</summary>
     public List<DotNetRequirement> DotNet { get; set; } = [];
+    /// <summary>The Windows App SDK runtime (framework package) a framework-dependent WinUI 3 app needs.</summary>
+    public WindowsAppRuntimeRequirement WindowsAppRuntime { get; set; } = new();
 }
 
 /// <summary>How setup obtains a missing prerequisite. Bundled installer first, then the download; neither = setup stops.</summary>
 public class PrerequisiteSource
 {
+    /// <summary>Only needed for these variants (files.variants ids); empty = always.</summary>
+    public List<string> Variants { get; set; } = [];
     /// <summary>Relative path of an installer inside the installed files (add it with files.extra).</summary>
     public string Installer { get; set; } = "";
     public List<string> Arguments { get; set; } = [];
@@ -186,6 +210,14 @@ public sealed class WebView2Settings : PrerequisiteSource
     public WebView2Settings() => Arguments = ["/silent", "/install"];
 }
 
+public sealed class WindowsAppRuntimeRequirement : PrerequisiteSource
+{
+    public bool Required { get; set; }
+    /// <summary>Minimum runtime version, e.g. "2.5.1" (Windows App SDK 2.x) or "1.6" (1.x: any 1.6 runtime).</summary>
+    public string Version { get; set; } = "";
+    public WindowsAppRuntimeRequirement() => Arguments = ["--quiet"];
+}
+
 public sealed class DotNetRequirement : PrerequisiteSource
 {
     /// <summary>desktop (Microsoft.WindowsDesktop.App) | core (Microsoft.NETCore.App) | aspnetcore (Microsoft.AspNetCore.App)</summary>
@@ -205,6 +237,15 @@ public sealed class UserOptionSettings
     public bool Default { get; set; }
     /// <summary>A component that is always installed: shown checked and locked (e.g. a driver the app needs).</summary>
     public bool Required { get; set; }
+    /// <summary>While selected, start the main executable with Windows: HKCU\...\Run\&lt;name&gt; = "&lt;exe&gt;" &lt;arguments&gt;. Removed on uninstall.</summary>
+    public RunValueSettings? Startup { get; set; }
+}
+
+public sealed class CommandSettings
+{
+    /// <summary>Relative path of an .exe of the installed app.</summary>
+    public string Run { get; set; } = "";
+    public List<string> Arguments { get; set; } = [];
 }
 
 public sealed class ActionSettings

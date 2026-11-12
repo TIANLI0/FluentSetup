@@ -4,6 +4,7 @@
 #include "Common/text.h"
 #include "Common/win.h"
 
+#include <algorithm>
 #include <shellapi.h>
 
 #include <vector>
@@ -126,10 +127,19 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
                 if (!(iswalnum(c) || c == L'_' || c == L'-')) return error = L"invalid /option name", false;
             }
             out.choices[WideToUtf8(id)] = on;
+        } else if (name == L"variant") {
+            std::wstring variantName;
+            if (!value(variantName)) return false;
+            if (variantName.empty() || variantName.size() > 32 ||
+                !std::all_of(variantName.begin(), variantName.end(), [](wchar_t c) { return iswalnum(c) || c == L'_' || c == L'-'; })) {
+                return error = L"invalid /variant name", false;
+            }
+            out.variant = WideToUtf8(variantName);
         } else if (name == L"lang") {
             if (!value(v)) return false;
-            if (!EqualsIgnoreCase(v, L"en-US") && !EqualsIgnoreCase(v, L"zh-CN") && !EqualsIgnoreCase(v, L"ja-JP") && !EqualsIgnoreCase(v, L"ko-KR")) {
-                return error = L"/lang must be en-US, zh-CN, ja-JP or ko-KR", false;
+            // Any BCP-47 tag: built-in languages and those the package brings strings for are used; others fall back.
+            if (v.empty() || v.size() > 35 || !std::all_of(v.begin(), v.end(), [](wchar_t c) { return iswalnum(c) || c == L'-'; })) {
+                return error = L"/lang needs a language tag such as en-US, zh-CN or fr-FR", false;
             }
             out.language = v;
         } else if (name == L"ui") {

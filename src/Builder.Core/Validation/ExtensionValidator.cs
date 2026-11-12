@@ -38,6 +38,7 @@ public static partial class ExtensionValidator
     /// <summary>All prerequisites that can carry an installer or download, with their field names.</summary>
     private static IEnumerable<(PrerequisiteSource Source, string Field)> Sources(SetupProject p)
     {
+        if (p.Requirements.WindowsAppRuntime is { Required: true } war) yield return (war, "requirements.windowsAppRuntime");
         if (p.Requirements.NetFrameworkSetup is { } nf) yield return (nf, "requirements.netFrameworkSetup");
         if (p.Requirements.WebView2.Required) yield return (p.Requirements.WebView2, "requirements.webView2");
         foreach (var (r, i) in p.Requirements.DotNet.Select((r, i) => (r, i))) yield return (r, $"requirements.dotNet[{i}]");
@@ -89,7 +90,22 @@ public static partial class ExtensionValidator
             if (!ProjectValidator.IsValidVersion(r.Version)) d.Error("FS1618", field + ".version", "Give the minimum runtime version, e.g. 8.0.0.");
             if (r.RollForward is not ("patch" or "minor" or "major")) d.Error("FS1619", field + ".rollForward", "Use patch, minor or major.");
         }
-        foreach (var (s, field) in Sources(p)) ValidateSource(s, field, d);
+        foreach (var (s, field) in Sources(p))
+        {
+            ValidateSource(s, field, d);
+            foreach (var id in s.Variants.Where(id => p.Files.Variants.All(v => v.Id != id)))
+                d.Error("FS1661", field + ".variants", $"No variant '{id}' in files.variants.");
+        }
+        if (p.Requirements.WindowsAppRuntime is { Required: true } w2 &&
+            !System.Text.RegularExpressions.Regex.IsMatch(w2.Version, @"^(1\.\d+|[2-9]\d*\.\d+(\.\d+){0,2})$"))
+        {
+            d.Error("FS1663", "requirements.windowsAppRuntime.version", "Use the Windows App SDK version, e.g. 2.5.1 (or 1.6 for a 1.x runtime).");
+        }
+        if (p.Install.CloseCommand is { } close &&
+            (!PathRules.TryNormalizeRelative(close.Run, out var closeRun, out _) || !closeRun.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || close.Arguments.Count > 32))
+        {
+            d.Error("FS1666", "install.closeCommand", "Needs run (relative path of an .exe of the app) and at most 32 arguments.");
+        }
         foreach (var (n, i) in p.Install.LegacyUninstallKeys.Select((n, i) => (n, i)))
         {
             if (!IsTaskOrValueName(n) || n.Equals(p.App.Id, StringComparison.OrdinalIgnoreCase))
@@ -118,6 +134,10 @@ public static partial class ExtensionValidator
         {
             if (!OptionIdRegex().IsMatch(o.Id)) d.Error("FS1610", $"options[{i}].id", "Option ids use letters, digits, '-' and '_' (max 32).");
             else if (!ids.Add(o.Id)) d.Error("FS1611", $"options[{i}].id", $"Duplicate option id '{o.Id}'.");
+            if (o.Startup is { } st && (!IsTaskOrValueName(st.Name) || st.Arguments.Count > 32))
+                d.Error("FS1664", $"options[{i}].startup", "Needs a Run value name and at most 32 arguments.");
+            if (o.Startup is not null && string.IsNullOrEmpty(p.App.MainExecutable))
+                d.Error("FS1665", $"options[{i}].startup", "Needs app.mainExecutable (the program that is started).");
             if (o.Label.Count == 0 || o.Label.Values.Any(string.IsNullOrWhiteSpace)) d.Error("FS1612", $"options[{i}].label", "Give the option a label (per language, or in the localization files plus one here).");
         }
         if (p.Options.Count > 16) d.Error("FS1613", "options", "At most 16 options.");

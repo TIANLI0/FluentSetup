@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!--
   Installer window, laid out like the Windows App Installer / Android-app (APK) install dialog:
   one Mica surface, a question as the title, publisher/version lines, the app icon large at the top right,
@@ -128,6 +128,14 @@
                                     <RadioButton x:Name="ScopeUserRadio" />
                                     <RadioButton x:Name="ScopeMachineRadio" />
                                 </RadioButtons>
+                            </StackPanel>
+                            <StackPanel x:Name="VariantPanel" Margin="0,0,0,4" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal" Spacing="16">
+                                    <TextBlock x:Name="VariantLabel" Style="{StaticResource DetailLabelStyle}" VerticalAlignment="Center" Margin="0,6,0,0" />
+                                    <RadioButtons x:Name="VariantRadios" SelectionChanged="OnVariantChanged" MaxColumns="3" />
+                                </StackPanel>
+                                <TextBlock x:Name="VariantDescription" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,2,0,0" />
                             </StackPanel>
                             <CheckBox x:Name="DesktopCheck" />
                             <CheckBox x:Name="StartMenuCheck" />

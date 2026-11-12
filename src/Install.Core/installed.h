@@ -16,6 +16,7 @@ namespace fsetup::install {
 struct InstalledProduct {
     Scope scope = Scope::User;
     std::wstring appId, name, version, publisher, installDir, recordSha256;
+    std::string variant;  // package variant that is installed ("" = none)
 };
 
 struct RecordFile {
@@ -67,7 +68,7 @@ void RestoreArp(const std::wstring& appId, Scope scope, const json::Value& snaps
 
 struct ArpEntry {
     std::wstring displayName, displayVersion, publisher, displayIcon, installLocation, uninstallString,
-        quietUninstallString, urlInfoAbout, comments, recordSha256;
+        quietUninstallString, urlInfoAbout, comments, recordSha256, variant;
     uint32_t estimatedSizeKb = 0;
     uint32_t versionMajor = 0, versionMinor = 0;
 };

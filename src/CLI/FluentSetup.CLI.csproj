@@ -20,6 +20,9 @@
     <None Include="$(FsNativeOut)ARM64\Release\ui\*.exe;$(FsNativeOut)ARM64\Release\ui\*.dll;$(FsNativeOut)ARM64\Release\ui\*.pri;$(FsNativeOut)ARM64\Release\ui\*.xbf" LinkBase="runtime\arm64\ui" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\shared\localization\*.json" LinkBase="runtime\localization" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\shared\schemas\*.json" LinkBase="schemas" CopyToOutputDirectory="PreserveNewest" />
+    <!-- fluentsetup guide / schema: always the documentation of this exact build. -->
+    <EmbeddedResource Include="..\..\docs\ai-guide.md" LogicalName="FluentSetup.Cli.ai-guide.md" />
+    <EmbeddedResource Include="..\..\shared\schemas\fluentsetup.project.schema.json" LogicalName="FluentSetup.Cli.fluentsetup.project.schema.json" />
     <None Include="..\..\assets\default-app.ico" Link="runtime\default-app.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

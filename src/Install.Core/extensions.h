@@ -14,6 +14,7 @@
 #include "Common/version.h"
 #include "Common/win.h"
 
+#include <algorithm>
 #include <atomic>
 #include <functional>
 
@@ -30,10 +31,11 @@ struct LocalizedText {
 };
 
 struct Requirement {
-    enum class Kind { NetFramework, DotNet, WebView2 } kind = Kind::NetFramework;
+    enum class Kind { NetFramework, DotNet, WebView2, WindowsAppRuntime } kind = Kind::NetFramework;
     std::wstring name;            // shown to the user
     uint32_t minRelease = 0;      // .NET Framework "Release" value
     std::wstring runtime;         // .NET: Microsoft.NETCore.App | Microsoft.WindowsDesktop.App | Microsoft.AspNetCore.App
+                                  // Windows App Runtime: package family, e.g. Microsoft.WindowsAppRuntime.2_8wekyb3d8bbwe
     std::optional<Version> minVersion;  // .NET runtime / WebView2 runtime
     std::wstring minVersionText;        // as written in the package, for messages
     bool mustSucceed = false;           // still missing after its installer ran: stop and roll back (else a warning)
@@ -45,6 +47,10 @@ struct Requirement {
     Sha256Digest downloadSha256{};
     uint64_t downloadSize = 0;    // exact size in bytes, 0 = unknown (then capped at 512 MiB)
     std::string helpUrl;          // shown when missing and not installable
+    std::vector<std::string> variants;  // only needed for these package variants (empty = always)
+    [[nodiscard]] bool AppliesTo(const std::string& variant) const {
+        return variants.empty() || std::find(variants.begin(), variants.end(), variant) != variants.end();
+    }
     [[nodiscard]] bool Installable() const noexcept { return !installer.empty() || !downloadUrl.empty(); }
 };
 
@@ -53,6 +59,9 @@ struct UserOption {
     LocalizedText label;
     bool defaultValue = false;
     bool required = false;  // shown checked and locked (a component the app always needs)
+    // When selected: HKCU\...\Run\<startupName> = "<main executable>" <startupArgs>; removed on uninstall.
+    std::wstring startupName;
+    std::vector<std::wstring> startupArgs;
 };
 
 struct RegistryVersionCondition {
@@ -89,6 +98,9 @@ using UninstallCleanup = Cleanup;
 
 struct Extensions {
     std::vector<std::wstring> closeProcesses;
+    // Asks the installed app to exit cleanly before files are replaced or removed (e.g. "App.exe --exit").
+    std::wstring closeCommand;
+    std::vector<std::wstring> closeCommandArgs;
     std::wstring adoptUninstallKey;
     std::vector<std::wstring> legacyUninstallKeys;  // older product names: adopted if found, removed after install
     std::vector<std::wstring> ngen;                 // relative payload paths of .NET Framework assemblies
@@ -98,6 +110,9 @@ struct Extensions {
     std::vector<Action> actions;
     UninstallCleanup cleanup;
 };
+
+// "text" or { "en-US": "text", ... } (each up to 256 characters).
+LocalizedText ParseLocalizedText(const json::Value& v);
 
 // Parses and validates the optional sections of a package header. `payloadHas(rel)` reports whether a relative path
 // is part of the payload. Throws Failure(PackageCorrupt) on invalid input.

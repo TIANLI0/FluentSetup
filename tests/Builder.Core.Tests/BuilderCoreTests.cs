@@ -160,7 +160,8 @@ public class ValidatorTests
         p.Ui.Localization = "locales";
         dir.File("locales/license-ja.txt", "規約");
         dir.File("locales/ja-JP.json", """{ "options": { "auto": "自動起動" }, "actions": { "drv": "ドライバー" }, "license": "license-ja.txt", "strings": { "button.next": "進む" } }""");
-        dir.File("locales/fr-FR.json", "{}");
+        dir.File("locales/fr-FR.json", """{ "options": { "auto": "Démarrer avec Windows" }, "strings": { "button.install": "Installer" } }""");
+        dir.File("locales/notes.json", "{}");
         var bag = new DiagnosticBag();
         var t = Localization.Load(p, dir.Path, bag);
         Assert.Equal("自動起動", t.OptionLabels["auto"]["ja-JP"]);
@@ -168,7 +169,9 @@ public class ValidatorTests
         Assert.Equal("ドライバー", t.ActionNames[0]["ja-JP"]);
         Assert.EndsWith("license-ja.txt", t.LicenseFiles["ja-JP"]);
         Assert.Equal("進む", t.Strings["ja-JP"]["button.next"]);
-        Assert.Contains(bag.Items, d => d.Code == "FS1321");  // unsupported language file is reported, not used
+        Assert.Equal("Installer", t.Strings["fr-FR"]["button.install"]);     // a language the installer does not ship
+        Assert.Equal("Démarrer avec Windows", t.OptionLabels["auto"]["fr-FR"]);
+        Assert.Contains(bag.Items, d => d.Code == "FS1321");  // "notes" is not a language tag: reported, not used
     }
 
     [Fact]
@@ -183,6 +186,31 @@ public class ValidatorTests
 
 public class CollectorTests
 {
+    [Fact]
+    public void VariantsShareIdenticalFilesAndKeepTheRestApart()
+    {
+        using var dir = new TempDir();
+        dir.File("sc/App.exe", "apphost-sc");
+        dir.File("sc/App.dll", "same");
+        dir.File("sc/coreclr.dll", "runtime");
+        dir.File("fd/App.exe", "apphost-fd");
+        dir.File("fd/App.dll", "same");
+        var p = new SetupProject
+        {
+            App = new AppInfo { Id = "T", Name = "T", MainExecutable = "App.exe" },
+            Files = new FileSettings { Variants = [new VariantSettings { Id = "sc", Source = "sc" }, new VariantSettings { Id = "fd", Source = "fd" }] },
+        };
+        var all = FileCollector.Collect(p, dir.Path, p.Files.Variants).Files;
+        Assert.Contains(all, f => f.RelativePath == "App.dll" && f.Variant == "");                // identical: stored once
+        Assert.Contains(all, f => f.RelativePath == "App.exe" && f.Variant == "sc");
+        Assert.Contains(all, f => f.RelativePath == "App.exe" && f.Variant == "fd");              // differs: one per variant
+        Assert.Contains(all, f => f.RelativePath == "coreclr.dll" && f.Variant == "sc");          // only in one variant
+        Assert.Equal(4, all.Count);
+        var single = FileCollector.Collect(p, dir.Path, [p.Files.Variants[1]]).Files;           // --variant fd
+        Assert.All(single, f => Assert.Equal("", f.Variant));
+        Assert.Equal(2, single.Count);
+    }
+
     [Fact]
     public void CollectsWithIncludeExcludePreserve()
     {

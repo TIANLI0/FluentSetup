@@ -52,6 +52,7 @@
   "options.scope": "설치 대상",
   "options.scope.userShort": "나만",
   "options.scope.machineShort": "모든 사용자",
+  "options.variant": "런타임",
   "options.scope.user": "나만(관리자 권한 필요 없음)",
   "options.scope.machine": "이 PC를 사용하는 모든 사용자(관리자 권한 필요)",
   "options.location": "설치 위치",
@@ -169,5 +170,5 @@
   "fallback.browse": "찾아보기(&R)…",
   "fallback.viewLog": "로그 보기",
 
-  "usage": "사용법: Setup.exe [옵션]\n\n/quiet  사용자 인터페이스 없이 설치합니다.\n/uninstall  설치된 앱을 제거합니다.\n/dir <경로>  설치 위치\n/scope user|machine  현재 사용자 또는 모든 사용자용으로 설치합니다.\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  패키지에서 정의한 옵션을 켜거나 끕니다.\n/log <파일>  이 파일에 로그를 씁니다.\n/lang en-US|zh-CN|ja-JP|ko-KR  인터페이스 언어\n/ui auto|winui|win32  인터페이스 기술(진단용)\n\n종료 코드 0은 성공을 의미합니다. 다른 코드는 설명서를 참조하세요."
+  "usage": "사용법: Setup.exe [옵션]\n\n/quiet  사용자 인터페이스 없이 설치합니다.\n/uninstall  설치된 앱을 제거합니다.\n/dir <경로>  설치 위치\n/scope user|machine  현재 사용자 또는 모든 사용자용으로 설치합니다.\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  패키지에서 정의한 옵션을 켜거나 끕니다.\n/variant <id>  패키지 변형(공유 런타임 또는 자체 포함 등)\n/log <파일>  이 파일에 로그를 씁니다.\n/lang en-US|zh-CN|ja-JP|ko-KR  인터페이스 언어\n/ui auto|winui|win32  인터페이스 기술(진단용)\n\n종료 코드 0은 성공을 의미합니다. 다른 코드는 설명서를 참조하세요."
 }

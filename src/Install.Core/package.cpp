@@ -106,7 +106,10 @@ FileSet ParseFileSet(const json::Value& v, const wchar_t* what, const std::funct
             Bad(L"unsafe file path '" + f["path"].asWide() + L"': " + why);
         }
         if (checkReserved && IsReservedTopLevel(info.path)) Bad(L"file path uses a reserved name: " + info.path);
-        if (!seen.insert(ToLower(info.path)).second) Bad(L"duplicate file path: " + info.path);
+        info.variant = f["variant"].asString();
+        if (info.variant.size() > 32) Bad(L"invalid variant id for " + info.path);
+        // The same path may appear once per variant (different builds of one file), but not also as a shared file.
+        if (!seen.insert(Utf8ToWide(info.variant) + L"|" + ToLower(info.path)).second) Bad(L"duplicate file path: " + info.path);
         const int64_t size = f["size"].asInt(-1), stream = f["stream"].asInt(-1), offset = f["offset"].asInt(-1);
         if (size < 0 || stream < 0 || offset < 0) Bad(L"bad numeric fields for " + info.path);
         if (static_cast<size_t>(stream) >= set.streams.size()) Bad(L"file refers to a missing stream: " + info.path);
@@ -208,6 +211,40 @@ Package ParsePackage(const std::string& headerJson, const std::function<bool(uin
     if (!p.ui.isNull() && !p.ui.isObject()) Bad(L"ui must be an object");
 
     p.payload = ParseFileSet(root["payload"], L"payload", rangeCheck, true);
+    {
+        // Variants: declared ids, a default, and every variant-specific file belongs to a declared variant and does not
+        // shadow a shared file.
+        const auto& list = root["variants"].array();
+        if (list.size() > 8) Bad(L"too many variants");
+        for (const auto& entry : list) {
+            Variant variant;
+            variant.id = entry["id"].asString();
+            if (variant.id.empty() || variant.id.size() > 32 ||
+                !std::all_of(variant.id.begin(), variant.id.end(), [](char c) { return isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-'; })) {
+                Bad(L"invalid variant id");
+            }
+            if (p.FindVariant(variant.id)) Bad(L"duplicate variant id");
+            variant.label = ParseLocalizedText(entry["label"]);
+            variant.description = ParseLocalizedText(entry["description"]);
+            variant.isDefault = entry["default"].asBool(false);
+            p.variants.push_back(std::move(variant));
+        }
+        std::unordered_set<std::wstring> shared;
+        for (const auto& f : p.payload.files) {
+            if (f.variant.empty()) shared.insert(ToLower(f.path));
+        }
+        for (auto& each : p.variants) each.bytes = 0;
+        for (const auto& f : p.payload.files) {
+            if (f.variant.empty()) {
+                for (auto& each : p.variants) each.bytes += f.size;
+                continue;
+            }
+            Variant* owner = const_cast<Variant*>(p.FindVariant(f.variant));
+            if (!owner) Bad(L"file belongs to an undeclared variant: " + f.path);
+            if (shared.count(ToLower(f.path))) Bad(L"variant file shadows a shared file: " + f.path);
+            owner->bytes += f.size;
+        }
+    }
     if (!p.IsUninstaller() && !p.mainExecutable.empty()) {
         const bool found = std::any_of(p.payload.files.begin(), p.payload.files.end(),
                                        [&](const FileInfo& f) { return EqualsIgnoreCase(f.path, p.mainExecutable); });

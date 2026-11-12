@@ -61,6 +61,7 @@ struct InstallOptions {
     bool desktopShortcut = false;
     bool startMenuShortcut = true;
     std::map<std::string, bool> choices;  // package-defined options (id -> selected); missing ids use the default
+    std::string variant;                  // package variant to install ("" = the package default)
 };
 json::Value OptionsToJson(const InstallOptions& o);
 bool OptionsFromJson(const json::Value& v, InstallOptions& o);
@@ -100,7 +101,7 @@ public:
 
     [[nodiscard]] Existing DetectExisting() const;
     [[nodiscard]] std::wstring DefaultInstallDir(Scope scope) const;
-    [[nodiscard]] uint64_t RequiredBytes() const;
+    [[nodiscard]] uint64_t RequiredBytes(const std::string& variant = {}) const;
     // probeWritable: also verify the current (non-elevated) user can create the directory.
     [[nodiscard]] DirCheck CheckInstallDir(const std::wstring& dir, Scope scope, bool probeWritable) const;
     [[nodiscard]] bool ScopeAllowed(Scope s) const noexcept;
@@ -120,6 +121,7 @@ private:
     void InstallPayload(const std::wstring& dir, const std::wstring& backup, class Journal& journal, class Reporter& rep,
                         const std::atomic<bool>& cancel, std::vector<RecordFile>& recordFiles);
     void WriteUninstaller(const std::wstring& dest) const;
+    void RunCloseCommand(const std::wstring& dir) const;
     // Runs the package's actions for `when` (payload executables only). Fail-policy errors throw; others become warnings.
     void RunActions(Action::When when, const std::wstring& dir, const std::map<std::string, bool>& choices, Outcome& out) const;
     // Our own installation, or (if the package adopts it) one made by a previous installer under the same uninstall key.
@@ -128,6 +130,8 @@ private:
     const Package& pkg_;
     const archive::Container& container_;
     unsigned faultAfter_ = 0;
+    std::string variant_;  // variant being installed (Install sets it from the options)
+    [[nodiscard]] bool Selected(const FileInfo& f) const { return f.variant.empty() || f.variant == variant_; }
 };
 
 }  // namespace fsetup::install

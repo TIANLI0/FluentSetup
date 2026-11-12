@@ -60,7 +60,25 @@ public static partial class ProjectValidator
         }
 
         // files
-        if (string.IsNullOrWhiteSpace(p.Files.Source)) d.Error("FS1101", "files.source", "Choose the folder that contains the app's files.");
+        if (p.Files.Variants.Count > 0)
+        {
+            // Variants bring their own source folders; files.source is not used.
+            var variantIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (v, i) in p.Files.Variants.Select((v, i) => (v, i)))
+            {
+                var field = $"files.variants[{i}]";
+                if (!System.Text.RegularExpressions.Regex.IsMatch(v.Id, "^[A-Za-z0-9_-]{1,32}$")) d.Error("FS1110", field + ".id", "Variant ids use letters, digits, - and _ (max 32).");
+                else if (!variantIds.Add(v.Id)) d.Error("FS1111", field + ".id", $"Duplicate variant id '{v.Id}'.");
+                if (v.Label.Count == 0 && string.IsNullOrEmpty(p.Ui.Localization)) d.Error("FS1112", field + ".label", "Give the variant a label (per language, or in the localization files).");
+                if (string.IsNullOrWhiteSpace(v.Source)) d.Error("FS1101", field + ".source", "Choose the folder with this build.");
+                else if (!Directory.Exists(Resolve(projectDirectory, v.Source))) d.Error("FS1102", field + ".source", $"Source folder not found: {Resolve(projectDirectory, v.Source)}");
+            }
+            if (p.Files.Variants.Count > 8) d.Error("FS1113", "files.variants", "At most 8 variants.");
+            if (p.Files.Variants.Count(v => v.Default) > 1) d.Error("FS1114", "files.variants", "Only one variant can be the default.");
+            if (!string.IsNullOrWhiteSpace(p.Files.Source)) d.Warning("FS1115", "files.source", "Ignored: with files.variants each variant has its own source.");
+            foreach (var id in p.Output.Variants.Where(id => !variantIds.Contains(id))) d.Error("FS1662", "output.variants", $"No variant '{id}' in files.variants.");
+        }
+        else if (string.IsNullOrWhiteSpace(p.Files.Source)) d.Error("FS1101", "files.source", "Choose the folder that contains the app's files.");
         else if (!Directory.Exists(Resolve(projectDirectory, p.Files.Source))) d.Error("FS1102", "files.source", $"Source folder not found: {Resolve(projectDirectory, p.Files.Source)}");
         foreach (var (extra, i) in p.Files.Extra.Select((e, i) => (e, i)))
         {
@@ -103,7 +121,7 @@ public static partial class ProjectValidator
         if (ui.Theme is not ("system" or "light" or "dark")) d.Error("FS1301", "ui.theme", "Theme must be system, light or dark.");
         if (ui.Backdrop is not ("mica" or "micaAlt" or "none")) d.Error("FS1302", "ui.backdrop", "Backdrop must be mica, micaAlt or none.");
         if (!ui.UseSystemAccent && !ColorRegex().IsMatch(ui.AccentColor)) d.Error("FS1303", "ui.accentColor", "Accent colour must look like #0067C0 when the system accent is not used.");
-        if (ui.DefaultLanguage != "auto" && !Localization.SupportedLanguages.Contains(ui.DefaultLanguage)) d.Error("FS1304", "ui.defaultLanguage", $"Default language must be auto or one of {string.Join(", ", Localization.SupportedLanguages)}.");
+        if (ui.DefaultLanguage != "auto" && !Localization.IsLanguageTag(ui.DefaultLanguage)) d.Error("FS1304", "ui.defaultLanguage", "Default language must be auto or a language tag such as zh-CN.");
         if (ui.LicenseMode is not ("firstInstall" or "always")) d.Error("FS1311", "ui.licenseMode", "Use firstInstall or always.");
         if (!string.IsNullOrEmpty(ui.License))
         {
@@ -131,7 +149,7 @@ public static partial class ProjectValidator
 
         foreach (var (lang, file) in ui.Licenses)
         {
-            if (!Localization.SupportedLanguages.Contains(lang)) d.Warning("FS1309", $"ui.licenses.{lang}", $"License for '{lang}' is ignored: the installer supports {string.Join(", ", Localization.SupportedLanguages)}.");
+            if (!Localization.IsLanguageTag(lang)) d.Warning("FS1309", $"ui.licenses.{lang}", $"'{lang}' is not a language tag; this license is ignored.");
             if (!File.Exists(Resolve(projectDirectory, file))) d.Error("FS1310", $"ui.licenses.{lang}", $"License file not found: {Resolve(projectDirectory, file)}");
             else if (new FileInfo(Resolve(projectDirectory, file)).Length > 1024 * 1024) d.Error("FS1306", $"ui.licenses.{lang}", "License file is larger than 1 MB.");
         }

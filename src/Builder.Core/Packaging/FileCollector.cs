@@ -3,7 +3,7 @@ using FluentSetup.Builder.Core.Validation;
 
 namespace FluentSetup.Builder.Core.Packaging;
 
-public sealed record CollectedFile(string SourcePath, string RelativePath, long Size, bool Preserve, FileAttributes Attributes);
+public sealed record CollectedFile(string SourcePath, string RelativePath, long Size, bool Preserve, FileAttributes Attributes, string Variant = "");
 
 public sealed class CollectionResult
 {
@@ -22,6 +22,61 @@ public static class FileCollector
 {
     public const int MaxFiles = 2_000_000;
 
+    /// <summary>
+    /// Collects every variant's build (files.variants[].source, with the project's include/exclude/preserve and extra
+    /// files). Files with the same path and content in all variants become shared (stored and installed once); the rest
+    /// is tagged with its variant. With one variant, everything is shared and the package has no variants.
+    /// </summary>
+    public static CollectionResult Collect(SetupProject project, string projectDirectory, IReadOnlyList<VariantSettings> variants,
+                                           CancellationToken cancellationToken = default)
+    {
+        if (variants.Count == 0) return Collect(project, projectDirectory, cancellationToken);
+        var perVariant = new List<CollectionResult>();
+        var result = new CollectionResult();
+        foreach (var v in variants)
+        {
+            var files = new FileSettings
+            {
+                Source = v.Source, Include = project.Files.Include, Exclude = project.Files.Exclude, Preserve = project.Files.Preserve,
+                Extra = project.Files.Extra, EmptyDirectories = project.Files.EmptyDirectories,
+            };
+            var r = Collect(new SetupProject { Files = files, Output = project.Output }, projectDirectory, cancellationToken);
+            result.Diagnostics.AddRange(r.Diagnostics.Items.Select(d => d with { Field = $"files.variants[{v.Id}]: {d.Field}" }));
+            perVariant.Add(r);
+        }
+        foreach (var d in perVariant.SelectMany(r => r.Directories).Distinct(StringComparer.OrdinalIgnoreCase)) result.Directories.Add(d);
+        if (variants.Count == 1)
+        {
+            result.Files.AddRange(perVariant[0].Files);
+            return result;
+        }
+
+        var hashes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        byte[] Hash(CollectedFile f)
+        {
+            if (!hashes.TryGetValue(f.SourcePath, out var h))
+            {
+                using var s = File.OpenRead(f.SourcePath);
+                hashes[f.SourcePath] = h = System.Security.Cryptography.SHA256.HashData(s);
+            }
+            return h;
+        }
+        var maps = perVariant.Select(r => r.Files.ToDictionary(f => f.RelativePath, StringComparer.OrdinalIgnoreCase)).ToList();
+        var shared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in perVariant[0].Files)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var same = maps.Skip(1).All(m => m.TryGetValue(f.RelativePath, out var g) && g.Size == f.Size && g.Preserve == f.Preserve &&
+                                             g.Attributes == f.Attributes && (g.SourcePath == f.SourcePath || Hash(g).AsSpan().SequenceEqual(Hash(f))));
+            if (same) shared.Add(f.RelativePath);
+        }
+        result.Files.AddRange(perVariant[0].Files.Where(f => shared.Contains(f.RelativePath)));
+        for (var i = 0; i < variants.Count; i++)
+        {
+            result.Files.AddRange(perVariant[i].Files.Where(f => !shared.Contains(f.RelativePath)).Select(f => f with { Variant = variants[i].Id }));
+        }
+        return result;
+    }
     public static CollectionResult Collect(SetupProject project, string projectDirectory, CancellationToken cancellationToken = default)
     {
         var result = new CollectionResult();

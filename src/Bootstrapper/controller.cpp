@@ -55,6 +55,10 @@ install::InstallOptions Controller::DefaultOptions() const {
         o.choices[opt.id] = opt.defaultValue;
         if (auto it = args_.choices.find(opt.id); it != args_.choices.end()) o.choices[opt.id] = it->second;
     }
+    // Variant: /variant, else the one already installed (an update keeps the user's earlier choice), else the default.
+    o.variant = pkg_.DefaultVariant();
+    if (existing_.product && pkg_.FindVariant(existing_.product->variant)) o.variant = existing_.product->variant;
+    if (!args_.variant.empty() && pkg_.FindVariant(args_.variant)) o.variant = args_.variant;
     return o;
 }
 
@@ -170,11 +174,13 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
     std::wstring running;
     for (const auto& n : install::RunningProcesses(pkg_.ext.closeProcesses)) running += (running.empty() ? L"" : L", ") + n;
     h.set("runningApps", running);
-    // Prerequisites that are missing on this PC and what setup will do about them.
-    std::wstring notice;
-    if (mode_ == Mode::Install) {
+    // Prerequisites that are missing on this PC and what setup will do about them (per variant: a self-contained build
+    // needs no shared runtime).
+    const auto prerequisiteNotice = [&](const std::string& variant) {
+        std::wstring notice;
+        if (mode_ != Mode::Install) return notice;
         for (const auto& req : pkg_.ext.requirements) {
-            if (install::RequirementSatisfied(req)) continue;
+            if (!req.AppliesTo(variant) || install::RequirementSatisfied(req)) continue;
             std::wstring line;
             const std::wstring found = install::InstalledRequirementVersion(req);
             if (!found.empty() && req.minVersion) {
@@ -186,9 +192,24 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
             else line = strings_.Fmt("prereq.missing", {req.name}) + (req.helpUrl.empty() ? L"" : L" " + Utf8ToWide(req.helpUrl));
             notice += (notice.empty() ? L"" : L"\n") + line;
         }
+        return notice;
+    };
+    h.set("prerequisites", prerequisiteNotice(defaults.variant));
+    json::Value variants = json::Value::MakeArray();
+    if (mode_ == Mode::Install) {
+        for (const auto& v : pkg_.variants) {
+            json::Value item;
+            item.set("id", v.id);
+            item.set("label", v.label.Get(strings_.Language(), Utf8ToWide(v.id)));
+            item.set("description", v.description.Get(strings_.Language(), L""));
+            item.set("requiredBytes", engine.RequiredBytes(v.id));
+            item.set("prerequisites", prerequisiteNotice(v.id));
+            variants.push(item);
+        }
     }
-    h.set("prerequisites", notice);
-    h.set("requiredBytes", engine.RequiredBytes());
+    h.set("variants", variants);
+    h.set("variant", defaults.variant);
+    h.set("requiredBytes", engine.RequiredBytes(defaults.variant));
     h.set("freeBytes", fs::FreeSpace(dir));
     return h;
 }

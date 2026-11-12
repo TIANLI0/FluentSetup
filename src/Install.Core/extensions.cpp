@@ -10,6 +10,8 @@
 #include <taskschd.h>
 #include <tlhelp32.h>
 #include <winhttp.h>
+#include <appmodel.h>
+#include <shellapi.h>
 
 #include <algorithm>
 #include <unordered_set>
@@ -100,6 +102,8 @@ HKEY ParseHive(const std::string& h) {
 
 }  // namespace
 
+LocalizedText ParseLocalizedText(const json::Value& v) { return ParseText(v); }
+
 std::wstring LocalizedText::Get(const std::wstring& language, const std::wstring& fallback) const {
     if (auto it = byLanguage.find(WideToUtf8(language)); it != byLanguage.end() && !it->second.empty()) return it->second;
     if (auto it = byLanguage.find("*"); it != byLanguage.end()) return it->second;
@@ -119,6 +123,11 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
     e.adoptUninstallKey = inst["adoptUninstallKey"].asWide();
     if (!e.adoptUninstallKey.empty() && !ValidTaskOrValueName(e.adoptUninstallKey)) Bad(L"invalid adoptUninstallKey");
     ParseNames(inst["legacyUninstallKeys"], e.legacyUninstallKeys, ValidTaskOrValueName, L"legacyUninstallKeys");
+    if (const json::Value& cc = inst["closeCommand"]; cc.isObject()) {
+        // Runs a file of the *installed* app (checked at run time like an action).
+        if (!path::ValidateRelative(cc["run"].asWide(), e.closeCommand) || !IsExeName(path::FileName(e.closeCommand))) Bad(L"invalid closeCommand");
+        e.closeCommandArgs = ParseArgs(cc["args"]);
+    }
     for (const auto& n : inst["ngen"].array()) {
         std::wstring rel;
         if (!path::ValidateRelative(n.asWide(), rel) || !payloadHas(rel)) Bad(L"ngen entries must be payload files: " + n.asWide());
@@ -149,6 +158,12 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
             req.rollForward = rf == "patch" ? Requirement::RollForward::Patch : rf == "major" ? Requirement::RollForward::Major : Requirement::RollForward::Minor;
         } else if (type == "webview2") {
             req.kind = Requirement::Kind::WebView2;
+        } else if (type == "windowsAppRuntime") {
+            // Framework package of the Windows App SDK: 2.x is one family per major version ("2"), 1.x per minor ("1.6").
+            req.kind = Requirement::Kind::WindowsAppRuntime;
+            const std::wstring channel = r["channel"].asWide();
+            if (channel.empty() || channel.size() > 8 || channel.find_first_not_of(L"0123456789.") != std::wstring::npos) Bad(L"invalid Windows App Runtime channel");
+            req.runtime = L"Microsoft.WindowsAppRuntime." + channel + L"_8wekyb3d8bbwe";
         } else {
             Bad(L"unknown requirement type");
         }
@@ -159,6 +174,7 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
             req.minVersionText = r["minVersion"].asWide().substr(0, 64);
         }
         if (req.kind == Requirement::Kind::DotNet && !req.minVersion) Bad(L".NET requirement without minVersion");
+        if (req.kind == Requirement::Kind::WindowsAppRuntime && req.name.empty()) req.name = L"Windows App Runtime " + r["channel"].asWide();
         if (r["installer"].isString()) {
             std::wstring why;
             if (!path::ValidateRelative(r["installer"].asWide(), req.installer, &why) || !payloadHas(req.installer)) {
@@ -175,6 +191,10 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
             req.downloadSize = d["size"].asUint(0);
         }
         req.mustSucceed = r["onFailure"].asString() == "fail";
+        for (const auto& v : r["variants"].array()) {
+            if (!v.isString() || v.asString().empty() || v.asString().size() > 32 || req.variants.size() >= 8) Bad(L"invalid requirement variants");
+            req.variants.push_back(v.asString());
+        }
         req.helpUrl = r["helpUrl"].asString();
         if (req.helpUrl.size() > 2048 || (!req.helpUrl.empty() && req.helpUrl.rfind("https://", 0) != 0)) Bad(L"helpUrl must be https");
         if (req.name.empty()) {
@@ -197,6 +217,11 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
         if (!optionIds.insert(opt.id).second) Bad(L"duplicate option id");
         opt.label = ParseText(o["label"]);
         opt.required = o["required"].asBool(false);
+        if (const json::Value& s = o["startup"]; s.isObject()) {
+            opt.startupName = s["name"].asWide();
+            if (!ValidTaskOrValueName(opt.startupName)) Bad(L"invalid option startup name");
+            opt.startupArgs = ParseArgs(s["args"]);
+        }
         opt.defaultValue = opt.required || o["default"].asBool(false);
         e.options.push_back(std::move(opt));
     }
@@ -396,7 +421,38 @@ std::wstring DotNetVersion(const Requirement& r) {
 
 }  // namespace
 
+// Highest registered version of a Windows App Runtime framework package for this architecture that satisfies the
+// requirement ("" if none). Framework packages are registered per user; the installer registers them for the PC.
+std::wstring WindowsAppRuntimeVersion(const Requirement& r) {
+#if defined(_M_ARM64)
+    constexpr UINT32 kArch = PROCESSOR_ARCHITECTURE_ARM64;
+#else
+    constexpr UINT32 kArch = PROCESSOR_ARCHITECTURE_AMD64;
+#endif
+    UINT32 count = 0, length = 0;
+    if (::GetPackagesByPackageFamily(r.runtime.c_str(), &count, nullptr, &length, nullptr) != ERROR_INSUFFICIENT_BUFFER || count == 0) return {};
+    std::vector<PWSTR> names(count);
+    std::vector<wchar_t> buffer(length);
+    if (::GetPackagesByPackageFamily(r.runtime.c_str(), &count, names.data(), &length, buffer.data()) != ERROR_SUCCESS) return {};
+    std::wstring best;
+    Version bestV;
+    for (UINT32 i = 0; i < count; ++i) {
+        UINT32 idLength = 0;
+        if (::PackageIdFromFullName(names[i], PACKAGE_INFORMATION_BASIC, &idLength, nullptr) != ERROR_INSUFFICIENT_BUFFER) continue;
+        auto idBuffer = std::make_unique<BYTE[]>(idLength);
+        if (::PackageIdFromFullName(names[i], PACKAGE_INFORMATION_BASIC, &idLength, idBuffer.get()) != ERROR_SUCCESS) continue;
+        const auto* id = reinterpret_cast<const PACKAGE_ID*>(idBuffer.get());
+        if (id->processorArchitecture != kArch) continue;
+        const std::wstring text = Printf(L"%u.%u.%u.%u", id->version.Major, id->version.Minor, id->version.Build, id->version.Revision);
+        Version v;
+        if (!Version::Parse(text, v) || (r.minVersion && Compare(v, *r.minVersion) < 0)) continue;
+        if (best.empty() || Compare(v, bestV) > 0) best = text, bestV = v;
+    }
+    return best;
+}
+
 std::wstring InstalledRequirementVersion(const Requirement& r) {
+    if (r.kind == Requirement::Kind::WindowsAppRuntime) return WindowsAppRuntimeVersion(r);
     if (r.kind == Requirement::Kind::DotNet) return DotNetVersion(r);
     if (r.kind == Requirement::Kind::WebView2) return WebView2Version();
     return {};
@@ -404,6 +460,7 @@ std::wstring InstalledRequirementVersion(const Requirement& r) {
 
 bool RequirementSatisfied(const Requirement& r) {
     if (r.kind == Requirement::Kind::DotNet) return !DotNetVersion(r).empty();
+    if (r.kind == Requirement::Kind::WindowsAppRuntime) return !WindowsAppRuntimeVersion(r).empty();
     if (r.kind == Requirement::Kind::NetFramework) {
         for (const DWORD view : {static_cast<DWORD>(RRF_SUBKEY_WOW6464KEY), static_cast<DWORD>(RRF_SUBKEY_WOW6432KEY)}) {
             DWORD release = 0, size = sizeof(release);
@@ -525,8 +582,39 @@ ActionResult RunProgram(const std::wstring& exe, const std::vector<std::wstring>
     const std::wstring dir = path::Parent(exe);
     if (!::CreateProcessW(exe.c_str(), cmd.data(), nullptr, nullptr, FALSE, CREATE_SUSPENDED | (visible ? 0 : CREATE_NO_WINDOW), nullptr,
                           dir.c_str(), &si, &pi)) {
+        const DWORD error = ::GetLastError();
+        if (error == ERROR_ELEVATION_REQUIRED) {
+            // The program's manifest asks for administrator rights (e.g. a machine-wide runtime installer started by a
+            // per-user setup): start it through UAC, still without a shell command line.
+            std::wstring params;
+            for (const auto& a : args) params += (params.empty() ? L"" : L" ") + Quote(a);
+            SHELLEXECUTEINFOW sei{sizeof(sei)};
+            sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+            sei.lpVerb = L"runas";
+            sei.lpFile = exe.c_str();
+            sei.lpParameters = params.c_str();
+            sei.lpDirectory = dir.c_str();
+            sei.nShow = visible ? SW_SHOWNORMAL : SW_HIDE;
+            if (!::ShellExecuteExW(&sei) || !sei.hProcess) {
+                r.ok = false;
+                r.detail = L"Could not start " + exe + L" as administrator: " + Win32Message(::GetLastError());
+                return r;
+            }
+            UniqueHandle elevated(sei.hProcess);
+            r.ran = true;
+            if (::WaitForSingleObject(elevated.get(), timeoutSeconds * 1000u) == WAIT_TIMEOUT) {
+                ::TerminateProcess(elevated.get(), static_cast<UINT>(ERROR_TIMEOUT));
+                r.ok = false;
+                r.detail = Printf(L"%s did not finish within %u s", path::FileName(exe).c_str(), timeoutSeconds);
+                return r;
+            }
+            DWORD code = 0;
+            ::GetExitCodeProcess(elevated.get(), &code);
+            r.exitCode = static_cast<int32_t>(code);
+            return r;
+        }
         r.ok = false;
-        r.detail = L"Could not start " + exe + L": " + Win32Message(::GetLastError());
+        r.detail = L"Could not start " + exe + L": " + Win32Message(error);
         return r;
     }
     UniqueHandle process(pi.hProcess), thread(pi.hThread);

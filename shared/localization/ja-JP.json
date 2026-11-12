@@ -52,6 +52,7 @@
   "options.scope": "インストール対象",
   "options.scope.userShort": "自分のみ",
   "options.scope.machineShort": "すべてのユーザー",
+  "options.variant": "ランタイム",
   "options.scope.user": "自分のみ (管理者のアクセス許可は不要)",
   "options.scope.machine": "この PC を使用するすべてのユーザー (管理者のアクセス許可が必要)",
   "options.location": "インストール先",
@@ -169,5 +170,5 @@
   "fallback.browse": "参照(&R)…",
   "fallback.viewLog": "ログを表示",
 
-  "usage": "使用法: Setup.exe [オプション]\n\n/quiet  ユーザー インターフェイスを表示せずにインストールします\n/uninstall  インストールされているアプリを削除します\n/dir <パス>  インストール先\n/scope user|machine  現在のユーザーまたはすべてのユーザー向けにインストールします\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  パッケージで定義されたオプションをオンまたはオフにします\n/log <ファイル>  ログをこのファイルに書き込みます\n/lang en-US|zh-CN|ja-JP|ko-KR  インターフェイスの言語\n/ui auto|winui|win32  インターフェイスの技術 (診断用)\n\n終了コード 0 は成功を意味します。その他のコードについてはドキュメントを参照してください。"
+  "usage": "使用法: Setup.exe [オプション]\n\n/quiet  ユーザー インターフェイスを表示せずにインストールします\n/uninstall  インストールされているアプリを削除します\n/dir <パス>  インストール先\n/scope user|machine  現在のユーザーまたはすべてのユーザー向けにインストールします\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  パッケージで定義されたオプションをオンまたはオフにします\n/variant <id>  パッケージのバリアント (共有ランタイムまたは単体など)\n/log <ファイル>  ログをこのファイルに書き込みます\n/lang en-US|zh-CN|ja-JP|ko-KR  インターフェイスの言語\n/ui auto|winui|win32  インターフェイスの技術 (診断用)\n\n終了コード 0 は成功を意味します。その他のコードについてはドキュメントを参照してください。"
 }

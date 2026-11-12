@@ -82,6 +82,47 @@ The installer offers to launch the app at the end, and the output is `dist\Conto
 | `extra[].target` | string | `""` | Relative target folder. Empty means the install folder itself. |
 | `emptyDirectories` | string[] | `[]` | Relative folders to create even if they stay empty. They are removed on uninstall if they are still empty. |
 
+### Variants (self-contained or shared runtimes)
+
+`files.variants` puts several builds of the same app into one package, for example a WinUI 3 app published
+framework-dependent (`shared`: needs .NET and the Windows App Runtime) and self-contained (`selfContained`: carries
+both). Each variant names its own `source` folder; `files.include`, `exclude` and `preserve` apply to every variant
+and `files.extra` is added to every variant. With variants, `files.source` is not used.
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `id` | string | | **Required.** Letters, digits, `-`, `_` (max 32). |
+| `label` | object | `{}` | Text per language (or in the localization folder). Shown as a radio button with the variant's size. |
+| `description` | object | `{}` | One line shown below the choice. |
+| `default` | bool | `false` | Pre-selected variant (else the first). |
+| `source` | string | | **Required.** Folder with this build (e.g. `dotnet publish -o …`). |
+
+How it works:
+
+- **Build time.** The builder collects every variant. Files with the same path and content in all variants are stored
+  once as shared files; the rest is stored per variant in separate streams, so installing one variant never
+  decompresses the other's data. `output.variants` (or `fluentsetup build --variant id[,id]`) limits which variants go
+  into a package: with one variant the package has no choice at all.
+- **Install time.** The first page shows a *Runtime* choice when the package has more than one variant;
+  `Setup.exe /variant <id>` selects one from the command line (also in quiet mode). An update keeps the variant that is
+  installed unless another one is chosen. Switching variants removes the files the new choice does not need.
+- **Prerequisites per variant.** `requirements.*.variants` limits a prerequisite to some variants, e.g. the .NET runtime
+  and the Windows App Runtime only for `shared`. The notice on the first page follows the selected variant.
+
+```json
+"files": {
+  "include": ["**/*"], "exclude": ["**/*.pdb"],
+  "variants": [
+    { "id": "selfContained", "label": { "en-US": "Self-contained (includes runtimes)" }, "default": true, "source": "publish/sc" },
+    { "id": "shared", "label": { "en-US": "Shared runtimes (smaller)" }, "source": "publish/fd" }
+  ]
+},
+"requirements": {
+  "dotNet": [{ "runtime": "core", "version": "10.0.0", "variants": ["shared"], "download": { "url": "https://…", "sha256": "…" } }],
+  "windowsAppRuntime": { "required": true, "version": "2.5.1", "variants": ["shared"], "download": { "url": "https://…", "sha256": "…" } }
+}
+```
+
 ### Glob syntax
 
 The implementation is in `src/Builder.Core/Packaging/Glob.cs`.
@@ -136,6 +177,7 @@ syntax as above. A preserved file:
 | `adoptExistingInstall` | bool | `false` | Takes over an installation made by a previous, non-FluentSetup installer that registered the uninstall key named `app.id`. Its folder and version count as the existing installation. Files of the old version that the new one does not ship are left in place, because no FluentSetup install record exists for them. |
 | `legacyUninstallKeys` | string[] | `[]` | Uninstall key names of **older product names** (e.g. before a rename). If the app is not installed under its own id, the first of these keys that points at an existing folder is adopted the same way (folder from `InstallLocation`, else from `UninstallString` or `DisplayIcon`). After a successful install these keys are deleted. Keys written by FluentSetup are never touched; the app's own id is not allowed here (FS1650). |
 | `ngen` | string[] | `[]` | .NET Framework assemblies among the installed files (`.exe`/`.dll`, max 16). After install they are queued with `ngen install /queue` (compiled when the PC is idle); before an upgrade replaces them and before uninstall, `ngen uninstall` drops the old native images. Only in elevated (per-machine) installs; failures are only logged. |
+| `closeCommand` | object \| null | `null` | `{ "run": "App.exe", "arguments": ["--exit"] }`: asks a running copy of the **installed** app to exit cleanly (e.g. a tray app that only hides on WM_CLOSE) before files are replaced or removed; `closeProcesses` then handles anything still running. |
 | `cleanup.removeScheduledTasks` | string[] | `[]` | Leftovers of earlier versions removed **during installation**, after the files are in place and before `afterInstall` actions run (so an action can register its replacement). Task names in the root folder. |
 | `cleanup.removeRunValues` | string[] | `[]` | `...\CurrentVersion\Run` value names (HKCU and HKLM). |
 | `cleanup.removeShortcuts` | string[] | `[]` | Shortcut file names (`.lnk`) deleted from the per-user and all-users Start menu Programs, Desktop and Startup folders. Never list the app's own shortcut names here. |
@@ -213,6 +255,10 @@ installer together with what setup will do about it.
 | `webView2.required` | bool | `false` | The app needs the Microsoft Edge WebView2 Evergreen runtime (machine-wide or per-user registration). |
 | `webView2.minVersion` | string | `""` | Minimum runtime version, e.g. `"120.0.2210.91"`. An older runtime counts as missing: setup says it is too old and runs the installer to update it. Combine with `onFailure: "fail"` to refuse to install the app on an outdated runtime. |
 | `webView2.*` | source | | `installer`, `arguments` (default `["/silent", "/install"]`), `download`, `helpUrl`, `onFailure`. |
+| `windowsAppRuntime.required` | bool | `false` | The app needs the Windows App SDK runtime (framework-dependent WinUI 3 apps). Detected per user and architecture through its framework package. |
+| `windowsAppRuntime.version` | string | `""` | Windows App SDK version: `2.5.1` means package family `Microsoft.WindowsAppRuntime.2` at version 2.5.1 or newer; `1.6` means any `Microsoft.WindowsAppRuntime.1.6`. |
+| `windowsAppRuntime.*` | source | | `installer`, `arguments` (default `["--quiet"]`), `download`, `helpUrl`, `onFailure`, `variants`. Microsoft's installer is `WindowsAppRuntimeInstall-<arch>.exe`. |
+| `*.variants` | string[] | `[]` | On any prerequisite: only needed for these variants. |
 | `dotNet[]` | object[] | `[]` | .NET (Core) shared runtimes, max 8. |
 | `dotNet[].runtime` | `desktop` \| `core` \| `aspnetcore` | `"desktop"` | `Microsoft.WindowsDesktop.App`, `Microsoft.NETCore.App` or `Microsoft.AspNetCore.App`, found under `%ProgramFiles%\dotnet\shared` (or the registered install location) for the package's architecture. |
 | `dotNet[].version` | string | | **Required.** Minimum version, e.g. `"8.0.0"`. |
@@ -241,6 +287,7 @@ These are checkboxes on the installer's options page. Actions can depend on them
 | `id` | string | `""` | **Required.** Unique id: letters, digits, `-` and `_` (max 32). |
 | `label` | object | `{}` | **Required.** Text per language, e.g. `{ "en-US": "Start when I sign in", "zh-CN": "登录时启动" }`. At least one entry is needed and none may be blank. A plain string is not accepted. |
 | `default` | bool | `false` | Initial state. Quiet installs use this value unless `/option id=yes\|no` is given. |
+| `startup` | object \| null | `null` | `{ "name": "App", "arguments": ["--background"] }`: while the option is selected, `app.mainExecutable` starts with Windows (`HKCU\...\Run\<name>`). The value is removed when the option is unselected on an update and on uninstall. |
 | `required` | bool | `false` | A component that is always installed (e.g. a driver the app needs): shown checked and **locked**, so users see it is part of the installation. `/option id=no` cannot turn it off. |
 
 Options are shown on the installer's first page, below the install location. Labels can also come from the
@@ -315,7 +362,12 @@ removed. Preserved files and files the installer did not create are kept.
 ### Localization
 
 The installer's own text ships in four languages: en-US, zh-CN, ja-JP and ko-KR (one file each in
-`shared/localization`). The package's own text (option labels, action names, license, string overrides) can be kept
+`shared/localization`). **Any other language** can be added by a package: give its localization file (named with
+any BCP-47 tag, e.g. `fr-FR.json`, `de.json`, `pt-BR.json`) a `strings` table with the installer's texts.
+`fluentsetup locale add <tag> <project.json>` creates that file with every key (English values to translate) and the
+package's option, action and variant ids. Language choice: `/lang`, else `ui.defaultLanguage`, else the first Windows
+display language the installer has strings for (exact tag first, then the same primary language, e.g. `de-AT` →
+`de-DE`), else English. Untranslated keys show in English; `validate` reports the coverage (FS1327). The package's own text (option labels, action names, license, string overrides) can be kept
 out of `fluentsetup.json` in a folder named by `ui.localization`, one file per language:
 
 ```json
@@ -329,7 +381,7 @@ out of `fluentsetup.json` in a folder named by `ui.localization`, one file per l
 ```
 
 `options` and `actions` are keyed by id (`options[].id`, `actions[].id`), `license` is relative to the localization
-folder. A file wins over inline texts for its language. Files for unsupported languages are reported (FS1321) and
+folder. A file wins over inline texts for its language. Files whose name is not a language tag are reported (FS1321) and
 ignored; unknown ids give warnings (FS1323, FS1324).
 
 ## output
@@ -395,6 +447,7 @@ The installed `uninstall.exe` accepts the same switches.
 | `/scope user\|machine` | Scope. Honoured only if the package allows that scope and the app is not yet installed. |
 | `/desktop-shortcut yes\|no` | Desktop shortcut choice. Honoured only for `optionalOff`/`optionalOn`. |
 | `/start-menu-shortcut yes\|no` | Start menu shortcut choice. Honoured only for `optionalOff`/`optionalOn`. |
+| `/variant <id>` | Package variant to install (see *Variants*). |
 | `/option <id>=yes\|no` | Value of a package option. Can be repeated. Ids the package does not define are ignored. |
 | `/lang en-US\|zh-CN\|ja-JP\|ko-KR` | UI language. Overrides `ui.defaultLanguage`. |
 | `/log <file>` | Write the log to this absolute file path. Default: `%TEMP%\FluentSetup\<appId>-install-<timestamp>.log` (or `-uninstall-`). |

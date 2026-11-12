@@ -72,6 +72,7 @@ std::optional<InstalledProduct> QueryInstalled(const std::wstring& appId, Scope 
     p.publisher = ReadString(key.get(), L"Publisher");
     p.installDir = ReadString(key.get(), L"InstallLocation");
     p.recordSha256 = ReadString(key.get(), L"FluentSetupRecordSha256");
+    p.variant = WideToUtf8(ReadString(key.get(), L"FluentSetupVariant")).substr(0, 32);
     std::wstring normalized;
     if (path::ValidateAbsoluteSyntax(p.installDir, normalized) == path::Problem::None) p.installDir = normalized;
     return p;
@@ -318,6 +319,8 @@ void WriteArp(const std::wstring& appId, Scope scope, const ArpEntry& e) {
     SetDword(key.get(), L"NoRepair", 1);
     SetDword(key.get(), kMarkerValue, 1);
     SetString(key.get(), L"FluentSetupRecordSha256", e.recordSha256);
+    if (!e.variant.empty()) SetString(key.get(), L"FluentSetupVariant", e.variant);
+    else ::RegDeleteValueW(key.get(), L"FluentSetupVariant");
 }
 
 void DeleteArp(const std::wstring& appId, Scope scope) {

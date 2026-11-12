@@ -16,6 +16,8 @@ public sealed class BuildOptions
 {
     public string? OutputDirectory { get; set; }
     public string? Architecture { get; set; }
+    /// <summary>Variants to include (overrides output.variants); null = as configured.</summary>
+    public List<string>? Variants { get; set; }
     /// <summary>null = as configured in the project.</summary>
     public bool? Sign { get; set; }
     public string? RuntimeRoot { get; set; }
@@ -106,6 +108,17 @@ public sealed class PackageBuilder
         return report;
     }
 
+    /// <summary>The variants that go into this package: --variant, else output.variants, else all.</summary>
+    internal static List<VariantSettings> SelectedVariants(SetupProject project, BuildOptions options)
+    {
+        var wanted = options.Variants is { Count: > 0 } ? options.Variants : project.Output.Variants;
+        var all = project.Files.Variants;
+        if (wanted.Count == 0) return [.. all];
+        var missing = wanted.Where(id => all.All(v => v.Id != id)).ToList();
+        if (missing.Count > 0)
+            throw new BuildFailedException($"Unknown variant: {string.Join(", ", missing)}.", [new Diagnostic(Severity.Error, "FS1662", "output.variants", $"No variant {string.Join(", ", missing)} in files.variants.")]);
+        return [.. all.Where(v => wanted.Contains(v.Id))];
+    }
     private static void Build(SetupProject project, string projectPath, BuildOptions options, BuildReport report, string tempDir,
                               Action<string> setPartial, IProgress<BuildProgress>? progress, Action<string> log, CancellationToken ct)
     {
@@ -135,7 +148,8 @@ public sealed class PackageBuilder
 
         // ---- collect -------------------------------------------------------------------------------------------
         progress?.Report(new(BuildStage.Collecting, 0, "Collecting files"));
-        var collected = FileCollector.Collect(project, projectDir, ct);
+        var variants = SelectedVariants(project, options);
+        var collected = FileCollector.Collect(project, projectDir, variants, ct);
         report.Diagnostics.Clear();
         report.Diagnostics.AddRange(diagnostics.Items);
         report.Diagnostics.AddRange(collected.Diagnostics.Items);
@@ -151,14 +165,23 @@ public sealed class PackageBuilder
 
         // ---- compress ------------------------------------------------------------------------------------------
         var level = project.Output.Compression switch { "fast" => 3, "max" => 19, _ => 12 };
+        // Shared files first, then each variant's files in streams of their own: installing one variant never has to
+        // decode another variant's data.
         var ordered = collected.Files
-            .OrderBy(f => Path.GetExtension(f.RelativePath), StringComparer.OrdinalIgnoreCase)
+            .OrderBy(f => f.Variant, StringComparer.Ordinal)
+            .ThenBy(f => Path.GetExtension(f.RelativePath), StringComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase).ToList();
         var blocks = new List<List<CollectedFile>>();
         var current = new List<CollectedFile>();
         long currentSize = 0;
         foreach (var f in ordered)
         {
+            if (current.Count > 0 && current[0].Variant != f.Variant)
+            {
+                blocks.Add(current);
+                current = [];
+                currentSize = 0;
+            }
             if (f.Size >= OwnStreamBytes)
             {
                 blocks.Add([f]);
@@ -248,7 +271,7 @@ public sealed class PackageBuilder
             var license = string.IsNullOrEmpty(project.Ui.License) ? "" : File.ReadAllText(ProjectValidator.Resolve(projectDir, project.Ui.License));
             var texts = Localization.Load(project, projectDir);
             var licenses = texts.LicenseFiles.ToDictionary(kv => kv.Key, kv => File.ReadAllText(kv.Value));
-            var headerJson = HeaderWriter.Write(project, texts, arch, license, licenses, payloadRecords, results, collected.Directories, uiRecord, ui);
+            var headerJson = HeaderWriter.Write(project, texts, variants, arch, license, licenses, payloadRecords, results, collected.Directories, uiRecord, ui);
             var headerCompressed = new Compressor(19).Wrap(headerJson).ToArray();
             var headerOffset = output.Position - overlayStart;
             output.Write(headerCompressed);
@@ -415,7 +438,7 @@ public sealed class PackageBuilder
     /// <summary>Package header (see docs/package-format.md and src/Install.Core/package.cpp).</summary>
     internal static class HeaderWriter
     {
-        public static byte[] Write(SetupProject p, Localization.Texts texts, string arch, string license, Dictionary<string, string> licenses, List<StreamRecord> payload, CompressedStream[] payloadStreams,
+        public static byte[] Write(SetupProject p, Localization.Texts texts, IReadOnlyList<VariantSettings> variants, string arch, string license, Dictionary<string, string> licenses, List<StreamRecord> payload, CompressedStream[] payloadStreams,
                                    List<string> directories, StreamRecord? uiRecord, CompressedStream? ui)
         {
             using var ms = new MemoryStream();
@@ -451,6 +474,13 @@ public sealed class PackageBuilder
                 w.WriteEndArray();
                 if (p.Install.AdoptExistingInstall) w.WriteString("adoptUninstallKey", p.App.Id);
                 WriteStrings(w, "legacyUninstallKeys", p.Install.LegacyUninstallKeys);
+                if (p.Install.CloseCommand is { Run.Length: > 0 } cc)
+                {
+                    w.WriteStartObject("closeCommand");
+                    w.WriteString("run", cc.Run.Replace('/', '\\'));
+                    WriteStrings(w, "args", cc.Arguments);
+                    w.WriteEndObject();
+                }
                 WriteStrings(w, "ngen", p.Install.Ngen.Select(n => n.Replace('/', '\\')));
                 w.WriteStartObject("cleanup");
                 WriteStrings(w, "removeScheduledTasks", p.Install.Cleanup.RemoveScheduledTasks);
@@ -459,7 +489,22 @@ public sealed class PackageBuilder
                 WriteStrings(w, "removeUninstallKeys", p.Install.Cleanup.RemoveUninstallKeys);
                 w.WriteEndObject();
                 w.WriteEndObject();
-                WriteExtensions(w, p, texts);
+                WriteExtensions(w, p, texts, variants);
+                w.WriteStartArray("variants");
+                if (variants.Count > 1)
+                {
+                    var defaultId = (variants.FirstOrDefault(v => v.Default) ?? variants[0]).Id;
+                    foreach (var v in variants)
+                    {
+                        w.WriteStartObject();
+                        w.WriteString("id", v.Id);
+                        WriteLocalized(w, "label", texts.VariantLabels.GetValueOrDefault(v.Id) ?? v.Label);
+                        WriteLocalized(w, "description", texts.VariantDescriptions.GetValueOrDefault(v.Id) ?? v.Description);
+                        w.WriteBoolean("default", v.Id == defaultId);
+                        w.WriteEndObject();
+                    }
+                }
+                w.WriteEndArray();
 
                 w.WriteStartObject("ui");
                 w.WriteString("title", p.Ui.Title);
@@ -542,28 +587,51 @@ public sealed class PackageBuilder
             w.WriteString("onFailure", s.OnFailure);
         }
 
-        private static void WriteExtensions(Utf8JsonWriter w, SetupProject p, Localization.Texts texts)
+        private static void WriteExtensions(Utf8JsonWriter w, SetupProject p, Localization.Texts texts, IReadOnlyList<VariantSettings> variants)
         {
+            // A requirement limited to variants that are not in this package is dropped; with a single variant the
+            // filter is resolved here (the package then has no variants).
+            bool Applies(PrerequisiteSource? s) => s is null || s.Variants.Count == 0 || variants.Count == 0 || s.Variants.Any(id => variants.Any(v => v.Id == id));
+            void WriteVariantFilter(PrerequisiteSource? s)
+            {
+                if (s is null || s.Variants.Count == 0 || variants.Count < 2) return;
+                WriteStrings(w, "variants", s.Variants.Where(id => variants.Any(v => v.Id == id)));
+            }
             w.WriteStartArray("requirements");
-            if (ExtensionValidator.NetFrameworkRelease(p.Requirements.NetFramework) is { } release)
+            if (ExtensionValidator.NetFrameworkRelease(p.Requirements.NetFramework) is { } release && Applies(p.Requirements.NetFrameworkSetup))
             {
                 w.WriteStartObject();
                 w.WriteString("type", "netfx");
                 w.WriteNumber("minRelease", release);
                 w.WriteString("name", $".NET Framework {p.Requirements.NetFramework}");
                 WriteSource(w, p.Requirements.NetFrameworkSetup);
+                WriteVariantFilter(p.Requirements.NetFrameworkSetup);
                 w.WriteEndObject();
             }
-            if (p.Requirements.WebView2.Required)
+            if (p.Requirements.WebView2.Required && Applies(p.Requirements.WebView2))
             {
                 w.WriteStartObject();
                 w.WriteString("type", "webview2");
                 w.WriteString("name", "Microsoft Edge WebView2 Runtime");
                 if (!string.IsNullOrEmpty(p.Requirements.WebView2.MinVersion)) w.WriteString("minVersion", p.Requirements.WebView2.MinVersion);
                 WriteSource(w, p.Requirements.WebView2);
+                WriteVariantFilter(p.Requirements.WebView2);
                 w.WriteEndObject();
             }
-            foreach (var r in p.Requirements.DotNet)
+            if (p.Requirements.WindowsAppRuntime is { Required: true } war && Applies(war))
+            {
+                var parts = war.Version.Split('-')[0].Split('.');
+                var channel = parts[0] == "1" && parts.Length > 1 ? $"{parts[0]}.{parts[1]}" : parts[0];
+                w.WriteStartObject();
+                w.WriteString("type", "windowsAppRuntime");
+                w.WriteString("channel", channel);
+                w.WriteString("name", $"Windows App Runtime {war.Version}");
+                if (parts[0] != "1") w.WriteString("minVersion", war.Version);  // 2.x+: the package version is the SDK version
+                WriteSource(w, war);
+                WriteVariantFilter(war);
+                w.WriteEndObject();
+            }
+            foreach (var r in p.Requirements.DotNet.Where(Applies))
             {
                 var (runtime, label) = ExtensionValidator.DotNetRuntime(r.Runtime);
                 w.WriteStartObject();
@@ -573,6 +641,7 @@ public sealed class PackageBuilder
                 w.WriteString("minVersion", r.Version);
                 w.WriteString("rollForward", r.RollForward);
                 WriteSource(w, r);
+                WriteVariantFilter(r);
                 w.WriteEndObject();
             }
             w.WriteEndArray();
@@ -585,6 +654,13 @@ public sealed class PackageBuilder
                 WriteLocalized(w, "label", texts.OptionLabels.GetValueOrDefault(o.Id) ?? o.Label);
                 w.WriteBoolean("default", o.Default || o.Required);
                 if (o.Required) w.WriteBoolean("required", true);
+                if (o.Startup is { Name.Length: > 0 } st)
+                {
+                    w.WriteStartObject("startup");
+                    w.WriteString("name", st.Name);
+                    WriteStrings(w, "args", st.Arguments);
+                    w.WriteEndObject();
+                }
                 w.WriteEndObject();
             }
             w.WriteEndArray();
@@ -663,6 +739,7 @@ public sealed class PackageBuilder
                 w.WriteNumber("offset", f.Offset);
                 if (f.File.Attributes != 0) w.WriteNumber("attributes", (int)f.File.Attributes);
                 if (f.File.Preserve) w.WriteBoolean("preserve", true);
+                if (f.File.Variant.Length > 0) w.WriteString("variant", f.File.Variant);
                 w.WriteEndObject();
             }
         }

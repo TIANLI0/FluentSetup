@@ -219,6 +219,8 @@ void MainWindow::ApplyStaticText() {
     Automation::AutomationProperties::SetName(LicenseText(), Str("license.title"));
     Automation::AutomationProperties::SetName(ProgressBarControl(), Str("progress.accessibleName"));
     Automation::AutomationProperties::SetName(ScopeRadios(), Str("options.scope"));
+    VariantLabel().Text(Str("options.variant"));
+    Automation::AutomationProperties::SetName(VariantRadios(), Str("options.variant"));
 }
 
 void MainWindow::ApplyHello() {
@@ -284,13 +286,19 @@ void MainWindow::ApplyHello() {
         ChoicesPanel().Children().Append(box);
     }
     SetVisible(ChoicesPanel(), !opts["choices"].array().empty());
-    const std::wstring running = h["runningApps"].asWide();
-    std::wstring notice = h["prerequisites"].asWide();
-    if (!running.empty()) notice = Fmt("welcome.running", {running}) + (notice.empty() ? L"" : L"\n" + notice);
-    if (!notice.empty() && !IsUninstall()) {
-        RunningInfo().Message(notice);
-        RunningInfo().IsOpen(true);
+    // Package variants (e.g. shared runtime vs. self-contained): one radio button per build, with its size.
+    variant_ = h["variant"].asString();
+    const auto& variants = h["variants"].array();
+    int selected = 0;
+    for (size_t i = 0; i < variants.size(); ++i) {
+        RadioButton radio;
+        radio.Content(box_value(variants[i]["label"].asWide() + L" (" + fsetup::FormatBytes(variants[i]["requiredBytes"].asUint()) + L")"));
+        VariantRadios().Items().Append(radio);
+        if (variants[i]["id"].asString() == variant_) selected = static_cast<int>(i);
     }
+    SetVisible(VariantPanel(), variants.size() > 1);
+    if (variants.size() > 1) VariantRadios().SelectedIndex(selected);
+    UpdateNotice();
     LicenseText().Text(h["ui"]["licenseText"].asWide());
     UpdateInfoLines();
     UpdateSpaceText();
@@ -350,10 +358,41 @@ void MainWindow::UpdateInfoLines() {
 }
 void MainWindow::UpdateSpaceText() { UpdateInfoLines(); }
 
+const fsetup::json::Value* MainWindow::SelectedVariant() const {
+    for (const auto& v : Hello()["variants"].array()) {
+        if (v["id"].asString() == variant_) return &v;
+    }
+    return nullptr;
+}
+
+// Running copies of the app and missing prerequisites (for the chosen variant), in one notice on the first page.
+void MainWindow::UpdateNotice() {
+    const Value& h = Hello();
+    if (IsUninstall()) return;
+    const Value* v = SelectedVariant();
+    std::wstring notice = v ? (*v)["prerequisites"].asWide() : h["prerequisites"].asWide();
+    const std::wstring running = h["runningApps"].asWide();
+    if (!running.empty()) notice = Fmt("welcome.running", {running}) + (notice.empty() ? L"" : L"\n" + notice);
+    RunningInfo().Message(notice);
+    RunningInfo().IsOpen(!notice.empty());
+    VariantDescription().Text(v ? (*v)["description"].asWide() : std::wstring());
+    SetVisible(VariantDescription(), v && !(*v)["description"].asWide().empty());
+}
+
+void MainWindow::OnVariantChanged(IInspectable const&, SelectionChangedEventArgs const&) {
+    const int index = VariantRadios().SelectedIndex();
+    const auto& variants = Hello()["variants"].array();
+    if (index < 0 || static_cast<size_t>(index) >= variants.size()) return;
+    variant_ = variants[static_cast<size_t>(index)]["id"].asString();
+    requiredBytes_ = variants[static_cast<size_t>(index)]["requiredBytes"].asUint(requiredBytes_);
+    UpdateNotice();
+    UpdateInfoLines();
+}
+
 bool MainWindow::HasOptions() const {
     if (IsUninstall()) return false;
     const Value& o = Hello()["options"];
-    return o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
+    return Hello()["variants"].array().size() > 1 || o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
            o["startMenuShortcut"]["visible"].asBool() || !o["choices"].array().empty();
 }
 
@@ -557,6 +596,7 @@ void MainWindow::StartInstall() {
         }
     }
     options.set("choices", choices);
+    options.set("variant", variant_);
     Value m;
     m.set("t", "start");
     m.set("options", options);
@@ -684,6 +724,7 @@ void MainWindow::OnPathCheck(const Value& m) {
     pathOk_ = m["ok"].asBool();
     if (pathOk_) installDir_ = m["normalized"].asWide().empty() ? pendingPath_ : m["normalized"].asWide();
     requiredBytes_ = m["requiredBytes"].asUint(requiredBytes_);
+    if (const Value* v = SelectedVariant()) requiredBytes_ = (*v)["requiredBytes"].asUint(requiredBytes_);
     freeBytes_ = m["freeBytes"].asUint();
     WelcomeDirError().Message(m["message"].asWide());
     WelcomeDirError().IsOpen(!pathOk_);

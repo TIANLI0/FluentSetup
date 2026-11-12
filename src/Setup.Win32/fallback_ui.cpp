@@ -37,11 +37,12 @@ enum Id : int {
     kStatus = 100, kTitle, kDescription, kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
     kLblSize, kSize, kInfo, kDirError,
     kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog,
-    kOScopeLabel = 300, kOScopeUser, kOScopeMachine, kODesktop, kOStartMenu,
+    kOScopeLabel = 300, kOScopeUser, kOScopeMachine, kODesktop, kOStartMenu, kOVariantLabel, kOVariantDesc,
     kLHeading = 400, kLSub, kLText, kLAccept,
     kLaunch = 500, kPStage, kPPercent, kPBar, kPDetail,
     kSecondary = 700,
-    kChoiceBase = 900,  // package-defined option checkboxes: kChoiceBase + index
+    kChoiceBase = 900,   // package-defined option checkboxes: kChoiceBase + index
+    kVariantBase = 950,  // package variant radio buttons: kVariantBase + index
 };
 
 enum class Page { Welcome, License, Progress, Result };
@@ -81,6 +82,9 @@ private:
     void ApplyTheme();
     void ApplyHello();
     void UpdateInfoLines();
+    void UpdateNotice();
+    void OnVariantChanged(size_t index);
+    size_t VariantCount() const { return hello_["variants"].array().size(); }
     void ShowPage(Page p);
     void Layout();
     void UpdateFooter();
@@ -116,7 +120,8 @@ private:
     HICON iconSmall_ = nullptr;
     Page page_ = Page::Welcome;
     ResultKind result_ = ResultKind::None;
-    std::wstring scope_, installDir_, logPath_;
+    std::wstring scope_, installDir_, logPath_, baseInfo_;
+    std::string variant_;
     uint64_t requiredBytes_ = 0, freeBytes_ = 0;
     bool pathOk_ = true, userPickedPath_ = false;
     bool cancellable_ = true, cancelRequested_ = false, retryable_ = true, canLaunch_ = false;
@@ -255,6 +260,11 @@ void Window::Create() {
     Make(WC_STATICW, kOScopeLabel, text);
     Make(WC_BUTTONW, kOScopeUser, BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, kOScopeMachine, BS_AUTORADIOBUTTON);
+    Make(WC_STATICW, kOVariantLabel, text);
+    for (size_t i = 0; i < VariantCount(); ++i) {
+        Make(WC_BUTTONW, kVariantBase + static_cast<int>(i), BS_AUTORADIOBUTTON | WS_TABSTOP | (i == 0 ? WS_GROUP : 0));
+    }
+    Make(WC_STATICW, kOVariantDesc, text);
     Make(WC_BUTTONW, kODesktop, BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, kOStartMenu, BS_AUTOCHECKBOX | WS_TABSTOP);
     for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) {
@@ -280,6 +290,11 @@ void Window::Create() {
     SetText(kOScopeLabel, S("options.scope"));
     SetText(kOScopeUser, S("options.scope.userShort"));
     SetText(kOScopeMachine, S("options.scope.machineShort"));
+    SetText(kOVariantLabel, S("options.variant"));
+    for (size_t i = 0; i < VariantCount(); ++i) {
+        const Value& v = hello_["variants"].array()[i];
+        SetText(kVariantBase + static_cast<int>(i), v["label"].asWide() + L" (" + FormatBytes(v["requiredBytes"].asUint()) + L")");
+    }
     SetText(kODesktop, S("fallback.desktop"));
     SetText(kOStartMenu, S("fallback.startMenu"));
     SetText(kLHeading, S("license.title"));
@@ -301,7 +316,9 @@ void Window::ApplyFonts() {
     set(kTitle, theme_.title);
     set(kLHeading, theme_.subtitle);
     for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) set(kChoiceBase + static_cast<int>(i), theme_.body);
-    for (int id : {kPDetail, kResultCode}) set(id, theme_.caption);
+    for (int id : std::initializer_list<int>{kPDetail, kResultCode, kOVariantDesc}) set(id, theme_.caption);
+    set(kOVariantLabel, theme_.body);
+    for (size_t i = 0; i < VariantCount(); ++i) set(kVariantBase + static_cast<int>(i), theme_.body);
     for (int id : std::initializer_list<int>{kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
                                              kLblSize, kSize, kDescription, kInfo, kDirError,
                                              kResultBody, kResultDetail, kOpenFolder, kViewLog, kOScopeLabel, kOScopeUser,
@@ -366,17 +383,14 @@ void Window::ApplyHello() {
         Button_SetCheck(Ctl(kChoiceBase + static_cast<int>(i)), choices[i]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
         ::EnableWindow(Ctl(kChoiceBase + static_cast<int>(i)), !choices[i]["required"].asBool());  // required: locked on
     }
-    if (!IsUninstall()) {
-        std::wstring notice = info;
-        const auto add = [&](const std::wstring& line) {
-            if (!line.empty()) notice += (notice.empty() ? L"" : L"\r\n") + line;
-        };
-        if (!hello_["runningApps"].asWide().empty()) add(F("welcome.running", {hello_["runningApps"].asWide()}));
-        std::wstring prereq = hello_["prerequisites"].asWide();
-        for (size_t p = 0; (p = prereq.find(L'\n', p)) != std::wstring::npos; p += 2) prereq.replace(p, 1, L"\r\n");
-        add(prereq);
-        SetText(kInfo, notice);
+    baseInfo_ = info;
+    variant_ = hello_["variant"].asString();
+    for (size_t i = 0; i < VariantCount(); ++i) {
+        const bool on = hello_["variants"].array()[i]["id"].asString() == variant_;
+        Button_SetCheck(Ctl(kVariantBase + static_cast<int>(i)), on ? BST_CHECKED : BST_UNCHECKED);
+        if (on) requiredBytes_ = hello_["variants"].array()[i]["requiredBytes"].asUint(requiredBytes_);
     }
+    UpdateNotice();
     std::wstring license = hello_["ui"]["licenseText"].asWide(), crlf;
     for (size_t i = 0; i < license.size(); ++i) {
         if (license[i] == L'\n' && (i == 0 || license[i - 1] != L'\r')) crlf.push_back(L'\r');
@@ -386,6 +400,33 @@ void Window::ApplyHello() {
     UpdateInfoLines();
 }
 
+// Running copies of the app and missing prerequisites of the chosen variant, in the info box on the first page.
+void Window::UpdateNotice() {
+    if (IsUninstall()) return;
+    std::wstring notice = baseInfo_;
+    const auto add = [&](const std::wstring& line) {
+        if (!line.empty()) notice += (notice.empty() ? L"" : L"\r\n") + line;
+    };
+    if (!hello_["runningApps"].asWide().empty()) add(F("welcome.running", {hello_["runningApps"].asWide()}));
+    std::wstring prereq = hello_["prerequisites"].asWide(), description;
+    for (const auto& v : hello_["variants"].array()) {
+        if (v["id"].asString() == variant_) prereq = v["prerequisites"].asWide(), description = v["description"].asWide();
+    }
+    for (size_t p = 0; (p = prereq.find(L'\n', p)) != std::wstring::npos; p += 2) prereq.replace(p, 1, L"\r\n");
+    add(prereq);
+    SetText(kInfo, notice);
+    SetText(kOVariantDesc, description);
+}
+
+void Window::OnVariantChanged(size_t index) {
+    const auto& variants = hello_["variants"].array();
+    if (index >= variants.size() || variants[index]["id"].asString() == variant_) return;
+    variant_ = variants[index]["id"].asString();
+    requiredBytes_ = variants[index]["requiredBytes"].asUint(requiredBytes_);
+    UpdateNotice();
+    UpdateInfoLines();
+    ShowPage(page_);  // the info box may appear or disappear
+}
 void Window::UpdateInfoLines() {
     SetText(kPublisher, hello_["app"]["publisher"].asWide());
     const std::wstring version = hello_["app"]["version"].asWide(), installed = hello_["existing"]["version"].asWide();
@@ -448,6 +489,10 @@ void Window::ShowPage(Page p) {
     }
 
     for (int id : {kOScopeLabel, kOScopeUser, kOScopeMachine}) Show(id, editable && o["canChangeScope"].asBool());
+    const bool variants = editable && VariantCount() > 1;
+    Show(kOVariantLabel, variants);
+    for (size_t i = 0; i < VariantCount(); ++i) Show(kVariantBase + static_cast<int>(i), variants);
+    Show(kOVariantDesc, variants && ::GetWindowTextLengthW(Ctl(kOVariantDesc)) > 0);
     Show(kODesktop, editable && o["desktopShortcut"]["visible"].asBool());
     Show(kOStartMenu, editable && o["startMenuShortcut"]["visible"].asBool());
     for (size_t i = 0; i < o["choices"].array().size(); ++i) Show(kChoiceBase + static_cast<int>(i), editable);
@@ -575,6 +620,29 @@ void Window::Layout() {
                     rx += w + Px(16);
                 }
                 y += rowH + Px(4);
+            }
+            if (Visible(kOVariantLabel)) {
+                y += Px(6);
+                const int lw = TextWidth(kOVariantLabel), rowH = Px(24);
+                place(kOVariantLabel, left, y + (rowH - TextHeight(kOVariantLabel, lw + Px(4))) / 2, lw + Px(4), TextHeight(kOVariantLabel, lw + Px(4)));
+                int rx = left + std::max(lw + Px(16), valueX - left);
+                for (size_t i = 0; i < VariantCount(); ++i) {
+                    const int id = kVariantBase + static_cast<int>(i);
+                    const int w = std::min(right - rx, TextWidth(id) + Px(32));
+                    if (rx + w > right && rx > left + Px(100)) {  // wrap long labels onto the next row
+                        y += rowH + Px(2);
+                        rx = left + std::max(lw + Px(16), valueX - left);
+                    }
+                    place(id, rx, y, w, rowH);
+                    rx += w + Px(16);
+                }
+                y += rowH + Px(2);
+                if (Visible(kOVariantDesc)) {
+                    const int dx = left + std::max(lw + Px(16), valueX - left), dw = right - dx;
+                    const int dh = TextHeight(kOVariantDesc, dw);
+                    place(kOVariantDesc, dx, y, dw, dh);
+                    y += dh + Px(4);
+                }
             }
             if (Visible(kODesktop) || Visible(kOStartMenu) || Visible(kChoiceBase)) y += Px(6);
             const auto checkRow = [&](int id) {
@@ -804,6 +872,7 @@ void Window::StartInstall() {
         const auto& defined = hello_["options"]["choices"].array();
         for (size_t i = 0; i < defined.size(); ++i) choices.set(defined[i]["id"].asString(), Checked(kChoiceBase + static_cast<int>(i)));
         v.set("choices", choices);
+        v.set("variant", variant_);
         if (!c_.SanitizeOptions(v, o)) {
             pathOk_ = false;
             SetText(kDirError, S("error.InvalidArguments"));
@@ -905,6 +974,9 @@ void Window::CheckPath(const std::wstring& path) {
     pathOk_ = r["ok"].asBool();
     installDir_ = r["normalized"].asWide().empty() ? path : r["normalized"].asWide();
     requiredBytes_ = r["requiredBytes"].asUint(requiredBytes_);
+    for (const auto& v : hello_["variants"].array()) {
+        if (v["id"].asString() == variant_) requiredBytes_ = v["requiredBytes"].asUint(requiredBytes_);
+    }
     freeBytes_ = r["freeBytes"].asUint();
     SetText(kDirError, r["message"].asWide());
     UpdateInfoLines();
@@ -978,7 +1050,7 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             COLORREF bg = c.base, fg = c.text;
             if (id == kInfo) brush = theme_.infoBrush(), bg = c.infoFill;
             if (id == kLText || id == kResultDetail) brush = theme_.editBrush(), bg = c.editFill;
-            if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kOScopeLabel || id == kDescription || id == kPDetail || id == kPPercent || id == kResultCode) fg = c.textSecondary;
+            if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kOScopeLabel || id == kOVariantLabel || id == kOVariantDesc || id == kDescription || id == kPDetail || id == kPPercent || id == kResultCode) fg = c.textSecondary;
             if (id == kDirError) fg = c.critical;
             ::SetTextColor(dc, fg);
             ::SetBkColor(dc, bg);
@@ -1002,6 +1074,7 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             else if (id == kSecondary) OnSecondary();
             else if (id == kChange) Browse();
             else if ((id == kOScopeUser || id == kOScopeMachine) && code == BN_CLICKED) OnScopeChanged();
+            else if (id >= kVariantBase && id < kVariantBase + static_cast<int>(VariantCount()) && code == BN_CLICKED) OnVariantChanged(static_cast<size_t>(id - kVariantBase));
             else if (id == kLAccept && code == BN_CLICKED) UpdateFooter();
             else if (id == kViewLog && !logPath_.empty()) {
                 ::ShellExecuteW(hwnd_, L"open", L"notepad.exe", (L"\"" + logPath_ + L"\"").c_str(), nullptr, SW_SHOWNORMAL);

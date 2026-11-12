@@ -70,6 +70,7 @@ json::Value OptionsToJson(const InstallOptions& o) {
     json::Value choices = json::Value::MakeObject();
     for (const auto& [id, on] : o.choices) choices.set(id, on);
     v.set("choices", choices);
+    v.set("variant", o.variant);
     return v;
 }
 
@@ -87,6 +88,8 @@ bool OptionsFromJson(const json::Value& v, InstallOptions& o) {
         if (id.size() > 32 || !on.isBool()) return false;
         o.choices[id] = on.asBool();
     }
+    o.variant = v["variant"].asString();
+    if (o.variant.size() > 32) return false;
     return true;
 }
 
@@ -310,6 +313,9 @@ bool Engine::SanitizeOptions(InstallOptions& o) const {
     for (const auto& opt : pkg_.ext.options) {
         if (opt.required) choices[opt.id] = true;  // locked on, whatever the UI or /option says
     }
+    if (pkg_.variants.empty()) o.variant.clear();
+    else if (o.variant.empty()) o.variant = pkg_.DefaultVariant();
+    else if (!pkg_.FindVariant(o.variant)) return false;
     o.choices = std::move(choices);
     return true;
 }
@@ -321,11 +327,12 @@ std::wstring Engine::DefaultInstallDir(Scope scope) const {
     return path::ValidateAbsoluteSyntax(expanded, normalized) == path::Problem::None ? normalized : expanded;
 }
 
-uint64_t Engine::RequiredBytes() const {
+uint64_t Engine::RequiredBytes(const std::string& variant) const {
     // What ends up on disk: the app's files plus the uninstaller (stub + WinUI front end + header).
     uint64_t ui = 0;
     for (const auto& s : pkg_.frontend.streams) ui += s.size;
-    return pkg_.payload.totalRaw + container_.OverlayStart() + ui;
+    const Variant* v = pkg_.FindVariant(variant.empty() ? pkg_.DefaultVariant() : variant);
+    return (v ? v->bytes : pkg_.payload.totalRaw) + container_.OverlayStart() + ui;
 }
 
 DirCheck Engine::CheckInstallDir(const std::wstring& dir, Scope scope, bool probeWritable) const {
@@ -413,10 +420,27 @@ void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup,
     size_t index = 0;
     for (uint32_t s = 0; s < pkg_.payload.streams.size(); ++s) {
         const StreamInfo& si = pkg_.payload.streams[s];
+        // A stream holding only another variant's files is not decoded at all.
+        size_t end = index;
+        bool needed = false;
+        for (; end < files.size() && files[end].stream == s; ++end) needed = needed || Selected(files[end]);
+        if (!needed) {
+            index = end;
+            continue;
+        }
         archive::StreamReader reader(container_, si.offset, si.size, si.rawSize, si.sha256);
         for (; index < files.size() && files[index].stream == s; ++index) {
             ThrowIfCancelled(cancel);
             const FileInfo& f = files[index];
+            if (!Selected(f)) {
+                // Another variant's file in a shared stream: decode (the stream hash covers it) and drop it.
+                for (uint64_t left = f.size; left > 0;) {
+                    const size_t n = reader.Read(buffer.get(), static_cast<size_t>(std::min<uint64_t>(left, kChunk)));
+                    if (n == 0) throw Failure(ErrorCode::PackageCorrupt, L"Stream ended early in " + f.path);
+                    left -= n;
+                }
+                continue;
+            }
             const std::wstring target = path::Join(dir, f.path);
             std::vector<std::wstring> parents;
             fs::CreateDirectories(path::Parent(target), &parents);
@@ -556,6 +580,15 @@ void Engine::WriteUninstaller(const std::wstring& dest) const {
 // ---------------------------------------------------------------------------------------------------------------
 // Actions
 
+void Engine::RunCloseCommand(const std::wstring& dir) const {
+    if (pkg_.ext.closeCommand.empty() || dir.empty()) return;
+    const std::wstring exe = path::Join(dir, pkg_.ext.closeCommand);
+    if (!path::IsStrictlyUnder(exe, dir) || !fs::Exists(exe) || fs::HasLinkInPath(path::Parent(exe))) return;
+    if (RunningProcesses({path::FileName(exe)}).empty()) return;  // nothing to close
+    log::Info(L"Asking the app to exit: %s", pkg_.ext.closeCommand.c_str());
+    const ActionResult r = RunProgram(exe, pkg_.ext.closeCommandArgs, 30);
+    if (!r.ok) log::Warn(L"%s", r.detail.c_str());
+}
 void Engine::RunActions(Action::When when, const std::wstring& dir, const std::map<std::string, bool>& choices, Outcome& out) const {
     for (const Action& a : pkg_.ext.actions) {
         if (a.when != when) continue;
@@ -617,8 +650,10 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
     bool pendingSet = false;
     Existing existing;
 
+    variant_ = pkg_.variants.empty() ? std::string() : options.variant.empty() ? pkg_.DefaultVariant() : options.variant;
     try {
         rep.Set(State::Validating, -1);
+        if (!pkg_.variants.empty() && !pkg_.FindVariant(variant_)) throw Failure(ErrorCode::InvalidArguments, L"Unknown variant " + Utf8ToWide(variant_));
         log::Info(L"Install %s %s (%s scope) to '%s'", pkg_.appId.c_str(), pkg_.version.c_str(), ScopeName(scope),
                   options.installDir.c_str());
         if (pkg_.IsUninstaller()) throw Failure(ErrorCode::InvalidArguments, L"This executable is an uninstaller");
@@ -642,6 +677,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         RecoverPending(scope);
         std::vector<const Requirement*> installLater;  // missing prerequisites with a bundled or downloadable installer
         for (const auto& req : pkg_.ext.requirements) {
+            if (!req.AppliesTo(variant_)) continue;  // e.g. a shared runtime the self-contained build does not need
             const std::wstring found = InstalledRequirementVersion(req);
             if (RequirementSatisfied(req)) {
                 log::Info(L"Prerequisite %s present%s%s", req.name.c_str(), found.empty() ? L"" : L": ", found.c_str());
@@ -710,6 +746,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
 
         // ---- Preparing --------------------------------------------------------------------------------------
         rep.Set(State::Preparing, -1);
+        if (existing.product) RunCloseCommand(existing.product->installDir);
         for (const auto& still : CloseProcesses(pkg_.ext.closeProcesses)) log::Warn(L"%s could not be closed", still.c_str());
         if (existing.product && security::IsElevated()) {
             // The previous build's native images no longer match the assemblies about to be replaced.
@@ -759,7 +796,9 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         std::vector<RecordFile> recordFiles;
         InstallPayload(dir, backup, *journal, rep, cancel, recordFiles);
         std::unordered_set<std::wstring> newSet;
-        for (const auto& f : pkg_.payload.files) newSet.insert(ToLower(f.path));
+        for (const auto& f : pkg_.payload.files) {
+            if (Selected(f)) newSet.insert(ToLower(f.path));  // switching variants removes the other build's files
+        }
         for (const auto& d : pkg_.payload.directories) {
             std::vector<std::wstring> made;
             fs::CreateDirectories(path::Join(dir, d), &made);
@@ -873,8 +912,11 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         arp.quietUninstallString = L"\"" + uninstaller + L"\" /uninstall /quiet";
         arp.urlInfoAbout = pkg_.website;
         arp.comments = pkg_.description;
+        arp.variant = Utf8ToWide(variant_);
         arp.recordSha256 = Utf8ToWide(ToHex(Sha256::Of({reinterpret_cast<const uint8_t*>(recordJson.data()), recordJson.size()})));
-        arp.estimatedSizeKb = static_cast<uint32_t>(std::min<uint64_t>((pkg_.payload.totalRaw + 1023) / 1024, 0xFFFFFFFFu));
+        uint64_t installedBytes = 0;
+        for (const auto& f : pkg_.payload.files) installedBytes += Selected(f) ? f.size : 0;
+        arp.estimatedSizeKb = static_cast<uint32_t>(std::min<uint64_t>((installedBytes + 1023) / 1024, 0xFFFFFFFFu));
         Version v;
         Version::Parse(pkg_.version, v);
         arp.versionMajor = v.Major();
@@ -907,6 +949,16 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         }
         for (const auto& r : ic.removeRunValues) DeleteRunValue(r);
         for (const auto& s : ic.removeShortcuts) DeleteShortcutsNamed(s);
+        // "Start with Windows"-style options: a Run value for the main executable while the option is selected.
+        for (const auto& opt : pkg_.ext.options) {
+            if (opt.startupName.empty() || pkg_.mainExecutable.empty()) continue;
+            const auto it = options.choices.find(opt.id);
+            if (opt.required || (it != options.choices.end() ? it->second : opt.defaultValue)) {
+                if (!WriteRunValue(opt.startupName, path::Join(dir, pkg_.mainExecutable), opt.startupArgs)) out.warnings.push_back(L"Could not register " + opt.startupName);
+            } else {
+                DeleteRunValue(opt.startupName);
+            }
+        }
         if (security::IsElevated()) {
             for (const auto& a : pkg_.ext.ngen) RunNGen(path::Join(dir, a), true);  // queued: compiled when the PC is idle
         }
@@ -933,7 +985,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         ::SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, dir.c_str(), nullptr);
 
         rep.Set(State::Completed, 1.0, {}, false);
-        log::Info(L"Install completed: %zu files", pkg_.payload.files.size());
+        log::Info(L"Install completed: %zu files%s%S", recordFiles.size(), variant_.empty() ? L"" : L", variant ", variant_.c_str());
         return out;
     } catch (const Failure& f) {
         out.code = f.code();
@@ -1016,6 +1068,7 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
         const std::wstring trash = path::Join(workDir, L"t-" + RandomToken().substr(0, 10));
         fs::CreateDirectories(trash);
 
+        RunCloseCommand(dir);
         for (const auto& still : CloseProcesses(pkg_.ext.closeProcesses)) log::Warn(L"%s could not be closed", still.c_str());
         RunActions(Action::When::BeforeUninstall, dir, record.choices, out);
         if (security::IsElevated()) {
@@ -1073,6 +1126,9 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
             if (DeleteScheduledTask(t)) log::Info(L"Removed scheduled task %s", t.c_str());
         }
         for (const auto& v : pkg_.ext.cleanup.removeRunValues) DeleteRunValue(v);
+        for (const auto& opt : pkg_.ext.options) {
+            if (!opt.startupName.empty()) DeleteRunValue(opt.startupName);
+        }
         for (const auto& s : pkg_.ext.cleanup.removeShortcuts) DeleteShortcutsNamed(s);
         for (const auto& tpl : pkg_.ext.cleanup.removeData) {
             const std::wstring target = ExpandDataTemplate(tpl);

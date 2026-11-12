@@ -21,6 +21,9 @@ struct MainWindow : MainWindowT<MainWindow> {
     void OnOpenFolderClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnViewLogClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnScopeChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
+    void OnVariantChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
+    void UpdateNotice();
+    const fsetup::json::Value* SelectedVariant() const;
     void OnLicenseChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
 
 private:
@@ -69,6 +72,7 @@ private:
     bool closing_ = false;
     bool dialogOpen_ = false;
     std::wstring scope_;
+    std::string variant_;
     std::wstring logPath_;
     std::wstring installDir_;
     std::wstring pendingPath_;  // folder whose check is in flight

@@ -19,6 +19,7 @@ public static class Program
           fluentsetup build <project.json> [options]   Build Setup.exe
               -o, --output <dir>        Output folder (default: project output.directory)
               --arch x64|arm64          Target architecture (default: project output.architecture)
+              --variant <id>[,<id>]     Variants to include (default: project output.variants, else all)
               --sign | --no-sign        Override the project's signing setting
               --report <file.json>      Write a machine-readable build report
               --runtime <dir>           Use another installer runtime folder
@@ -28,6 +29,11 @@ public static class Program
           fluentsetup validate <project.json> [--json]
           fluentsetup inspect <Setup.exe> [--verify] [--json]
           fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
+          fluentsetup locale add <language> <project.json> [--force]
+                                        Create <ui.localization>/<language>.json with every text to translate
+                                        (installer strings, option/action/variant ids); any BCP-47 tag, e.g. fr-FR
+          fluentsetup guide                     Print the complete project-authoring guide (for people and AI tools)
+          fluentsetup schema                    Print the JSON Schema of fluentsetup.json
           fluentsetup --version | --help
 
         Exit codes: 0 success, 1 validation/build failure, 2 usage error, 3 unexpected error, 4 cancelled.
@@ -61,6 +67,9 @@ public static class Program
                 "validate" => Validate(parsed),
                 "inspect" => Inspect(parsed),
                 "init" => Init(parsed),
+                "guide" => PrintResource("FluentSetup.Cli.ai-guide.md"),
+                "schema" => PrintResource("FluentSetup.Cli.fluentsetup.project.schema.json"),
+                "locale" => Locale(parsed),
                 _ => UsageError($"Unknown command '{args[0]}'."),
             };
         }
@@ -103,6 +112,7 @@ public static class Program
         {
             OutputDirectory = a.Value("output", "o") is { } o ? Path.GetFullPath(o) : null,
             Architecture = a.Value("arch"),
+            Variants = a.Value("variant") is { Length: > 0 } vs ? [.. vs.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)] : null,
             RuntimeRoot = a.Value("runtime"),
             Sign = a.Flag("sign") ? true : a.Flag("no-sign") ? false : null,
             Log = verbose && !json ? m => Console.WriteLine($"  {m}") : null,
@@ -153,6 +163,67 @@ public static class Program
         return report.Success ? 0 : 1;
     }
 
+    private static int PrintResource(string name)
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
+            ?? throw new InvalidDataException($"Resource {name} is missing from this build.");
+        using var reader = new StreamReader(stream);
+        Console.Out.Write(reader.ReadToEnd());
+        return 0;
+    }
+
+    /// <summary>
+    /// locale add &lt;lang&gt; &lt;project.json&gt;: writes a localization file listing every text of the package and, for a
+    /// language the installer does not ship, every installer string (English as the starting point).
+    /// </summary>
+    private static int Locale(ParsedArgs a)
+    {
+        if (a.PositionalOrDefault(0) != "add") throw new UsageException("Use: fluentsetup locale add <language> <project.json>");
+        var lang = a.PositionalOrDefault(1) ?? throw new UsageException("Give a language tag, e.g. fr-FR.");
+        var projectPath = a.PositionalOrDefault(2) ?? throw new UsageException("Give the project file.");
+        if (!Localization.IsLanguageTag(lang)) throw new UsageException($"'{lang}' is not a language tag (e.g. fr-FR, de, pt-BR).");
+        var project = ProjectSerializer.Load(projectPath);
+        var dir = Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
+        if (string.IsNullOrEmpty(project.Ui.Localization))
+            throw new UsageException("Set ui.localization in the project first (e.g. \"localization\": \"locales\").");
+        var folder = ProjectValidator.Resolve(dir, project.Ui.Localization);
+        var file = Path.Combine(folder, lang + ".json");
+        if (File.Exists(file) && !a.Flag("force")) throw new UsageException($"{file} exists (use --force to overwrite).");
+
+        static string Pick(Dictionary<string, string> text, string lang) =>
+            text.TryGetValue(lang, out var t) ? t : text.TryGetValue("en-US", out var en) ? en : text.Values.FirstOrDefault() ?? "";
+        var json = new System.Text.Json.Nodes.JsonObject
+        {
+            ["options"] = new System.Text.Json.Nodes.JsonObject(project.Options.Select(o => KeyValuePair.Create(o.Id, (System.Text.Json.Nodes.JsonNode?)Pick(o.Label, lang)))),
+            ["actions"] = new System.Text.Json.Nodes.JsonObject(project.Actions.Where(x => x.Id.Length > 0).Select(x => KeyValuePair.Create(x.Id, (System.Text.Json.Nodes.JsonNode?)Pick(x.Name, lang)))),
+            ["variants"] = new System.Text.Json.Nodes.JsonObject(project.Files.Variants.Select(v => KeyValuePair.Create(v.Id, (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject
+            {
+                ["label"] = Pick(v.Label, lang), ["description"] = Pick(v.Description, lang),
+            }))),
+            ["license"] = "",
+        };
+        var builtIn = Localization.SupportedLanguages.Contains(lang);
+        var strings = new System.Text.Json.Nodes.JsonObject();
+        if (!builtIn)
+        {
+            // The installer's own texts, in English, to be translated. Placeholders {0}, {1} and "&" mnemonics stay.
+            var english = new RuntimeAssets().LocalizationFile("en-US");
+            if (!File.Exists(english)) throw new InvalidDataException($"Installer strings not found: {english}");
+            foreach (var p in System.Text.Json.JsonDocument.Parse(File.ReadAllText(english)).RootElement.EnumerateObject())
+                strings[p.Name] = p.Value.GetString();
+        }
+        json["strings"] = strings;
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(file, json.ToJsonString(new System.Text.Json.JsonSerializerOptions
+        {
+            WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        }) + "\n", new System.Text.UTF8Encoding(false));
+        Console.WriteLine($"Created {file}");
+        Console.WriteLine(builtIn
+            ? $"The installer already speaks {lang}; translate the package texts (options, actions, variants, license)."
+            : $"The installer has no {lang} strings: translate the {strings.Count} entries under \"strings\" too (keep {{0}} placeholders and & mnemonics). Untranslated entries show in English.");
+        return 0;
+    }
     private static int Validate(ParsedArgs a)
     {
         var projectPath = Path.GetFullPath(a.Positional(0, "project file"));
