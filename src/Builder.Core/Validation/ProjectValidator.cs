@@ -16,7 +16,9 @@ public static partial class ProjectValidator
     [GeneratedRegex(@"^#[0-9A-Fa-f]{6}$")]
     private static partial Regex ColorRegex();
 
-    public static bool IsValidVersion(string v) => v.Length <= 64 && VersionRegex().IsMatch(v);
+    /// <summary>Same rules as the installer (src/Common/version.cpp): 1-4 numbers, each fitting in 32 bits, optional -tag.</summary>
+    public static bool IsValidVersion(string v) =>
+        v.Length <= 64 && VersionRegex().IsMatch(v) && v.Split('-')[0].Split('.').All(n => ulong.Parse(n, System.Globalization.CultureInfo.InvariantCulture) <= uint.MaxValue);
 
     public static DiagnosticBag Validate(SetupProject p, string projectDirectory)
     {
@@ -130,6 +132,7 @@ public static partial class ProjectValidator
         {
             if (lang is not ("en-US" or "zh-CN")) d.Warning("FS1309", $"ui.licenses.{lang}", $"License for '{lang}' is ignored: the installer supports en-US and zh-CN.");
             if (!File.Exists(Resolve(projectDirectory, file))) d.Error("FS1310", $"ui.licenses.{lang}", $"License file not found: {Resolve(projectDirectory, file)}");
+            else if (new FileInfo(Resolve(projectDirectory, file)).Length > 1024 * 1024) d.Error("FS1306", $"ui.licenses.{lang}", "License file is larger than 1 MB.");
         }
         ExtensionValidator.Validate(p, d);
 

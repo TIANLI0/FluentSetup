@@ -411,7 +411,7 @@ public sealed class PackageBuilder
         }
     }
 
-    /// <summary>Package header (see shared/schemas/package-header.schema.json and src/Install.Core/package.cpp).</summary>
+    /// <summary>Package header (see docs/package-format.md and src/Install.Core/package.cpp).</summary>
     internal static class HeaderWriter
     {
         public static byte[] Write(SetupProject p, string arch, string license, Dictionary<string, string> licenses, List<StreamRecord> payload, CompressedStream[] payloadStreams,

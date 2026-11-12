@@ -65,9 +65,10 @@ public static partial class ExtensionValidator
             if (a.OnFailure is not ("fail" or "warn" or "ignore")) d.Error("FS1624", field + ".onFailure", "Use fail, warn or ignore.");
             if (!string.IsNullOrEmpty(a.IfOption) && !p.Options.Any(o => o.Id == a.IfOption)) d.Error("FS1625", field + ".ifOption", $"No option '{a.IfOption}'.");
             if (a.SkipIfInstalled is { } c &&
-                (c.Hive is not ("HKLM" or "HKCU") || string.IsNullOrWhiteSpace(c.Key) || c.Key.StartsWith('\\') || !ProjectValidator.IsValidVersion(c.Version)))
+                (c.Hive is not ("HKLM" or "HKCU") || string.IsNullOrWhiteSpace(c.Key) || c.Key.Length > 255 || c.Key.StartsWith('\\') ||
+                 (c.Value?.Length ?? 0) > 128 || !ProjectValidator.IsValidVersion(c.Version)))
             {
-                d.Error("FS1626", field + ".skipIfInstalled", "Needs hive HKLM|HKCU, a key below it, a value name and a version.");
+                d.Error("FS1626", field + ".skipIfInstalled", "Needs hive HKLM|HKCU, a key below it (up to 255 characters), a value name (up to 128 characters; empty = the key's default value) and a version.");
             }
             if (a.When == "afterInstall" && a.OnFailure == "fail")
             {

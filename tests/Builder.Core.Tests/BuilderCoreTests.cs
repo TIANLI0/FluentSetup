@@ -104,6 +104,7 @@ public class ValidatorTests
     [InlineData("1.0")]
     [InlineData("1.2.3.4")]
     [InlineData("2.0.0-beta.1")]
+    [InlineData("4294967295.0")]
     public void AcceptsVersions(string v) => Assert.True(ProjectValidator.IsValidVersion(v));
 
     [Theory]
@@ -111,6 +112,7 @@ public class ValidatorTests
     [InlineData("1.2.3.4.5")]
     [InlineData("1..2")]
     [InlineData("")]
+    [InlineData("4294967296.0")]  // the installer stores each part in 32 bits
     public void RejectsVersions(string v) => Assert.False(ProjectValidator.IsValidVersion(v));
 
     [Fact]

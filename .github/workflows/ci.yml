@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build (native runtime, WinUI front end, Builder.Core, CLI, Builder GUI, tests)
+        shell: pwsh
+        run: ./scripts/build.ps1 -Configuration Release
+
+      - name: Native unit tests
+        shell: pwsh
+        run: |
+          ./out/bin/x64/Release/FluentSetup.Tests.Native.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Managed unit tests
+        shell: pwsh
+        run: dotnet test tests/Builder.Core.Tests -c Release --no-build --logger "trx;LogFileName=managed.trx" --results-directory out/test-results
+
+      - name: End-to-end install / upgrade / rollback / uninstall
+        shell: pwsh
+        run: ./tests/Integration/e2e.ps1
+
+      - name: Size report (fails above the 5 MiB overhead budget)
+        shell: pwsh
+        run: ./scripts/size-report.ps1 -Json out/size-report.json
+
+      # Needs an interactive desktop session. GitHub-hosted Windows runners provide one; the WinUI front end is skipped
+      # there because the Windows App Runtime is not installed (Setup.exe would fall back to Win32 anyway).
+      - name: UI tests (UI Automation)
+        shell: pwsh
+        continue-on-error: true
+        run: ./tests/UI/ui-tests.ps1
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluentsetup-x64
+          if-no-files-found: ignore
+          path: |
+            out/bin/x64/Release/FluentSetup.Stub.exe
+            out/bin/x64/Release/ui/
+            src/CLI/bin/Release/
+            out/size-report.json
+            out/test-results/
+            out/e2e/logs/
+            out/ui-tests/logs/
