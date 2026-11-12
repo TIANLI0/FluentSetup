@@ -41,6 +41,8 @@ public:
     HFONT bodyStrong = nullptr;
     HFONT heading = nullptr;
     HFONT subtitle = nullptr;
+    HFONT title = nullptr;
+    HFONT statusIcon = nullptr;
     HFONT caption = nullptr;
     HFONT icon = nullptr;
 

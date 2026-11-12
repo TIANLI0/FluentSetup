@@ -95,7 +95,7 @@ void Theme::DestroyBrushes() {
 }
 
 void Theme::DestroyFonts() {
-    for (HFONT* f : {&body, &bodyStrong, &heading, &subtitle, &caption, &icon}) {
+    for (HFONT* f : {&body, &bodyStrong, &heading, &subtitle, &title, &statusIcon, &caption, &icon}) {
         if (*f) ::DeleteObject(*f);
         *f = nullptr;
     }
@@ -113,7 +113,9 @@ void Theme::CreateFonts(UINT dpi) {
     heading = MakeFont(display, 18, FW_SEMIBOLD, dpi);
     subtitle = MakeFont(display, 20, FW_SEMIBOLD, dpi);
     caption = MakeFont(smallFace, 12, FW_NORMAL, dpi);
+    title = MakeFont(display, 28, FW_SEMIBOLD, dpi);
     icon = MakeFont(fluentIcons ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets", 40, FW_NORMAL, dpi);
+    statusIcon = MakeFont(fluentIcons ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets", 28, FW_NORMAL, dpi);
 }
 
 void Theme::ApplyWindowAttributes(HWND hwnd) const {

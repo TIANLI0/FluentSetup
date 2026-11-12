@@ -4,6 +4,8 @@
 
 #include "Common/json.h"
 
+#include <functional>
+
 namespace winrt::FluentSetupUI::implementation {
 
 enum class Page { Welcome, Options, License, Progress, Result };
@@ -23,33 +25,31 @@ struct MainWindow : MainWindowT<MainWindow> {
     void OnLicenseChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
 
 private:
-    // setup
     void InitWindow();
     winrt::fire_and_forget LoadIconFrame(std::wstring path, int pixels,
                                          std::function<void(winrt::Microsoft::UI::Xaml::Media::ImageSource const&)> apply);
     void ApplyHello();
     void ApplyStaticText();
+    void UpdateInfoLines();
 
-    // navigation
     void ShowPage(Page page);
     void UpdateFooter();
     [[nodiscard]] bool HasOptions() const;
     [[nodiscard]] bool ShowsLicense() const;
+    [[nodiscard]] bool LaunchOffered() const;
     [[nodiscard]] std::wstring PrimaryVerb() const;
     [[nodiscard]] bool NeedsElevation() const;
     void StartInstall();
+    void Finish(bool launch);
     void RequestClose();
     winrt::fire_and_forget ConfirmCancel();
 
-    // engine events
     void HandleMessage(fsetup::json::Value message);
     void OnProgress(const fsetup::json::Value& m);
     void OnDone(const fsetup::json::Value& m);
     void OnPathCheck(const fsetup::json::Value& m);
     void OnPeerLost();
     void RequestPathCheck();
-
-    // preview
     winrt::fire_and_forget RunPreviewProgress();
 
     [[nodiscard]] std::wstring AppName() const;
@@ -59,9 +59,10 @@ private:
     HWND hwnd_ = nullptr;
     Page page_ = Page::Welcome;
     ResultKind result_ = ResultKind::None;
-    bool installing_ = false;
     bool cancellable_ = true;
     bool cancelRequested_ = false;
+    bool canLaunch_ = false;
+    bool retryable_ = true;
     bool pathOk_ = true;
     bool pathDirty_ = false;
     bool userEditedPath_ = false;

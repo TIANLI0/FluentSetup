@@ -1,3 +1,6 @@
+// Win32 fallback front end, laid out like the WinUI one (Windows App Installer / APK-installer style):
+// a question as the title, publisher/version lines, the app icon large at the top right, "Launch when ready" at the
+// bottom left and progress inline in the bottom bar. System controls only (Common Controls v6, UxTheme, DWM).
 #include "Setup.Win32/fallback_ui.h"
 
 #include "Bootstrapper/resource.h"
@@ -26,19 +29,19 @@ using json::Value;
 constexpr UINT WM_APP_PROGRESS = WM_APP + 1;
 constexpr UINT WM_APP_DONE = WM_APP + 2;
 constexpr UINT_PTR kPathTimer = 1;
-constexpr int kClientWidth = 720;   // DIP, same as the WinUI window
-constexpr int kClientHeight = 500;  // DIP
+constexpr int kClientWidth = 640;   // DIP (same window size as the WinUI front end)
+constexpr int kClientHeight = 398;  // DIP
 constexpr int kMargin = 32;
-constexpr int kHeaderHeight = 88;
+constexpr int kIconSize = 72;
 
 enum Id : int {
-    kHeaderName = 100, kHeaderMeta,
-    kWHeading = 200, kWBody, kWInfo, kWError, kWLocLabel, kWLoc, kWSpace,
+    kStatus = 100, kTitle, kDescription, kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
+    kLblSize, kSize, kInfo, kDirError,
+    kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog,
     kOHeading = 300, kOScopeLabel, kOScopeUser, kOScopeMachine, kOLocLabel, kOLoc, kOBrowse, kOSpace, kOError,
     kOShortLabel, kODesktop, kOStartMenu,
     kLHeading = 400, kLSub, kLText, kLAccept,
-    kPHeading = 500, kPStage, kPBar, kPDetail, kPPercent,
-    kRIcon = 600, kRHeading, kRBody, kRLaunch, kRCode, kRDetail, kRFolder, kRLog,
+    kLaunch = 500, kPStage, kPPercent, kPBar, kPDetail,
     kSecondary = 700,
 };
 
@@ -48,10 +51,8 @@ enum class ResultKind { None, Success, Failed, Cancelled };
 class Window : public boot::IListener {
 public:
     Window(Controller& controller, Value hello) : c_(controller), hello_(std::move(hello)) {}
+    void Run();
 
-    void Run(bool resume);
-
-    // IListener (engine thread): marshal to the UI thread.
     void OnProgress(const install::Progress& p) override {
         if (hwnd_) ::PostMessageW(hwnd_, WM_APP_PROGRESS, 0, reinterpret_cast<LPARAM>(new install::Progress(p)));
     }
@@ -63,30 +64,33 @@ private:
     static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l);
     LRESULT Handle(UINT m, WPARAM w, LPARAM l);
 
-    // helpers
     std::wstring S(std::string_view key) const { return c_.strings().Get(key); }
     std::wstring F(std::string_view key, std::initializer_list<std::wstring_view> a) const { return c_.strings().Fmt(key, a); }
     int Px(int dip) const { return MulDiv(dip, static_cast<int>(dpi_), 96); }
     HWND Ctl(int id) const { return ::GetDlgItem(hwnd_, id); }
-    HWND Make(const wchar_t* cls, int id, DWORD style, const std::wstring& text = {}, DWORD exStyle = 0);
+    HWND Make(const wchar_t* cls, int id, DWORD style, DWORD exStyle = 0);
     void SetText(int id, const std::wstring& t) { ::SetWindowTextW(Ctl(id), t.c_str()); }
+    std::wstring GetText(int id) const;
     void Show(int id, bool visible) { ::ShowWindow(Ctl(id), visible ? SW_SHOWNA : SW_HIDE); }
     bool Visible(int id) const { return (::GetWindowLongW(Ctl(id), GWL_STYLE) & WS_VISIBLE) != 0; }
+    bool Checked(int id) const { return Button_GetCheck(Ctl(id)) == BST_CHECKED; }
     int TextHeight(int id, int width) const;
 
     void Create();
     void ApplyFonts();
     void ApplyTheme();
     void ApplyHello();
+    void UpdateInfoLines();
     void ShowPage(Page p);
     void Layout();
     void UpdateFooter();
     void Paint(HDC dc);
     LRESULT CustomDrawButton(NMCUSTOMDRAW* cd);
-    void DrawResultIcon(const DRAWITEMSTRUCT* di);
+    void DrawStatus(const DRAWITEMSTRUCT* di);
 
     bool HasOptions() const;
-    bool ShowsLicense() const;
+    bool ShowsLicense() const { return !IsUninstall() && !hello_["ui"]["licenseText"].asString().empty(); }
+    bool LaunchOffered() const { return !IsUninstall() && hello_["options"]["launchAfter"]["visible"].asBool(); }
     bool NeedsElevation() const { return scope_ == L"machine" && !hello_["elevated"].asBool(); }
     bool IsUninstall() const { return hello_["mode"].asString() == "uninstall"; }
     std::wstring AppName() const { return hello_["app"]["name"].asWide(); }
@@ -95,6 +99,7 @@ private:
     void OnPrimary();
     void OnSecondary();
     void RequestClose();
+    void Finish(bool launch);
     void StartInstall();
     void OnProgressMsg(const install::Progress& p);
     void OnDoneMsg(const Value& m);
@@ -112,37 +117,30 @@ private:
     HICON iconSmall_ = nullptr;
     Page page_ = Page::Welcome;
     ResultKind result_ = ResultKind::None;
-    std::wstring scope_;
-    std::wstring installDir_;
-    std::wstring logPath_;
-    std::wstring resultInstallDir_;
+    std::wstring scope_, installDir_, logPath_;
     uint64_t requiredBytes_ = 0, freeBytes_ = 0;
-    bool pathOk_ = true;
-    bool pathDirty_ = false;
-    bool userEditedPath_ = false;
-    bool suppress_ = false;
-    bool cancellable_ = true;
-    bool cancelRequested_ = false;
-    bool retryable_ = true;
-    bool done_ = false;
-    std::wstring resultGlyph_;
-    COLORREF resultColor_ = 0;
+    bool pathOk_ = true, pathDirty_ = false, userEditedPath_ = false, suppress_ = false;
+    bool cancellable_ = true, cancelRequested_ = false, retryable_ = true, canLaunch_ = false;
+    std::wstring statusGlyph_;
+    COLORREF statusColor_ = 0;
     RECT infoRect_{};
 };
 
-// ---------------------------------------------------------------------------------------------------------------
-
-HWND Window::Make(const wchar_t* cls, int id, DWORD style, const std::wstring& text, DWORD exStyle) {
-    return ::CreateWindowExW(exStyle, cls, text.c_str(), WS_CHILD | style, 0, 0, 10, 10, hwnd_,
+HWND Window::Make(const wchar_t* cls, int id, DWORD style, DWORD exStyle) {
+    return ::CreateWindowExW(exStyle, cls, L"", WS_CHILD | style, 0, 0, 10, 10, hwnd_,
                              reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), ::GetModuleHandleW(nullptr), nullptr);
+}
+
+std::wstring Window::GetText(int id) const {
+    std::wstring t(static_cast<size_t>(::GetWindowTextLengthW(Ctl(id))) + 1, L'\0');
+    ::GetWindowTextW(Ctl(id), t.data(), static_cast<int>(t.size()));
+    t.resize(wcslen(t.c_str()));
+    return t;
 }
 
 int Window::TextHeight(int id, int width) const {
     HWND h = Ctl(id);
-    const int len = ::GetWindowTextLengthW(h);
-    std::wstring text(static_cast<size_t>(len) + 1, L'\0');
-    ::GetWindowTextW(h, text.data(), len + 1);
-    text.resize(static_cast<size_t>(len));
+    std::wstring text = GetText(id);
     if (text.empty()) text = L" ";
     HDC dc = ::GetDC(h);
     HGDIOBJ old = ::SelectObject(dc, reinterpret_cast<HFONT>(::SendMessageW(h, WM_GETFONT, 0, 0)));
@@ -153,11 +151,10 @@ int Window::TextHeight(int id, int width) const {
     return r.bottom - r.top;
 }
 
-void Window::Run(bool resume) {
-    INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_STANDARD_CLASSES | ICC_PROGRESS_CLASS | ICC_LINK_CLASS};
+void Window::Run() {
+    INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_STANDARD_CLASSES | ICC_PROGRESS_CLASS};
     ::InitCommonControlsEx(&icc);
-    // hello_ outlives theme_, so the setting string stays valid.
-    const std::string& themeSetting = hello_["ui"]["theme"].asString();
+    const std::string& themeSetting = hello_["ui"]["theme"].asString();  // hello_ outlives theme_
     theme_.Init(themeSetting.empty() ? "system" : themeSetting.c_str());
 
     WNDCLASSEXW wc{sizeof(wc)};
@@ -168,7 +165,6 @@ void Window::Run(bool resume) {
     wc.hIcon = ::LoadIconW(wc.hInstance, MAKEINTRESOURCEW(IDI_APP));
     ::RegisterClassExW(&wc);
 
-    // Place on the monitor under the cursor, sized for its DPI.
     POINT cursor{};
     ::GetCursorPos(&cursor);
     HMONITOR monitor = ::MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY);
@@ -184,13 +180,11 @@ void Window::Run(bool resume) {
     MONITORINFO mi{sizeof(mi)};
     ::GetMonitorInfoW(monitor, &mi);
     const int w = r.right - r.left, h = r.bottom - r.top;
-    const int x = mi.rcWork.left + (mi.rcWork.right - mi.rcWork.left - w) / 2;
-    const int y = mi.rcWork.top + (mi.rcWork.bottom - mi.rcWork.top - h) / 2;
-
     std::wstring title = hello_["ui"]["title"].asWide();
     if (title.empty()) title = F(IsUninstall() ? "window.title.uninstall" : "window.title.install", {AppName()});
-    hwnd_ = ::CreateWindowExW(WS_EX_CONTROLPARENT, wc.lpszClassName, title.c_str(), style, x, y, w, h, nullptr, nullptr,
-                              wc.hInstance, this);
+    hwnd_ = ::CreateWindowExW(WS_EX_CONTROLPARENT, wc.lpszClassName, title.c_str(), style,
+                              mi.rcWork.left + (mi.rcWork.right - mi.rcWork.left - w) / 2,
+                              mi.rcWork.top + (mi.rcWork.bottom - mi.rcWork.top - h) / 2, w, h, nullptr, nullptr, wc.hInstance, this);
     if (!hwnd_) return;
     dpi_ = ::GetDpiForWindow(hwnd_);
 
@@ -198,7 +192,7 @@ void Window::Run(bool resume) {
     ApplyHello();
     ApplyTheme();
 
-    // Resume: show whatever the session is doing right now.
+    // Resume: show whatever the session is doing right now (e.g. after the WinUI front end stopped).
     install::Progress last;
     std::optional<install::Outcome> outcome;
     bool started = false;
@@ -207,14 +201,12 @@ void Window::Run(bool resume) {
         OnDoneMsg(c_.DoneMessage(*outcome));
     } else if (started) {
         ShowPage(Page::Progress);
-        SetText(kPHeading, F(IsUninstall() ? "progress.title.uninstall" : "progress.title.install", {AppName()}));
         OnProgressMsg(last);
     } else {
         ShowPage(Page::Welcome);
     }
-    (void)resume;
 
-    // Hide focus rectangles and mnemonic underlines until the user actually uses the keyboard (standard dialog behaviour).
+    // Hide focus rectangles and mnemonic underlines until the keyboard is used (standard dialog behaviour).
     ::SendMessageW(hwnd_, WM_CHANGEUISTATE, MAKEWPARAM(UIS_INITIALIZE, 0), 0);
     ::ShowWindow(hwnd_, SW_SHOWNORMAL);
     ::SetForegroundWindow(hwnd_);
@@ -226,7 +218,6 @@ void Window::Run(bool resume) {
         }
     }
     c_.Attach(nullptr, nullptr, nullptr, nullptr);
-    // Drain anything posted between the last message and detaching.
     while (::PeekMessageW(&msg, nullptr, WM_APP_PROGRESS, WM_APP_DONE, PM_REMOVE)) {
         if (msg.message == WM_APP_PROGRESS) delete reinterpret_cast<install::Progress*>(msg.lParam);
         else delete reinterpret_cast<Value*>(msg.lParam);
@@ -236,24 +227,25 @@ void Window::Run(bool resume) {
 }
 
 void Window::Create() {
-    const DWORD text = WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-    Make(WC_STATICW, kHeaderName, text | SS_ENDELLIPSIS);
-    Make(WC_STATICW, kHeaderMeta, text);
-
-    Make(WC_STATICW, kWHeading, text);
-    Make(WC_STATICW, kWBody, text);
-    Make(WC_STATICW, kWInfo, text);
-    Make(WC_STATICW, kWError, text);
-    Make(WC_STATICW, kWLocLabel, text);
-    Make(WC_STATICW, kWLoc, text | SS_PATHELLIPSIS);
-    Make(WC_STATICW, kWSpace, text);
+    const DWORD text = SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
+    // Creation order = tab order.
+    Make(WC_STATICW, kStatus, SS_OWNERDRAW);
+    Make(WC_STATICW, kTitle, text);
+    Make(WC_STATICW, kDescription, text);
+    for (int id : {kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation}) Make(WC_STATICW, id, text);
+    Make(WC_STATICW, kLocation, text | SS_PATHELLIPSIS);
+    Make(WC_BUTTONW, kChange, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
+    for (int id : {kLblSize, kSize, kInfo, kDirError, kResultBody, kResultCode}) Make(WC_STATICW, id, text);
+    Make(WC_EDITW, kResultDetail, WS_TABSTOP | WS_GROUP | ES_MULTILINE | ES_READONLY | WS_VSCROLL, WS_EX_CLIENTEDGE);
+    Make(WC_BUTTONW, kOpenFolder, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
+    Make(WC_BUTTONW, kViewLog, BS_PUSHBUTTON | WS_TABSTOP);
 
     Make(WC_STATICW, kOHeading, text);
     Make(WC_STATICW, kOScopeLabel, text);
     Make(WC_BUTTONW, kOScopeUser, BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, kOScopeMachine, BS_AUTORADIOBUTTON);
     Make(WC_STATICW, kOLocLabel, text);
-    Make(WC_EDITW, kOLoc, WS_TABSTOP | WS_GROUP | ES_AUTOHSCROLL, {}, WS_EX_CLIENTEDGE);
+    Make(WC_EDITW, kOLoc, WS_TABSTOP | WS_GROUP | ES_AUTOHSCROLL, WS_EX_CLIENTEDGE);
     Make(WC_BUTTONW, kOBrowse, BS_PUSHBUTTON | WS_TABSTOP);
     Make(WC_STATICW, kOSpace, text);
     Make(WC_STATICW, kOError, text);
@@ -263,23 +255,14 @@ void Window::Create() {
 
     Make(WC_STATICW, kLHeading, text);
     Make(WC_STATICW, kLSub, text);
-    Make(WC_EDITW, kLText, WS_TABSTOP | WS_GROUP | ES_MULTILINE | ES_READONLY | WS_VSCROLL | ES_AUTOVSCROLL, {}, WS_EX_CLIENTEDGE);
+    Make(WC_EDITW, kLText, WS_TABSTOP | WS_GROUP | ES_MULTILINE | ES_READONLY | WS_VSCROLL, WS_EX_CLIENTEDGE);
     Make(WC_BUTTONW, kLAccept, BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP);
 
-    Make(WC_STATICW, kPHeading, text);
-    Make(WC_STATICW, kPStage, text);
+    Make(WC_BUTTONW, kLaunch, BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP);
+    Make(WC_STATICW, kPStage, text | SS_ENDELLIPSIS);
+    Make(WC_STATICW, kPPercent, text | SS_RIGHT);
     Make(PROGRESS_CLASSW, kPBar, PBS_SMOOTH);
     Make(WC_STATICW, kPDetail, text | SS_PATHELLIPSIS);
-    Make(WC_STATICW, kPPercent, text | SS_RIGHT);
-
-    Make(WC_STATICW, kRIcon, SS_OWNERDRAW);
-    Make(WC_STATICW, kRHeading, text);
-    Make(WC_STATICW, kRBody, text);
-    Make(WC_BUTTONW, kRLaunch, BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP);
-    Make(WC_STATICW, kRCode, text);
-    Make(WC_EDITW, kRDetail, WS_TABSTOP | ES_MULTILINE | ES_READONLY | WS_VSCROLL, {}, WS_EX_CLIENTEDGE);
-    Make(WC_BUTTONW, kRFolder, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
-    Make(WC_BUTTONW, kRLog, BS_PUSHBUTTON | WS_TABSTOP);
 
     Make(WC_BUTTONW, kSecondary, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, IDOK, BS_DEFPUSHBUTTON | WS_TABSTOP);
@@ -287,8 +270,6 @@ void Window::Create() {
 
     ::SendMessageW(Ctl(kPBar), PBM_SETRANGE32, 0, 1000);
     ::SendMessageW(Ctl(kOLoc), EM_SETLIMITTEXT, 240, 0);
-
-    // Static texts that never change.
     SetText(kOHeading, S("options.title"));
     SetText(kOScopeLabel, S("options.scope"));
     SetText(kOScopeUser, S("options.scope.user"));
@@ -301,24 +282,33 @@ void Window::Create() {
     SetText(kLHeading, S("license.title"));
     SetText(kLSub, S("license.subtitle"));
     SetText(kLAccept, S("fallback.accept"));
-    SetText(kRFolder, S("result.openFolder"));
-    SetText(kRLog, S("fallback.viewLog"));
+    SetText(kLaunch, S("launchWhenReady"));
+    SetText(kLblPublisher, S("label.publisher"));
+    SetText(kLblVersion, S("label.version"));
+    SetText(kLblLocation, S("label.location"));
+    SetText(kLblSize, S("label.size"));
+    SetText(kChange, S("button.change"));
+    SetText(kOpenFolder, S("result.openFolder"));
+    SetText(kViewLog, S("fallback.viewLog"));
 }
 
 void Window::ApplyFonts() {
     theme_.CreateFonts(dpi_);
     const auto set = [&](int id, HFONT f) { ::SendMessageW(Ctl(id), WM_SETFONT, reinterpret_cast<WPARAM>(f), FALSE); };
-    for (int id : {kHeaderMeta, kWSpace, kOSpace, kPDetail, kPPercent, kRCode}) set(id, theme_.caption);
-    set(kHeaderName, theme_.subtitle);
-    for (int id : {kWHeading, kOHeading, kLHeading, kPHeading, kRHeading}) set(id, theme_.heading);
-    for (int id : {kWLocLabel, kOScopeLabel, kOLocLabel, kOShortLabel}) set(id, theme_.bodyStrong);
-    for (int id : std::initializer_list<int>{kWBody, kWInfo, kWError, kWLoc, kOScopeUser, kOScopeMachine, kOLoc, kOBrowse, kOError, kODesktop, kOStartMenu,
-                   kLSub, kLText, kLAccept, kPStage, kRBody, kRLaunch, kRDetail, kRFolder, kRLog, kSecondary, static_cast<int>(IDOK), static_cast<int>(IDCANCEL)}) {
+    set(kTitle, theme_.title);
+    for (int id : {kOHeading, kLHeading}) set(id, theme_.subtitle);
+    for (int id : {kOScopeLabel, kOLocLabel, kOShortLabel}) set(id, theme_.bodyStrong);
+    for (int id : {kOSpace, kPDetail, kResultCode}) set(id, theme_.caption);
+    for (int id : std::initializer_list<int>{kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
+                                             kLblSize, kSize, kDescription, kInfo, kDirError,
+                                             kResultBody, kResultDetail, kOpenFolder, kViewLog, kOScopeUser, kOScopeMachine, kOLoc,
+                                             kOBrowse, kOError, kODesktop, kOStartMenu, kLSub, kLText, kLAccept, kLaunch, kPStage,
+                                             kPPercent, kSecondary, static_cast<int>(IDOK), static_cast<int>(IDCANCEL)}) {
         set(id, theme_.body);
     }
     if (iconLarge_) ::DestroyIcon(iconLarge_);
     if (iconSmall_) ::DestroyIcon(iconSmall_);
-    ::LoadIconWithScaleDown(::GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APP), Px(48), Px(48), &iconLarge_);
+    ::LoadIconWithScaleDown(::GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APP), Px(kIconSize), Px(kIconSize), &iconLarge_);
     ::LoadIconWithScaleDown(::GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APP), ::GetSystemMetricsForDpi(SM_CXSMICON, dpi_),
                             ::GetSystemMetricsForDpi(SM_CYSMICON, dpi_), &iconSmall_);
     ::SendMessageW(hwnd_, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(iconSmall_));
@@ -340,40 +330,29 @@ void Window::ApplyTheme() {
 }
 
 void Window::ApplyHello() {
-    const Value& app = hello_["app"];
     const Value& opts = hello_["options"];
     const Value& existing = hello_["existing"];
     const std::wstring name = AppName();
-    SetText(kHeaderName, name);
-    std::wstring meta = F("header.version", {app["version"].asWide()});
-    if (!app["publisher"].asWide().empty()) meta = app["publisher"].asWide() + L"  ·  " + meta;
-    SetText(kHeaderMeta, meta);
+    std::wstring description = hello_["ui"]["welcomeText"].asWide();
+    if (IsUninstall()) description = F("uninstall.body", {name});
+    SetText(kDescription, description);
 
-    if (IsUninstall()) {
-        SetText(kWHeading, F("uninstall.title", {name}));
-        SetText(kWBody, F("uninstall.body", {name}));
-        SetText(kWLocLabel, S("uninstall.location"));
-    } else {
-        const std::string relation = existing["relation"].asString();
-        SetText(kWHeading, F(relation == "upgrade" ? "welcome.title.update" : "welcome.title", {name}));
-        const std::wstring welcome = hello_["ui"]["welcomeText"].asWide();
-        SetText(kWBody, welcome.empty() ? F("welcome.body", {name}) : welcome);
-        SetText(kWLocLabel, S("welcome.location"));
-        std::wstring info;
-        if (relation == "upgrade") info = F("welcome.upgrade", {existing["version"].asWide(), app["version"].asWide()});
-        else if (relation == "same") info = F("welcome.reinstall", {existing["version"].asWide()});
-        else if (relation == "downgrade") {
-            info = F(existing["blocked"].asBool() ? "welcome.downgradeBlocked" : "welcome.downgrade",
-                     {existing["version"].asWide(), app["version"].asWide()});
-        }
-        SetText(kWInfo, info);
+    const std::string relation = existing["relation"].asString();
+    std::wstring info;
+    if (!IsUninstall() && relation == "downgrade") {  // upgrades/reinstalls are explained inline in the version row
+        const std::wstring oldV = existing["version"].asWide(), newV = hello_["app"]["version"].asWide();
+        if (relation == "upgrade") info = F("welcome.upgrade", {oldV, newV});
+        else if (relation == "same") info = F("welcome.reinstall", {oldV});
+        else if (relation == "downgrade") info = F(existing["blocked"].asBool() ? "welcome.downgradeBlocked" : "welcome.downgrade", {oldV, newV});
     }
+    SetText(kInfo, info);
+
     installDir_ = opts["installDir"].asWide();
     scope_ = opts["scope"].asWide();
     requiredBytes_ = hello_["requiredBytes"].asUint();
     freeBytes_ = hello_["freeBytes"].asUint();
     pathOk_ = opts["dirOk"].asBool(true);
-    SetText(kWError, opts["dirMessage"].asWide());
+    SetText(kDirError, opts["dirMessage"].asWide());
     SetText(kOError, opts["dirMessage"].asWide());
     suppress_ = true;
     SetText(kOLoc, installDir_);
@@ -381,9 +360,7 @@ void Window::ApplyHello() {
     Button_SetCheck(Ctl(scope_ == L"machine" ? kOScopeMachine : kOScopeUser), BST_CHECKED);
     Button_SetCheck(Ctl(kODesktop), opts["desktopShortcut"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(Ctl(kOStartMenu), opts["startMenuShortcut"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
-    SetText(kRLaunch, F("fallback.launch", {name}));
-    Button_SetCheck(Ctl(kRLaunch), opts["launchAfter"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
-    // Normalise line breaks for the multi-line edit control.
+    Button_SetCheck(Ctl(kLaunch), opts["launchAfter"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
     std::wstring license = hello_["ui"]["licenseText"].asWide(), crlf;
     for (size_t i = 0; i < license.size(); ++i) {
         if (license[i] == L'\n' && (i == 0 || license[i - 1] != L'\r')) crlf.push_back(L'\r');
@@ -393,11 +370,24 @@ void Window::ApplyHello() {
     UpdateSpace();
 }
 
+void Window::UpdateInfoLines() {
+    SetText(kPublisher, hello_["app"]["publisher"].asWide());
+    const std::wstring version = hello_["app"]["version"].asWide(), installed = hello_["existing"]["version"].asWide();
+    const std::string relation = hello_["existing"]["relation"].asString();
+    std::wstring versionText = version;
+    if (page_ == Page::Welcome && !IsUninstall()) {
+        if (relation == "upgrade") versionText = F("version.upgrade", {installed, version});
+        else if (relation == "same") versionText = F("version.same", {version});
+        else if (relation == "downgrade") versionText = F("version.downgrade", {installed, version});
+    }
+    SetText(kVersion, versionText);
+    SetText(kLocation, installDir_);
+    SetText(kSize, IsUninstall() || requiredBytes_ == 0 || page_ == Page::Result ? std::wstring() : FormatBytes(requiredBytes_));
+}
 void Window::UpdateSpace() {
-    SetText(kWLoc, installDir_);
-    SetText(kWSpace, requiredBytes_ ? F("welcome.space", {FormatBytes(requiredBytes_)}) : std::wstring());
     SetText(kOSpace, freeBytes_ ? F("options.space", {FormatBytes(requiredBytes_), FormatBytes(freeBytes_)})
                                 : F("welcome.space", {FormatBytes(requiredBytes_)}));
+    UpdateInfoLines();
 }
 
 bool Window::HasOptions() const {
@@ -406,8 +396,6 @@ bool Window::HasOptions() const {
     return o["canChangeDir"].asBool() || o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
            o["startMenuShortcut"]["visible"].asBool();
 }
-
-bool Window::ShowsLicense() const { return !IsUninstall() && !hello_["ui"]["licenseText"].asString().empty(); }
 
 std::wstring Window::PrimaryVerb() const {
     if (IsUninstall()) return S("button.uninstall");
@@ -420,12 +408,33 @@ std::wstring Window::PrimaryVerb() const {
 void Window::ShowPage(Page p) {
     page_ = p;
     const Value& o = hello_["options"];
-    const bool welcome = p == Page::Welcome, options = p == Page::Options, license = p == Page::License,
-               progress = p == Page::Progress, result = p == Page::Result;
-    for (int id : {kWHeading, kWBody, kWLocLabel, kWLoc}) Show(id, welcome);
-    Show(kWSpace, welcome && !IsUninstall());
-    Show(kWInfo, welcome && ::GetWindowTextLengthW(Ctl(kWInfo)) > 0);
-    Show(kWError, welcome && !pathOk_);
+    const bool summary = p == Page::Welcome || p == Page::Progress || p == Page::Result;
+    const bool welcome = p == Page::Welcome, options = p == Page::Options, license = p == Page::License, result = p == Page::Result;
+
+    if (welcome) {
+        const std::string relation = hello_["existing"]["relation"].asString();
+        const char* key = IsUninstall() ? "ask.uninstall" : relation == "upgrade" ? "ask.update" : relation == "same" ? "ask.reinstall" : "ask.install";
+        SetText(kTitle, F(key, {AppName()}));
+    } else if (p == Page::Progress) {
+        SetText(kTitle, F(IsUninstall() ? "progress.uninstalling" : "progress.installing", {AppName()}));
+    }
+    UpdateInfoLines();
+    Show(kTitle, summary);
+    Show(kStatus, result);
+    for (const auto [label, value] : {std::pair{kLblPublisher, kPublisher}, std::pair{kLblVersion, kVersion},
+                                      std::pair{kLblLocation, kLocation}, std::pair{kLblSize, kSize}}) {
+        const bool has = summary && ::GetWindowTextLengthW(Ctl(value)) > 0;
+        Show(label, has);
+        Show(value, has);
+    }
+    Show(kChange, welcome && HasOptions() && !hello_["existing"]["blocked"].asBool());
+    Show(kDescription, welcome && ::GetWindowTextLengthW(Ctl(kDescription)) > 0);
+    Show(kInfo, welcome && ::GetWindowTextLengthW(Ctl(kInfo)) > 0);
+    Show(kDirError, welcome && !pathOk_);
+    if (!result) {
+        for (int id : {kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog}) Show(id, false);
+    }
+
     Show(kOHeading, options);
     for (int id : {kOScopeLabel, kOScopeUser, kOScopeMachine}) Show(id, options && o["canChangeScope"].asBool());
     for (int id : {kOLocLabel, kOLoc, kOBrowse, kOSpace}) Show(id, options && o["canChangeDir"].asBool());
@@ -435,27 +444,21 @@ void Window::ShowPage(Page p) {
     Show(kODesktop, options && desktop);
     Show(kOStartMenu, options && start);
     for (int id : {kLHeading, kLSub, kLText, kLAccept}) Show(id, license);
-    for (int id : {kPHeading, kPStage, kPBar, kPDetail, kPPercent}) Show(id, progress);
-    for (int id : {kRIcon, kRHeading, kRBody}) Show(id, result);
-    if (!result) {
-        for (int id : {kRLaunch, kRCode, kRDetail, kRFolder, kRLog}) Show(id, false);
-    }
+
     UpdateFooter();
-    Layout();
     ::InvalidateRect(hwnd_, nullptr, TRUE);
     HWND focus = Visible(IDOK) && ::IsWindowEnabled(Ctl(IDOK)) ? Ctl(IDOK) : Ctl(IDCANCEL);
-    if (p == Page::Options && o["canChangeDir"].asBool()) focus = Ctl(kOLoc);
+    if (options && o["canChangeDir"].asBool()) focus = Ctl(kOLoc);
     ::SetFocus(focus);
 }
 
 void Window::UpdateFooter() {
     const bool blocked = hello_["existing"]["blocked"].asBool();
-    bool secondary = false, primary = true, cancel = true, primaryEnabled = true, shield = false;
+    const bool beforeStart = page_ == Page::Welcome || page_ == Page::Options || page_ == Page::License;
+    bool secondary = false, primary = true, primaryEnabled = true, shield = false;
     std::wstring secondaryText, primaryText, cancelText = S("button.cancel");
     switch (page_) {
-        case Page::Welcome:
-            secondary = HasOptions() && !blocked;
-            secondaryText = S("button.options");
+        case Page::Welcome:  // options are reached through the "Change" button next to the location
             primaryText = ShowsLicense() ? S("button.next") : PrimaryVerb();
             shield = !ShowsLicense() && NeedsElevation();
             primaryEnabled = !blocked && pathOk_ && !pathDirty_;
@@ -472,32 +475,26 @@ void Window::UpdateFooter() {
             secondaryText = S("button.back");
             primaryText = PrimaryVerb();
             shield = NeedsElevation();
-            primaryEnabled = Button_GetCheck(Ctl(kLAccept)) == BST_CHECKED && pathOk_;
+            primaryEnabled = Checked(kLAccept) && pathOk_;
             break;
         case Page::Progress:
             primary = false;
             break;
         case Page::Result:
-            if (result_ == ResultKind::Success) {
-                primaryText = S("button.finish");
-                cancel = false;
-            } else if (result_ == ResultKind::Failed) {
-                primaryText = S("button.retry");
-                primary = retryable_;
-                cancelText = S("button.close");
-            } else {
-                primaryText = S("button.close");
-                cancel = false;
-            }
+            cancelText = S("button.close");
+            primary = result_ == ResultKind::Success ? canLaunch_ : result_ == ResultKind::Failed && retryable_;
+            primaryText = result_ == ResultKind::Success ? S("button.launch") : S("button.retry");
             break;
     }
+    Show(kLaunch, beforeStart && LaunchOffered());
+    for (int id : {kPStage, kPPercent, kPBar, kPDetail}) Show(id, page_ == Page::Progress);
     Show(kSecondary, secondary);
     SetText(kSecondary, secondaryText);
     Show(IDOK, primary);
     SetText(IDOK, primaryText);
     ::EnableWindow(Ctl(IDOK), primaryEnabled);
     Button_SetElevationRequiredState(Ctl(IDOK), shield);
-    Show(IDCANCEL, cancel);
+    Show(IDCANCEL, true);
     SetText(IDCANCEL, cancelText);
     ::EnableWindow(Ctl(IDCANCEL), page_ != Page::Progress || (cancellable_ && !cancelRequested_));
     Layout();
@@ -507,147 +504,165 @@ void Window::Layout() {
     if (!hwnd_) return;
     RECT client{};
     ::GetClientRect(hwnd_, &client);
-    const int width = client.right;
-    const int left = Px(kMargin), right = width - Px(kMargin), contentWidth = right - left;
+    const int left = Px(kMargin), right = client.right - Px(kMargin);
+    const int iconLeft = right - Px(kIconSize);
+    const int textRight = iconLeft - Px(24);
     HDWP dwp = ::BeginDeferWindowPos(48);
     const auto place = [&](int id, int x, int y, int w, int h) {
         dwp = ::DeferWindowPos(dwp, Ctl(id), nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
     };
-
-    // Header.
-    const int textLeft = left + Px(48 + 16);
-    const int nameH = TextHeight(kHeaderName, right - textLeft), metaH = TextHeight(kHeaderMeta, right - textLeft);
-    const int headerTop = (Px(kHeaderHeight) - nameH - metaH - Px(2)) / 2;
-    place(kHeaderName, textLeft, headerTop, right - textLeft, nameH);
-    place(kHeaderMeta, textLeft, headerTop + nameH + Px(2), right - textLeft, metaH);
-
-    // Content stacks.
-    int y = Px(kHeaderHeight) + Px(24);
-    const auto stack = [&](int id, int gapAfter, int h = -1, int indent = 0) {
+    int y = Px(16);
+    const auto stack = [&](int id, int gapAfter, int width, int h = -1, int x = -1) {
         if (!Visible(id)) return;
-        const int height = h >= 0 ? h : TextHeight(id, contentWidth - indent);
-        place(id, left + indent, y, contentWidth - indent, height);
+        if (x < 0) x = left;
+        const int height = h >= 0 ? h : TextHeight(id, width);
+        place(id, x, y, width, height);
         y += height + gapAfter;
     };
+    const int textWidth = textRight - left;
     infoRect_ = {};
     switch (page_) {
         case Page::Welcome:
-            stack(kWHeading, Px(12));
-            stack(kWBody, Px(16));
-            if (Visible(kWInfo)) {
-                const int pad = Px(12);
-                const int h = TextHeight(kWInfo, contentWidth - 2 * pad);
-                infoRect_ = {left, y, right, y + h + 2 * pad};
-                place(kWInfo, left + pad, y + pad, contentWidth - 2 * pad, h);
-                y += h + 2 * pad + Px(16);
+        case Page::Progress:
+        case Page::Result: {
+            int titleLeft = left;
+            if (Visible(kStatus)) {
+                place(kStatus, left, y + Px(6), Px(32), Px(32));
+                titleLeft = left + Px(44);
             }
-            stack(kWError, Px(16));
-            stack(kWLocLabel, Px(4));
-            stack(kWLoc, Px(4));
-            stack(kWSpace, 0);
+            stack(kTitle, Px(8), textRight - titleLeft, -1, titleLeft);
+            stack(kDescription, Px(8), textWidth);
+            y += Px(12);
+            // Aligned label / value rows.
+            int labelW = 0;
+            for (int id : {kLblPublisher, kLblVersion, kLblLocation, kLblSize}) {
+                HDC dc = ::GetDC(hwnd_);
+                HGDIOBJ old = ::SelectObject(dc, theme_.body);
+                const std::wstring t = GetText(id);
+                SIZE sz{};
+                ::GetTextExtentPoint32W(dc, t.c_str(), static_cast<int>(t.size()), &sz);
+                ::SelectObject(dc, old);
+                ::ReleaseDC(hwnd_, dc);
+                labelW = std::max(labelW, static_cast<int>(sz.cx));
+            }
+            const int valueX = left + labelW + Px(24);
+            for (const auto [label, value] : {std::pair{kLblPublisher, kPublisher}, std::pair{kLblVersion, kVersion},
+                                              std::pair{kLblLocation, kLocation}, std::pair{kLblSize, kSize}}) {
+                if (!Visible(value)) continue;
+                const int h = TextHeight(label, labelW + Px(4));
+                place(label, left, y, labelW + Px(4), h);
+                const int valueW = textRight - valueX;
+                place(value, valueX, y, valueW, h);  // the location static uses SS_PATHELLIPSIS: C:\Users\...\App
+                y += h + Px(8);
+                if (value == kLocation && Visible(kChange)) {
+                    SIZE ideal{};
+                    Button_GetIdealSize(Ctl(kChange), &ideal);
+                    const int bw = std::max(Px(72), static_cast<int>(ideal.cx) + Px(16));
+                    place(kChange, valueX, y - Px(2), bw, Px(28));
+                    y += Px(28) + Px(8);
+                }
+            }
+            y += Px(4);
+            if (Visible(kInfo)) {
+                const int pad = Px(14);
+                const int width = right - left;
+                const int h = TextHeight(kInfo, width - 2 * pad);
+                infoRect_ = {left, y, right, y + h + 2 * pad};
+                place(kInfo, left + pad, y + pad, width - 2 * pad, h);
+                y += h + 2 * pad + Px(12);
+            }
+            stack(kDirError, Px(12), right - left);
+            stack(kResultBody, Px(8), right - left);
+            stack(kResultCode, Px(8), right - left);
+            stack(kResultDetail, Px(8), right - left, Px(56));
+
             break;
+        }
         case Page::Options: {
-            stack(kOHeading, Px(16));
-            stack(kOScopeLabel, Px(6));
-            stack(kOScopeUser, Px(4), Px(22));
-            stack(kOScopeMachine, Px(16), Px(22));
-            stack(kOLocLabel, Px(6));
+            const int width = right - left;
+            stack(kOHeading, Px(16), width);
+            stack(kOScopeLabel, Px(6), width);
+            stack(kOScopeUser, Px(4), width, Px(22));
+            stack(kOScopeMachine, Px(16), width, Px(22));
+            stack(kOLocLabel, Px(6), width);
             if (Visible(kOLoc)) {
                 const int browseW = Px(104), h = Px(32);
-                place(kOLoc, left, y, contentWidth - browseW - Px(8), h);
+                place(kOLoc, left, y, width - browseW - Px(8), h);
                 place(kOBrowse, right - browseW, y, browseW, h);
                 y += h + Px(6);
             }
-            stack(kOSpace, Px(6));
-            stack(kOError, Px(10));
+            stack(kOSpace, Px(6), width);
+            stack(kOError, Px(10), width);
             if (Visible(kOShortLabel)) y += Px(6);
-            stack(kOShortLabel, Px(6));
-            stack(kODesktop, Px(4), Px(22));
-            stack(kOStartMenu, 0, Px(22));
+            stack(kOShortLabel, Px(6), width);
+            stack(kODesktop, Px(4), width, Px(22));
+            stack(kOStartMenu, 0, width, Px(22));
             break;
         }
-        case Page::License:
-            stack(kLHeading, Px(8));
-            stack(kLSub, Px(12));
-            stack(kLText, Px(12), Px(150));
-            stack(kLAccept, 0, Px(22));
-            break;
-        case Page::Progress: {
-            stack(kPHeading, Px(12));
-            stack(kPStage, Px(12));
-            stack(kPBar, Px(10), Px(4));
-            const int h = TextHeight(kPDetail, contentWidth);
-            place(kPDetail, left, y, contentWidth - Px(56), h);
-            place(kPPercent, right - Px(48), y, Px(48), h);
+        case Page::License: {
+            const int width = right - left;
+            stack(kLHeading, Px(8), width);
+            stack(kLSub, Px(12), width);
+            stack(kLText, Px(12), width, Px(150));
+            stack(kLAccept, 0, width, Px(22));
             break;
         }
-        case Page::Result:
-            place(kRIcon, left, y, Px(48), Px(48));
-            y += Px(52);
-            stack(kRHeading, Px(12));
-            stack(kRBody, Px(12));
-            stack(kRLaunch, Px(8), Px(22));
-            stack(kRCode, Px(8));
-            stack(kRDetail, Px(8), Px(64));
-            if (Visible(kRFolder) || Visible(kRLog)) {
-                int x = left;
-                for (int id : {kRFolder, kRLog}) {
-                    if (!Visible(id)) continue;
-                    SIZE ideal{};
-                    Button_GetIdealSize(Ctl(id), &ideal);
-                    const int w = std::max(Px(120), static_cast<int>(ideal.cx) + Px(24));
-                    place(id, x, y, w, Px(32));
-                    x += w + Px(8);
-                }
-            }
-            break;
     }
 
-    // Footer.
+    // Bottom bar: actions on the right, launch checkbox or progress on the left.
     const int buttonH = Px(32), footerY = client.bottom - Px(24) - buttonH;
     const auto buttonWidth = [&](int id) {
-        HWND h = Ctl(id);
         SIZE ideal{};
-        Button_GetIdealSize(h, &ideal);
+        Button_GetIdealSize(Ctl(id), &ideal);
         return std::max(Px(96), static_cast<int>(ideal.cx) + Px(24));
     };
     int x = right;
-    for (int id : {IDCANCEL, IDOK}) {
+    for (int id : {static_cast<int>(IDCANCEL), static_cast<int>(IDOK), static_cast<int>(kSecondary)}) {
         if (!Visible(id)) continue;
         const int w = buttonWidth(id);
         x -= w;
         place(id, x, footerY, w, buttonH);
         x -= Px(8);
     }
-    if (Visible(kSecondary)) place(kSecondary, left, footerY, buttonWidth(kSecondary), buttonH);
+    const int leftWidth = x - Px(16) - left;
+    if (Visible(kLaunch)) place(kLaunch, left, footerY + (buttonH - Px(22)) / 2, leftWidth, Px(22));
+    int linkX = left;
+    for (int id : {static_cast<int>(kOpenFolder), static_cast<int>(kViewLog)}) {
+        if (!Visible(id)) continue;
+        const int w = buttonWidth(id);
+        place(id, linkX, footerY, w, buttonH);
+        linkX += w + Px(8);
+    }
+    if (Visible(kPBar)) {
+        const int lineH = TextHeight(kPStage, leftWidth);
+        const int captionH = TextHeight(kPDetail, leftWidth);
+        int py = footerY + buttonH - (lineH + Px(6) + Px(4) + Px(4) + captionH);
+        place(kPStage, left, py, leftWidth - Px(56), lineH);
+        place(kPPercent, left + leftWidth - Px(52), py, Px(52), lineH);
+        py += lineH + Px(6);
+        place(kPBar, left, py, leftWidth, Px(4));
+        py += Px(8);
+        place(kPDetail, left, py, leftWidth, captionH);
+    }
     ::EndDeferWindowPos(dwp);
 }
 
 void Window::Paint(HDC dc) {
     RECT client{};
     ::GetClientRect(hwnd_, &client);
-    RECT header{0, 0, client.right, Px(kHeaderHeight)};
-    ::FillRect(dc, &header, theme_.baseBrush());
-    RECT layer{0, Px(kHeaderHeight), client.right, client.bottom};
-    ::FillRect(dc, &layer, theme_.layerBrush());
-    HPEN pen = ::CreatePen(PS_SOLID, 1, theme_.colors().stroke);
-    HGDIOBJ oldPen = ::SelectObject(dc, pen);
-    ::MoveToEx(dc, 0, Px(kHeaderHeight), nullptr);
-    ::LineTo(dc, client.right, Px(kHeaderHeight));
-    if (iconLarge_) {
-        ::DrawIconEx(dc, Px(kMargin), (Px(kHeaderHeight) - Px(48)) / 2, iconLarge_, Px(48), Px(48), 0, nullptr, DI_NORMAL);
+    ::FillRect(dc, &client, theme_.baseBrush());
+    if (iconLarge_ && page_ != Page::Options && page_ != Page::License) {
+        ::DrawIconEx(dc, client.right - Px(kMargin) - Px(kIconSize), Px(20), iconLarge_, Px(kIconSize), Px(kIconSize), 0, nullptr, DI_NORMAL);
     }
-    if (page_ == Page::Welcome && Visible(kWInfo)) {
+    if (page_ == Page::Welcome && Visible(kInfo)) {
         HPEN border = ::CreatePen(PS_SOLID, 1, theme_.colors().infoStroke);
-        ::SelectObject(dc, border);
+        HGDIOBJ oldPen = ::SelectObject(dc, border);
         HGDIOBJ oldBrush = ::SelectObject(dc, theme_.infoBrush());
         ::RoundRect(dc, infoRect_.left, infoRect_.top, infoRect_.right, infoRect_.bottom, Px(8), Px(8));
         ::SelectObject(dc, oldBrush);
-        ::SelectObject(dc, pen);
+        ::SelectObject(dc, oldPen);
         ::DeleteObject(border);
     }
-    ::SelectObject(dc, oldPen);
-    ::DeleteObject(pen);
 }
 
 LRESULT Window::CustomDrawButton(NMCUSTOMDRAW* cd) {
@@ -657,20 +672,19 @@ LRESULT Window::CustomDrawButton(NMCUSTOMDRAW* cd) {
     if ((!check && !radio) || theme_.highContrast()) return CDRF_DODEFAULT;
     if (cd->dwDrawStage != CDDS_PREPAINT) return CDRF_DODEFAULT;
 
-    // Draw the themed glyph ourselves so the label can follow the light/dark palette.
+    // Draw the themed glyph ourselves so the label follows the light/dark palette.
     HWND h = cd->hdr.hwndFrom;
     HDC dc = cd->hdc;
     RECT rc = cd->rc;
-    ::FillRect(dc, &rc, theme_.layerBrush());
+    ::FillRect(dc, &rc, theme_.baseBrush());
     const LRESULT state = ::SendMessageW(h, BM_GETSTATE, 0, 0);
     const bool checked = (state & BST_CHECKED) != 0, hot = (state & BST_HOT) != 0, pushed = (state & BST_PUSHED) != 0;
     const bool disabled = !::IsWindowEnabled(h);
     HTHEME th = ::OpenThemeDataForDpi(h, theme_.dark() ? L"DarkMode_Explorer::Button" : L"Button", dpi_);
     if (!th) th = ::OpenThemeDataForDpi(h, L"Button", dpi_);
-    int part = check ? BP_CHECKBOX : BP_RADIOBUTTON;
-    int s = 1;
+    const int part = check ? BP_CHECKBOX : BP_RADIOBUTTON;
     const int base = checked ? (check ? CBS_CHECKEDNORMAL : RBS_CHECKEDNORMAL) : (check ? CBS_UNCHECKEDNORMAL : RBS_UNCHECKEDNORMAL);
-    s = base + (disabled ? 3 : pushed ? 2 : hot ? 1 : 0);
+    const int s = base + (disabled ? 3 : pushed ? 2 : hot ? 1 : 0);
     SIZE glyph{Px(16), Px(16)};
     if (th) ::GetThemePartSize(th, dc, part, s, nullptr, TS_DRAW, &glyph);
     RECT g{rc.left, rc.top + (rc.bottom - rc.top - glyph.cy) / 2, rc.left + glyph.cx, 0};
@@ -692,8 +706,9 @@ LRESULT Window::CustomDrawButton(NMCUSTOMDRAW* cd) {
     ::DrawTextW(dc, text, -1, &measure, flags | DT_CALCRECT);
     ::DrawTextW(dc, text, -1, &t, flags);
     if (::GetFocus() == h && !(ui & UISF_HIDEFOCUS)) {
-        RECT f{t.left - Px(2), t.top + (t.bottom - t.top - (measure.bottom - measure.top)) / 2 - Px(1), t.left + (measure.right - measure.left) + Px(2), 0};
-        f.bottom = f.top + (measure.bottom - measure.top) + Px(2);
+        const int th2 = measure.bottom - measure.top;
+        RECT f{t.left - Px(2), t.top + (t.bottom - t.top - th2) / 2 - Px(1), t.left + (measure.right - measure.left) + Px(2), 0};
+        f.bottom = f.top + th2 + Px(2);
         ::SetTextColor(dc, theme_.colors().text);
         ::DrawFocusRect(dc, &f);
     }
@@ -701,14 +716,14 @@ LRESULT Window::CustomDrawButton(NMCUSTOMDRAW* cd) {
     return CDRF_SKIPDEFAULT;
 }
 
-void Window::DrawResultIcon(const DRAWITEMSTRUCT* di) {
-    ::FillRect(di->hDC, &di->rcItem, theme_.layerBrush());
-    if (resultGlyph_.empty()) return;
-    HGDIOBJ old = ::SelectObject(di->hDC, theme_.icon);
+void Window::DrawStatus(const DRAWITEMSTRUCT* di) {
+    ::FillRect(di->hDC, &di->rcItem, theme_.baseBrush());
+    if (statusGlyph_.empty()) return;
+    HGDIOBJ old = ::SelectObject(di->hDC, theme_.statusIcon);
     ::SetBkMode(di->hDC, TRANSPARENT);
-    ::SetTextColor(di->hDC, resultColor_);
+    ::SetTextColor(di->hDC, statusColor_);
     RECT r = di->rcItem;
-    ::DrawTextW(di->hDC, resultGlyph_.c_str(), -1, &r, DT_SINGLELINE | DT_LEFT | DT_VCENTER | DT_NOPREFIX);
+    ::DrawTextW(di->hDC, statusGlyph_.c_str(), -1, &r, DT_SINGLELINE | DT_LEFT | DT_TOP | DT_NOPREFIX);
     ::SelectObject(di->hDC, old);
 }
 
@@ -725,10 +740,8 @@ void Window::OnPrimary() {
             if (result_ == ResultKind::Failed) {
                 result_ = ResultKind::None;
                 ShowPage(Page::Welcome);
-            } else {
-                if (result_ == ResultKind::Success && Visible(kRLaunch) && Button_GetCheck(Ctl(kRLaunch)) == BST_CHECKED) c_.LaunchApp();
-                done_ = true;
-                ::DestroyWindow(hwnd_);
+            } else if (result_ == ResultKind::Success) {
+                Finish(true);
             }
             break;
     }
@@ -740,19 +753,25 @@ void Window::OnSecondary() {
     else ShowPage(Page::Welcome);
 }
 
+void Window::Finish(bool launch) {
+    if (launch && canLaunch_) c_.LaunchApp();
+    ::DestroyWindow(hwnd_);
+}
+
 void Window::RequestClose() {
     if (page_ == Page::Progress) {
         if (!cancellable_ || cancelRequested_) return;
+        const std::wstring title = S(IsUninstall() ? "cancel.title.uninstall" : "cancel.title");
+        const std::wstring body = S("cancel.body"), yes = S("cancel.confirm"), no = S("cancel.continue");
+        const std::wstring caption = [this] {
+            std::wstring t(static_cast<size_t>(::GetWindowTextLengthW(hwnd_)) + 1, L'\0');
+            ::GetWindowTextW(hwnd_, t.data(), static_cast<int>(t.size()));
+            return t;
+        }();
+        TASKDIALOG_BUTTON buttons[] = {{IDYES, yes.c_str()}, {IDNO, no.c_str()}};
         TASKDIALOGCONFIG tdc{sizeof(tdc)};
         tdc.hwndParent = hwnd_;
         tdc.dwFlags = TDF_POSITION_RELATIVE_TO_WINDOW | TDF_ALLOW_DIALOG_CANCELLATION;
-        const std::wstring title = S(IsUninstall() ? "cancel.title.uninstall" : "cancel.title");
-        const std::wstring body = S("cancel.body");
-        const std::wstring yes = S("cancel.confirm"), no = S("cancel.continue");
-        std::wstring caption;
-        caption.resize(static_cast<size_t>(::GetWindowTextLengthW(hwnd_)) + 1);
-        ::GetWindowTextW(hwnd_, caption.data(), static_cast<int>(caption.size()));
-        TASKDIALOG_BUTTON buttons[] = {{IDYES, yes.c_str()}, {IDNO, no.c_str()}};
         tdc.pszWindowTitle = caption.c_str();
         tdc.pszMainInstruction = title.c_str();
         tdc.pszContent = body.c_str();
@@ -769,7 +788,6 @@ void Window::RequestClose() {
         return;
     }
     if (!c_.Started()) c_.MarkClosedByUser();
-    done_ = true;
     ::DestroyWindow(hwnd_);
 }
 
@@ -779,8 +797,8 @@ void Window::StartInstall() {
         Value v;
         v.set("installDir", installDir_);
         v.set("scope", scope_);
-        v.set("desktopShortcut", Button_GetCheck(Ctl(kODesktop)) == BST_CHECKED);
-        v.set("startMenuShortcut", Button_GetCheck(Ctl(kOStartMenu)) == BST_CHECKED);
+        v.set("desktopShortcut", Checked(kODesktop));
+        v.set("startMenuShortcut", Checked(kOStartMenu));
         if (!c_.SanitizeOptions(v, o)) {
             pathOk_ = false;
             SetText(kOError, S("error.InvalidArguments"));
@@ -791,12 +809,12 @@ void Window::StartInstall() {
     cancelRequested_ = false;
     cancellable_ = true;
     result_ = ResultKind::None;
-    SetText(kPHeading, F(IsUninstall() ? "progress.title.uninstall" : "progress.title.install", {AppName()}));
     SetText(kPStage, S("state.Validating"));
     SetText(kPDetail, L"");
     SetText(kPPercent, L"");
-    ::SetWindowLongW(Ctl(kPBar), GWL_STYLE, ::GetWindowLongW(Ctl(kPBar), GWL_STYLE) | PBS_MARQUEE);
-    ::SendMessageW(Ctl(kPBar), PBM_SETMARQUEE, TRUE, 30);
+    HWND bar = Ctl(kPBar);
+    ::SetWindowLongW(bar, GWL_STYLE, ::GetWindowLongW(bar, GWL_STYLE) | PBS_MARQUEE);
+    ::SendMessageW(bar, PBM_SETMARQUEE, TRUE, 30);
     ShowPage(Page::Progress);
     c_.Start(o, hwnd_);
 }
@@ -832,53 +850,50 @@ void Window::OnDoneMsg(const Value& m) {
     const std::wstring name = AppName();
     const bool uninstall = IsUninstall();
     logPath_ = m["log"].asWide();
-    resultInstallDir_ = m["installDir"].asWide();
+    if (!m["installDir"].asWide().empty()) installDir_ = m["installDir"].asWide();
     retryable_ = m["retryable"].asBool(true);
+    canLaunch_ = !uninstall && r == "success" && m["canLaunch"].asBool();
+    if (canLaunch_ && LaunchOffered() && Checked(kLaunch)) {  // "Launch when ready"
+        Finish(true);
+        return;
+    }
     const auto& c = theme_.colors();
-    Show(kRLaunch, false);
-    Show(kRCode, false);
-    Show(kRDetail, false);
-    Show(kRFolder, false);
-    Show(kRLog, false);
+    std::wstring body;
     if (r == "success") {
         result_ = ResultKind::Success;
-        resultGlyph_ = L"";
-        resultColor_ = c.success;
-        SetText(kRHeading, F(uninstall ? "result.success.title.uninstall" : "result.success.title", {name}));
-        std::wstring body = uninstall ? std::wstring() : hello_["ui"]["finishText"].asWide();
-        if (body.empty()) body = F(uninstall ? "result.success.body.uninstall" : "result.success.body", {name});
-        if (uninstall && m["leftovers"].asBool()) body += L"\r\n\r\n" + F("result.leftovers", {resultInstallDir_});
-        SetText(kRBody, body);
-        ShowPage(Page::Result);
-        Show(kRLaunch, !uninstall && m["canLaunch"].asBool());
-        Show(kRFolder, !uninstall && !resultInstallDir_.empty());
+        statusGlyph_ = L"";
+        statusColor_ = c.success;
+        const bool updated = hello_["existing"]["relation"].asString() == "upgrade";
+        SetText(kTitle, F(uninstall ? "done.uninstalled" : updated ? "done.updated" : "done.installed", {name}));
+        body = uninstall ? std::wstring() : hello_["ui"]["finishText"].asWide();
+        if (uninstall && m["leftovers"].asBool()) body = F("result.leftovers", {installDir_});
     } else {
         const bool cancelled = r == "cancelled";
         result_ = cancelled ? ResultKind::Cancelled : ResultKind::Failed;
-        resultGlyph_ = cancelled ? L"" : L"";
-        resultColor_ = cancelled ? c.caution : c.critical;
-        if (cancelled) SetText(kRHeading, S(uninstall ? "result.cancelled.title.uninstall" : "result.cancelled.title"));
-        else SetText(kRHeading, S(uninstall ? "result.failed.title.uninstall" : "result.failed.title"));
-        std::wstring body = cancelled ? std::wstring() : m["message"].asWide();
-        if (m["restored"].asBool()) body += (body.empty() ? L"" : L"\r\n\r\n") + S("result.restored");
-        else if (m["noChanges"].asBool()) body += (body.empty() ? L"" : L"\r\n\r\n") + S("result.noChanges");
-        SetText(kRBody, body);
-        SetText(kRCode, F("result.code", {std::to_wstring(m["code"].asInt()), m["codeName"].asWide()}));
-        SetText(kRDetail, m["detail"].asWide());
-        ShowPage(Page::Result);
-        Show(kRCode, !cancelled);
-        Show(kRDetail, !cancelled && !m["detail"].asWide().empty());
-        Show(kRLog, !logPath_.empty());
+        statusGlyph_ = cancelled ? L"" : L"";
+        statusColor_ = cancelled ? c.caution : c.critical;
+        SetText(kTitle, S(cancelled ? (uninstall ? "result.cancelled.title.uninstall" : "result.cancelled.title")
+                                    : (uninstall ? "result.failed.title.uninstall" : "result.failed.title")));
+        body = cancelled ? std::wstring() : m["message"].asWide();
+        const std::wstring extra = m["restored"].asBool() ? S("result.restored") : m["noChanges"].asBool() || cancelled ? S("result.noChanges") : std::wstring();
+        if (!extra.empty()) body += (body.empty() ? L"" : L"\r\n") + extra;
+        SetText(kResultCode, F("result.code", {std::to_wstring(m["code"].asInt()), m["codeName"].asWide()}));
+        SetText(kResultDetail, m["detail"].asWide());
     }
+    SetText(kResultBody, body);
+    ShowPage(Page::Result);
+    const bool failed = result_ == ResultKind::Failed;
+    Show(kResultBody, !body.empty());
+    Show(kResultCode, failed);
+    Show(kResultDetail, failed && !m["detail"].asWide().empty());
+    Show(kOpenFolder, result_ == ResultKind::Success && !uninstall && !installDir_.empty());
+    Show(kViewLog, failed && !logPath_.empty());
     UpdateFooter();
-    Layout();
-    ::InvalidateRect(Ctl(kRIcon), nullptr, TRUE);
+    ::InvalidateRect(Ctl(kStatus), nullptr, TRUE);
 }
 
 void Window::CheckPathNow() {
-    std::wstring text(static_cast<size_t>(::GetWindowTextLengthW(Ctl(kOLoc))) + 1, L'\0');
-    ::GetWindowTextW(Ctl(kOLoc), text.data(), static_cast<int>(text.size()));
-    text.resize(wcslen(text.c_str()));
+    const std::wstring text = GetText(kOLoc);
     const Value r = c_.CheckPath(text, scope_ == L"machine" ? install::Scope::Machine : install::Scope::User);
     pathDirty_ = false;
     pathOk_ = r["ok"].asBool();
@@ -886,7 +901,7 @@ void Window::CheckPathNow() {
     requiredBytes_ = r["requiredBytes"].asUint(requiredBytes_);
     freeBytes_ = r["freeBytes"].asUint();
     SetText(kOError, r["message"].asWide());
-    SetText(kWError, r["message"].asWide());
+    SetText(kDirError, r["message"].asWide());
     Show(kOError, page_ == Page::Options && !pathOk_);
     UpdateSpace();
     UpdateFooter();
@@ -894,7 +909,7 @@ void Window::CheckPathNow() {
 }
 
 void Window::OnScopeChanged() {
-    const std::wstring scope = Button_GetCheck(Ctl(kOScopeMachine)) == BST_CHECKED ? L"machine" : L"user";
+    const std::wstring scope = Checked(kOScopeMachine) ? L"machine" : L"user";
     if (scope == scope_) return;
     scope_ = scope;
     if (!userEditedPath_) {
@@ -915,8 +930,7 @@ void Window::Browse() {
     dialog->SetTitle(title.c_str());
     IShellItem* item = nullptr;
     PWSTR chosen = nullptr;
-    if (SUCCEEDED(dialog->Show(hwnd_)) && SUCCEEDED(dialog->GetResult(&item)) &&
-        SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &chosen))) {
+    if (SUCCEEDED(dialog->Show(hwnd_)) && SUCCEEDED(dialog->GetResult(&item)) && SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &chosen))) {
         std::wstring dir = chosen;
         const std::wstring leaf = hello_["options"]["dirLeaf"].asWide();
         if (!leaf.empty()) {
@@ -956,28 +970,24 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
         case WM_CTLCOLOREDIT:
         case WM_CTLCOLORBTN: {
             HDC dc = reinterpret_cast<HDC>(w);
-            HWND ctl = reinterpret_cast<HWND>(l);
-            const int id = ::GetDlgCtrlID(ctl);
+            const int id = ::GetDlgCtrlID(reinterpret_cast<HWND>(l));
             const auto& c = theme_.colors();
-            HBRUSH brush = theme_.layerBrush();
-            COLORREF bg = c.layer, fg = c.text;
-            if (id == kHeaderName || id == kHeaderMeta) brush = theme_.baseBrush(), bg = c.base;
-            if (id == kWInfo) brush = theme_.infoBrush(), bg = c.infoFill;
-            if (id == kOLoc || id == kLText || id == kRDetail) brush = theme_.editBrush(), bg = c.editFill;
-            if (id == kHeaderMeta || id == kWSpace || id == kOSpace || id == kPDetail || id == kPPercent || id == kRCode) fg = c.textSecondary;
-            if (id == kOError || id == kWError) fg = c.critical;
+            HBRUSH brush = theme_.baseBrush();
+            COLORREF bg = c.base, fg = c.text;
+            if (id == kInfo) brush = theme_.infoBrush(), bg = c.infoFill;
+            if (id == kOLoc || id == kLText || id == kResultDetail) brush = theme_.editBrush(), bg = c.editFill;
+            if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kDescription || id == kOSpace || id == kPDetail || id == kPPercent || id == kResultCode) fg = c.textSecondary;
+            if (id == kOError || id == kDirError) fg = c.critical;
             ::SetTextColor(dc, fg);
             ::SetBkColor(dc, bg);
             return reinterpret_cast<LRESULT>(brush);
         }
-        case WM_NOTIFY: {
-            auto* hdr = reinterpret_cast<NMHDR*>(l);
-            if (hdr->code == NM_CUSTOMDRAW) return CustomDrawButton(reinterpret_cast<NMCUSTOMDRAW*>(l));
+        case WM_NOTIFY:
+            if (reinterpret_cast<NMHDR*>(l)->code == NM_CUSTOMDRAW) return CustomDrawButton(reinterpret_cast<NMCUSTOMDRAW*>(l));
             break;
-        }
         case WM_DRAWITEM:
-            if (w == kRIcon) {
-                DrawResultIcon(reinterpret_cast<DRAWITEMSTRUCT*>(l));
+            if (w == kStatus) {
+                DrawStatus(reinterpret_cast<DRAWITEMSTRUCT*>(l));
                 return TRUE;
             }
             break;
@@ -986,10 +996,8 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
         case WM_COMMAND: {
             const int id = LOWORD(w), code = HIWORD(w);
             if (id == IDOK && Visible(IDOK) && ::IsWindowEnabled(Ctl(IDOK))) OnPrimary();
-            else if (id == IDCANCEL) {
-                if (page_ == Page::Result && !Visible(IDCANCEL)) OnPrimary();
-                else RequestClose();
-            } else if (id == kSecondary) OnSecondary();
+            else if (id == IDCANCEL) RequestClose();
+            else if (id == kSecondary || id == kChange) OnSecondary();
             else if (id == kOBrowse) Browse();
             else if ((id == kOScopeUser || id == kOScopeMachine) && code == BN_CLICKED) OnScopeChanged();
             else if (id == kLAccept && code == BN_CLICKED) UpdateFooter();
@@ -998,10 +1006,10 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
                 pathDirty_ = true;
                 UpdateFooter();
                 ::SetTimer(hwnd_, kPathTimer, 350, nullptr);
-            } else if (id == kRLog && !logPath_.empty()) {
+            } else if (id == kViewLog && !logPath_.empty()) {
                 ::ShellExecuteW(hwnd_, L"open", L"notepad.exe", (L"\"" + logPath_ + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
-            } else if (id == kRFolder && !resultInstallDir_.empty()) {
-                ::ShellExecuteW(hwnd_, L"open", resultInstallDir_.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            } else if (id == kOpenFolder && !installDir_.empty()) {
+                ::ShellExecuteW(hwnd_, L"open", installDir_.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             }
             return 0;
         }
@@ -1022,7 +1030,8 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             return 0;
         }
         case WM_CLOSE:
-            RequestClose();
+            if (page_ == Page::Result && result_ == ResultKind::Success) Finish(false);
+            else RequestClose();
             return 0;
         case WM_DESTROY:
             ::PostQuitMessage(0);
@@ -1037,7 +1046,7 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             return 0;
         }
         case WM_SETTINGCHANGE:
-            if (l && (wcscmp(reinterpret_cast<const wchar_t*>(l), L"ImmersiveColorSet") == 0)) ApplyTheme();
+            if (l && wcscmp(reinterpret_cast<const wchar_t*>(l), L"ImmersiveColorSet") == 0) ApplyTheme();
             break;
         case WM_THEMECHANGED:
         case WM_SYSCOLORCHANGE:
@@ -1050,11 +1059,11 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
 
 }  // namespace
 
-void Run(boot::Controller& controller, bool resume) {
+void Run(boot::Controller& controller, bool /*resume*/) {
     const HRESULT com = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     {
         Window window(controller, controller.Hello(L""));
-        window.Run(resume);
+        window.Run();
     }
     if (SUCCEEDED(com)) ::CoUninitialize();
 }
