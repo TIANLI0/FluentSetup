@@ -231,7 +231,15 @@ public sealed partial class MainViewModel : ObservableObject
     public bool HasFileProblems => FileProblems.Count > 0;
     public bool ShowAccentColor => !UseSystemAccent;
     public string DisplayName => string.IsNullOrWhiteSpace(AppName) ? Loc.Get("Project_Untitled") : AppName;
-    public string DisplayMeta => string.Join("  ·  ", new[] { Publisher, string.IsNullOrWhiteSpace(Version) ? "" : Loc.Format("Overview_Version", Version) }.Where(s => !string.IsNullOrWhiteSpace(s)));
+    /// <summary>Publisher and version as the build will see them ($(Name) variables replaced).</summary>
+    public string DisplayMeta
+    {
+        get
+        {
+            var app = HasProject ? ExpandedModel().App : new AppInfo { Publisher = Publisher, Version = Version };
+            return string.Join("  ·  ", new[] { app.Publisher, string.IsNullOrWhiteSpace(app.Version) ? "" : Loc.Format("Overview_Version", app.Version) }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        }
+    }
     public string InstallSummary => $"{ScopeLabel(ScopeIndex)} · {(ScopeIndex == 1 ? MachineDir : UserDir)}";
     public string ShortcutSummary => string.Join(", ", new[]
     {
@@ -463,6 +471,7 @@ public sealed partial class MainViewModel : ObservableObject
         Errors.Set(all);
         UpdateRowErrors();
         OnPropertyChanged(nameof(OutputSummary));
+        OnPropertyChanged(nameof(DisplayMeta));  // variables may have changed
         Problems.Clear();
         foreach (var d in all.Where(d => d.Severity != Severity.Info).OrderByDescending(d => d.Severity)) Problems.Add(ToRow(d));
         ErrorCount = all.Count(d => d.Severity == Severity.Error);
