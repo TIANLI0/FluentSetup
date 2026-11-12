@@ -96,6 +96,30 @@ struct Cleanup {
 };
 using UninstallCleanup = Cleanup;
 
+// Changes the app made with administrator rights (e.g. after a UAC prompt from inside the app). Undone on uninstall
+// with administrator rights: directly when uninstall already runs elevated, else after one UAC prompt (interactive
+// uninstalls only), and only if one of `ifExists` exists (empty = always).
+struct ServiceAccess {
+    std::wstring service;
+    std::vector<std::wstring> rights;  // SDDL rights of ACEs granted to user accounts (S-1-5-21-...), e.g. LCRPWP
+};
+struct ElevatedCleanup {
+    std::vector<std::wstring> ifExists;        // {CommonAppData}|{LocalAppData}|{AppData}\... files or folders
+    std::vector<std::wstring> traceSessions;   // ETW sessions to stop, with their boot-time autologger
+    std::vector<std::wstring> scheduledTasks;  // task paths, e.g. "App\Restore hook"
+    std::vector<ServiceAccess> serviceAccess;
+    std::vector<std::wstring> removeData;
+    [[nodiscard]] bool Empty() const noexcept {
+        return traceSessions.empty() && scheduledTasks.empty() && serviceAccess.empty() && removeData.empty();
+    }
+};
+
+// Files/folders the user may want to keep (settings, caches); the uninstall UI asks, /remove-user-data in scripts.
+struct UserData {
+    std::vector<std::wstring> paths;
+    bool removeByDefault = false;
+};
+
 struct Extensions {
     std::vector<std::wstring> closeProcesses;
     // Asks the installed app to exit cleanly before files are replaced or removed (e.g. "App.exe --exit").
@@ -105,6 +129,10 @@ struct Extensions {
     std::vector<std::wstring> legacyUninstallKeys;  // older product names: adopted if found, removed after install
     std::vector<std::wstring> ngen;                 // relative payload paths of .NET Framework assemblies
     Cleanup installCleanup;
+    ElevatedCleanup elevatedCleanup;
+    UserData userData;
+    std::vector<std::wstring> relaunchArgs;  // arguments for the app when an updater asked for /relaunch
+    std::vector<std::wstring> addToPath;     // install sub-folders ("" = the install folder) added to PATH
     std::vector<Requirement> requirements;
     std::vector<UserOption> options;
     std::vector<Action> actions;
@@ -148,7 +176,16 @@ ActionResult RunProgram(const std::wstring& exe, const std::vector<std::wstring>
 
 // Expands {CommonAppData}/{LocalAppData}/{AppData} in a removeData template; empty if invalid.
 std::wstring ExpandDataTemplate(const std::wstring& tpl);
+// `name` may include folders ("Folder\Task"); an emptied folder is removed too.
 bool DeleteScheduledTask(const std::wstring& name);
+// Deletes a file or a folder tree from a removeData template; false if nothing was there or it is a link.
+bool RemoveDataPath(const std::wstring& tpl);
+bool StopTraceSession(const std::wstring& name);  // stops the ETW session and deletes its autologger (boot-time) key
+bool RemoveServiceAccess(const ServiceAccess& access);
+bool AnyExists(const std::vector<std::wstring>& templates);
+// Adds/removes a folder in the user (HKCU\Environment) or machine PATH and tells running programs (WM_SETTINGCHANGE).
+bool AddToPath(const std::wstring& dir, bool machine);
+void RemoveFromPath(const std::wstring& dir, bool machine);
 void DeleteRunValue(const std::wstring& name);
 bool WriteRunValue(const std::wstring& name, const std::wstring& exe, const std::vector<std::wstring>& args);
 // Deletes <name> from the per-user and all-users Start menu Programs, Desktop and Startup folders.

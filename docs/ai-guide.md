@@ -41,6 +41,10 @@ machine-specific.
 | Programs to run after install / before uninstall | `actions[]`: only `.exe` files from the package itself, no shell. |
 | App running while updating? | `install.closeProcesses` (image names) and `install.closeCommand` (e.g. `App.exe --exit` for tray apps). |
 | Replacing another installer (NSIS, Inno, MSI-less)? | `install.adoptExistingInstall` (same uninstall key = app id) or `install.legacyUninstallKeys` (old key names, e.g. Inno `"{GUID}_is1"`), plus `install.cleanup` for old tasks/Run values/shortcuts. |
+| Command-line tool? | `install.addToPath: ["cli"]` (folder relative to the install folder; `""` = the folder itself): user PATH for per-user installs, machine PATH for per-machine; removed on uninstall. |
+| Settings/data to ask about on uninstall | `uninstall.userData: { "paths": ["{LocalAppData}\\App"], "default": false }`: a checkbox on the uninstall page; silent uninstalls keep the data unless `/remove-user-data`. |
+| Things the app did with administrator rights (ETW sessions, service permissions, scheduled tasks, ProgramData files) | `uninstall.elevated` (§8): undone with one UAC prompt during an interactive per-user uninstall, directly in a per-machine one. |
+| The app updates itself by running the new Setup.exe silently | It can keep its Inno Setup / NSIS command line (§11). `install.relaunchArguments` = arguments when it passes `/relaunch` (Inno `/RELAUNCH=1`). |
 | License / agreement | `ui.license` or per-language files; `ui.licenseMode: "always"` to show it on every update. |
 | Languages | Built in: en-US, zh-CN, ja-JP, ko-KR. Any other language: a localization file with a `strings` table (§10). |
 
@@ -170,6 +174,27 @@ content and breaks the hash.
 - `install.cleanup` removes leftovers of *older versions* during install (before actions). Never list the app's own
   shortcut names there. `uninstall.*` removes what the app creates at run time.
 - `install.ngen`: .NET Framework assemblies to pre-compile (per-machine only).
+- Updates pre-fill the user's earlier choices: shortcuts, every option, the variant, the folder and scope (from the
+  install record; for an adopted Inno Setup install from its saved "Selected Tasks", mapping `desktopicon` and option ids).
+  Explicit switches still win.
+
+```jsonc
+"uninstall": {
+  "removeRunValues": ["App"],
+  "removeData": ["{LocalAppData}\\App\\some-marker"],              // files or folders, always removed
+  "userData": { "paths": ["{LocalAppData}\\App"], "default": false },  // asked on the uninstall page
+  "elevated": {                                                    // changes made with administrator rights
+    "ifExists": ["{CommonAppData}\\App\\Codec"],                   // only if one of these exists (empty = always)
+    "traceSessions": ["App-Trace"],                                // stop + delete boot-time autologger
+    "scheduledTasks": ["App\\Restore hook"],                       // folders allowed; an emptied folder is removed
+    "serviceAccess": [{ "service": "SomeSvc", "rights": ["LCRPWP"] }], // drop ACEs granted to user accounts
+    "removeData": ["{CommonAppData}\\App\\Codec"]
+  }
+}
+```
+
+Per-user uninstalls run without administrator rights: `uninstall.elevated` then asks once for UAC (interactive only;
+silent uninstalls skip it and log a warning). Per-machine uninstalls already run elevated and do it directly.
 
 ## 9. Validation codes
 
@@ -202,8 +227,21 @@ content and breaks the hash.
 ## 11. Setup.exe command line and exit codes
 
 `Setup.exe [/quiet | /S | /silent] [/uninstall] [/dir <path>] [/scope user|machine] [/variant <id>]
-[/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no] [/log <file>] [/lang <tag>]
-[/ui auto|winui|win32]`
+[/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no] [/remove-user-data] [/relaunch]
+[/log <file>] [/lang <tag>] [/ui auto|winui|win32]`
+
+Compatible switches of other installers, so existing scripts and in-app updaters keep working:
+
+| Inno Setup | NSIS | FluentSetup meaning |
+|---|---|---|
+| `/SILENT`, `/VERYSILENT` | `/S` | quiet |
+| `/DIR="path"` | `/D=path` (last, unquoted, spaces allowed) | install folder |
+| `/LOG="file"` (or `/LOG`) | | log file |
+| `/LANG=english` (Inno names) | | language |
+| `/TASKS="a,b"`, `/MERGETASKS="a,!b"` | | `desktopicon` = desktop shortcut, other names = option ids; `/TASKS` turns unlisted ones off |
+| `/NOICONS`, `/CURRENTUSER`, `/ALLUSERS` | | no Start menu shortcut, per-user, per-machine |
+| `/RELAUNCH=1` | | start the app after a quiet install with `install.relaunchArguments` |
+| `/SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /SP- /NOCANCEL …` | `/NCRC`, `_?=` | accepted, no effect (setup never reboots and closes the app itself) |
 
 | Code | Meaning |
 |---|---|

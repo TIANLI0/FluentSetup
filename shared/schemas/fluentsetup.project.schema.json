@@ -224,9 +224,6 @@
     "files": {
       "type": "object",
       "description": "Which files are installed.",
-      "required": [
-        "source"
-      ],
       "properties": {
         "source": {
           "allOf": [
@@ -296,7 +293,29 @@
           },
           "description": "Alternative builds (e.g. shared runtimes vs self-contained). With variants, files.source is not used; the user picks a variant at install time."
         }
-      }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "source"
+          ],
+          "properties": {
+            "source": {
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "required": [
+            "variants"
+          ],
+          "properties": {
+            "variants": {
+              "minItems": 1
+            }
+          }
+        }
+      ]
     },
     "offer": {
       "type": "string",
@@ -487,6 +506,26 @@
               }
             }
           }
+        },
+        "relaunchArguments": {
+          "type": "array",
+          "maxItems": 32,
+          "default": [],
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "description": "Arguments for the app when an in-app updater ran Setup.exe with /relaunch (Inno: /RELAUNCH=1) in quiet mode, e.g. [\"--updated\"]."
+        },
+        "addToPath": {
+          "type": "array",
+          "maxItems": 8,
+          "default": [],
+          "items": {
+            "type": "string",
+            "maxLength": 260
+          },
+          "description": "Folders of the app (relative; \"\" = the install folder) added to PATH: the user PATH for per-user installs, the machine PATH for per-machine. Added after the install is committed, removed on uninstall; running programs are notified (new terminals see it)."
         }
       },
       "allOf": [
@@ -922,7 +961,7 @@
             "pattern": "^\\{(CommonAppData|LocalAppData|AppData)\\}\\\\(?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*[^<>:\"/\\\\|?*\\x00-\\x1F. ](?:[\\\\/](?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*[^<>:\"/\\\\|?*\\x00-\\x1F. ])*$"
           },
           "default": [],
-          "description": "Folders deleted recursively on uninstall. Each must be {CommonAppData}\\<relative path> (ProgramData), {LocalAppData}\\<relative path> or {AppData}\\<relative path> (roaming). Only existing directories (not links) are removed."
+          "description": "Files or folders deleted after uninstalling: {CommonAppData}\\X, {LocalAppData}\\X or {AppData}\\X."
         },
         "removeScheduledTasks": {
           "type": "array",
@@ -933,7 +972,7 @@
             "pattern": "^[^\\\\/:*?\"<>|\\x00-\\x1F]+$"
           },
           "default": [],
-          "description": "Names of scheduled tasks in the Task Scheduler root folder to delete."
+          "description": "Scheduled tasks to delete; folders allowed (\"Folder\\\\Task\"), an emptied folder is removed."
         },
         "removeRunValues": {
           "type": "array",
@@ -956,6 +995,108 @@
             "minLength": 1,
             "maxLength": 128,
             "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$"
+          }
+        },
+        "userData": {
+          "type": "object",
+          "default": {},
+          "description": "Settings and data the user decides about: a checkbox on the uninstall page (default: keep); silent uninstalls keep them unless /remove-user-data.",
+          "properties": {
+            "paths": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "items": {
+                "type": "string",
+                "pattern": "^\\{(CommonAppData|LocalAppData|AppData)\\}\\\\.+",
+                "description": "{CommonAppData}|{LocalAppData}|{AppData}\\<path> (file or folder)"
+              }
+            },
+            "default": {
+              "type": "boolean",
+              "default": false,
+              "description": "Checkbox pre-selected (delete)."
+            }
+          }
+        },
+        "elevated": {
+          "type": "object",
+          "default": {},
+          "description": "Changes the app made with administrator rights. Undone on uninstall: directly when uninstall runs elevated (per-machine), else after one UAC prompt (interactive uninstalls only; skipped in silent mode).",
+          "properties": {
+            "ifExists": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "items": {
+                "type": "string",
+                "pattern": "^\\{(CommonAppData|LocalAppData|AppData)\\}\\\\.+",
+                "description": "{CommonAppData}|{LocalAppData}|{AppData}\\<path> (file or folder)"
+              },
+              "description": "Only when one of these exists (checked before user data is removed). Empty = always."
+            },
+            "traceSessions": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "description": "ETW sessions to stop, including their boot-time autologger (logman \"autosession\\\\name\")."
+            },
+            "scheduledTasks": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "description": "Scheduled tasks; folders allowed (\"App\\\\Task\")."
+            },
+            "serviceAccess": {
+              "type": "array",
+              "maxItems": 8,
+              "default": [],
+              "description": "Remove allow-entries for user accounts (S-1-5-21-...) with exactly these SDDL rights from a service's DACL.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "service",
+                  "rights"
+                ],
+                "properties": {
+                  "service": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "rights": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{1,32}$"
+                    }
+                  }
+                }
+              }
+            },
+            "removeData": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "items": {
+                "type": "string",
+                "pattern": "^\\{(CommonAppData|LocalAppData|AppData)\\}\\\\.+",
+                "description": "{CommonAppData}|{LocalAppData}|{AppData}\\<path> (file or folder)"
+              },
+              "description": "Files or folders removed with administrator rights."
+            }
           }
         }
       }

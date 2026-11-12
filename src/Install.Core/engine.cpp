@@ -71,6 +71,7 @@ json::Value OptionsToJson(const InstallOptions& o) {
     for (const auto& [id, on] : o.choices) choices.set(id, on);
     v.set("choices", choices);
     v.set("variant", o.variant);
+    v.set("removeUserData", o.removeUserData);
     return v;
 }
 
@@ -89,6 +90,7 @@ bool OptionsFromJson(const json::Value& v, InstallOptions& o) {
         o.choices[id] = on.asBool();
     }
     o.variant = v["variant"].asString();
+    o.removeUserData = v["removeUserData"].asBool(false);
     if (o.variant.size() > 32) return false;
     return true;
 }
@@ -580,6 +582,22 @@ void Engine::WriteUninstaller(const std::wstring& dest) const {
 // ---------------------------------------------------------------------------------------------------------------
 // Actions
 
+bool Engine::ElevatedCleanupApplies() const {
+    return !pkg_.ext.elevatedCleanup.Empty() && AnyExists(pkg_.ext.elevatedCleanup.ifExists);
+}
+
+void Engine::RunElevatedCleanup(Outcome& out) const {
+    const ElevatedCleanup& c = pkg_.ext.elevatedCleanup;
+    log::Info(L"Undoing changes the app made with administrator rights");
+    for (const auto& s : c.traceSessions) {
+        if (!StopTraceSession(s)) out.warnings.push_back(L"Trace session " + s + L" could not be removed");
+    }
+    for (const auto& t : c.scheduledTasks) DeleteScheduledTask(t);
+    for (const auto& a : c.serviceAccess) {
+        if (!RemoveServiceAccess(a)) out.warnings.push_back(L"Access to service " + a.service + L" could not be reset");
+    }
+    for (const auto& d : c.removeData) RemoveDataPath(d);
+}
 void Engine::RunCloseCommand(const std::wstring& dir) const {
     if (pkg_.ext.closeCommand.empty() || dir.empty()) return;
     const std::wstring exe = path::Join(dir, pkg_.ext.closeCommand);
@@ -967,6 +985,10 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         // ---- Finalizing: point of no return -----------------------------------------------------------------
         rep.Set(State::Finalizing, 0.99, {}, false);
         journal->Commit();
+        // Command-line tools: folders on PATH (after the commit, so a rollback never leaves PATH changed).
+        for (const auto& rel : pkg_.ext.addToPath) {
+            if (!AddToPath(rel.empty() ? dir : path::Join(dir, rel), scope == Scope::Machine)) out.warnings.push_back(L"Could not add the app to PATH");
+        }
         // Uninstall entries of older product names now point at files this install replaced.
         for (const auto& k : ic.removeUninstallKeys) {
             if (!EqualsIgnoreCase(k, pkg_.appId) && DeleteForeignArpEntry(k, scope)) log::Info(L"Removed uninstall entry %s", k.c_str());
@@ -1019,7 +1041,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
 // ---------------------------------------------------------------------------------------------------------------
 // Uninstall
 
-Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, const std::atomic<bool>& cancel) {
+Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, const std::atomic<bool>& cancel, bool removeUserData) {
     Outcome out;
     Reporter rep(sink);
     ComScope com;
@@ -1130,12 +1152,13 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
             if (!opt.startupName.empty()) DeleteRunValue(opt.startupName);
         }
         for (const auto& s : pkg_.ext.cleanup.removeShortcuts) DeleteShortcutsNamed(s);
-        for (const auto& tpl : pkg_.ext.cleanup.removeData) {
-            const std::wstring target = ExpandDataTemplate(tpl);
-            if (!target.empty() && fs::IsDirectory(target) && !fs::IsLinkLike(target)) {
-                if (!fs::DeleteTree(target)) log::Warn(L"Could not fully remove %s", target.c_str());
-            }
+        for (const auto& rel : pkg_.ext.addToPath) RemoveFromPath(rel.empty() ? dir : path::Join(dir, rel), scope == Scope::Machine);
+        // Elevated leftovers first: their markers may live in the user data removed next.
+        if (security::IsElevated() && ElevatedCleanupApplies()) RunElevatedCleanup(out);
+        if (removeUserData) {
+            for (const auto& tpl : pkg_.ext.userData.paths) RemoveDataPath(tpl);
         }
+        for (const auto& tpl : pkg_.ext.cleanup.removeData) RemoveDataPath(tpl);  // folders or single files
         std::vector<std::wstring> relFiles;
         for (const auto& f : record.files) relFiles.push_back(f.path);
         RemoveEmptyDirectories(dir, ImpliedDirectories(relFiles, record.directories));

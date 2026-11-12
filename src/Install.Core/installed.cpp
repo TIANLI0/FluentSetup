@@ -103,6 +103,7 @@ std::optional<InstalledProduct> QueryForeign(const std::wstring& appId, Scope sc
     p.name = ReadString(key.get(), L"DisplayName");
     p.version = ReadString(key.get(), L"DisplayVersion");
     p.publisher = ReadString(key.get(), L"Publisher");
+    p.innoTasks = ReadString(key.get(), L"Inno Setup: Selected Tasks").substr(0, 1024);
     // InstallLocation, else the folder of the uninstaller or of the icon ("C:\App\app.exe",0). Older installers
     // (NSIS, Inno, hand-written keys) do not always write InstallLocation.
     const auto folderOf = [](std::wstring v) -> std::wstring {

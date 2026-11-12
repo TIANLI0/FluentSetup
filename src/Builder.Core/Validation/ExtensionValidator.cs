@@ -64,6 +64,12 @@ public static partial class ExtensionValidator
     }
 
     private static bool IsExeName(string n) => PathRules.IsValidComponent(n, out _) && n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+    private static bool IsTaskPath(string n) => n.Length is > 0 and <= 255 && !n.StartsWith('\\') && !n.EndsWith('\\') && n.Split('\\').All(IsTaskOrValueName);
+    private static bool IsDataTemplate(string t)
+    {
+        var root = DataRoots.FirstOrDefault(r => t.StartsWith(r, StringComparison.Ordinal));
+        return root is not null && PathRules.TryNormalizeRelative(t[root.Length..], out _, out _);
+    }
     private static bool IsLnkName(string n) => PathRules.IsValidComponent(n, out _) && n.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase);
     private static bool IsTaskOrValueName(string n) => n.Length is > 0 and <= 128 && n.All(c => c >= 0x20 && !"\\/:*?\"<>|".Contains(c));
 
@@ -181,11 +187,36 @@ public static partial class ExtensionValidator
         }
         foreach (var (t, i) in p.Uninstall.RemoveScheduledTasks.Select((t, i) => (t, i)))
         {
-            if (!IsTaskOrValueName(t)) d.Error("FS1631", $"uninstall.removeScheduledTasks[{i}]", "Invalid scheduled task name.");
+            if (!IsTaskPath(t)) d.Error("FS1631", $"uninstall.removeScheduledTasks[{i}]", "Invalid scheduled task name (folders: \"Folder\\Task\").");
         }
         foreach (var (t, i) in p.Uninstall.RemoveRunValues.Select((t, i) => (t, i)))
         {
             if (!IsTaskOrValueName(t)) d.Error("FS1632", $"uninstall.removeRunValues[{i}]", "Invalid Run value name.");
+        }
+        var ec = p.Uninstall.Elevated;
+        foreach (var (list, name, check, rule) in new (List<string>, string, Func<string, bool>, string)[] {
+                     (p.Uninstall.UserData.Paths, "uninstall.userData.paths", IsDataTemplate, @"{LocalAppData}\X, {AppData}\X or {CommonAppData}\X"),
+                     (ec.IfExists, "uninstall.elevated.ifExists", IsDataTemplate, @"{LocalAppData}\X, {AppData}\X or {CommonAppData}\X"),
+                     (ec.RemoveData, "uninstall.elevated.removeData", IsDataTemplate, @"{LocalAppData}\X, {AppData}\X or {CommonAppData}\X"),
+                     (ec.TraceSessions, "uninstall.elevated.traceSessions", IsTaskOrValueName, "a trace session name"),
+                     (ec.ScheduledTasks, "uninstall.elevated.scheduledTasks", IsTaskPath, "a task name, folders allowed (Folder\\Task)") })
+        {
+            if (list.Count > 32) d.Error("FS1654", name, "At most 32 entries.");
+            foreach (var (n, i) in list.Select((n, i) => (n, i)))
+                if (!check(n)) d.Error("FS1655", $"{name}[{i}]", $"'{n}' must be {rule}.");
+        }
+        foreach (var (s, i) in ec.ServiceAccess.Select((s, i) => (s, i)))
+        {
+            if (!IsTaskOrValueName(s.Service) || s.Service.Contains(' ') || s.Rights.Count is 0 or > 8 ||
+                s.Rights.Any(r => r.Length is 0 or > 32 || !r.All(char.IsAsciiLetterUpper)))
+                d.Error("FS1656", $"uninstall.elevated.serviceAccess[{i}]", "Needs a service name and 1-8 SDDL rights strings such as LCRPWP.");
+        }
+        if (p.Install.RelaunchArguments.Count > 32) d.Error("FS1657", "install.relaunchArguments", "At most 32 arguments.");
+        if (p.Install.AddToPath.Count > 8) d.Error("FS1658", "install.addToPath", "At most 8 folders.");
+        foreach (var (dirName, i) in p.Install.AddToPath.Select((x, i) => (x, i)))
+        {
+            if (dirName is not ("" or ".") && !PathRules.TryNormalizeRelative(dirName, out _, out _))
+                d.Error("FS1659", $"install.addToPath[{i}]", "A folder inside the install folder (relative), or \"\" for the install folder itself.");
         }
     }
 

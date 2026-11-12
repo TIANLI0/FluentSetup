@@ -62,14 +62,17 @@ int RunWorker(const boot::Args& args, const install::Package& pkg, const archive
         return internal;
     }
     const std::string& op = run["op"].asString();
-    const bool uninstall = op == "uninstall";
+    const bool cleanup = op == "cleanup";  // undo what the app did elevated (only what this package declares)
+    const bool uninstall = op == "uninstall" || cleanup;
     if ((op != "install" && !uninstall) || uninstall != args.uninstall || (!uninstall && pkg.IsUninstaller())) {
         log::Error(L"Worker: operation '%S' is not allowed for this package/command line", op.c_str());
         return internal;
     }
     install::InstallOptions options;
     // Re-check against the package: the unelevated parent is not trusted to respect allowCustomDir, scopes or option ids.
-    if (!uninstall && (!install::OptionsFromJson(run["options"], options) || !install::Engine(pkg, container).SanitizeOptions(options))) {
+    if (uninstall) {
+        options.removeUserData = run["options"]["removeUserData"].asBool(false);
+    } else if (!install::OptionsFromJson(run["options"], options) || !install::Engine(pkg, container).SanitizeOptions(options)) {
         log::Error(L"Worker: malformed or disallowed install options");
         return static_cast<int>(ErrorCode::InvalidArguments);
     }
@@ -86,7 +89,9 @@ int RunWorker(const boot::Args& args, const install::Package& pkg, const archive
 
     PipeSink sink(channel);
     install::Engine engine(pkg, container);
-    const install::Outcome outcome = uninstall ? engine.Uninstall(args.originDir, sink, cancel) : engine.Install(options, sink, cancel);
+    install::Outcome outcome;
+    if (cleanup) engine.RunElevatedCleanup(outcome);
+    else outcome = uninstall ? engine.Uninstall(args.originDir, sink, cancel, options.removeUserData) : engine.Install(options, sink, cancel);
     json::Value done;
     done.set("t", "done");
     done.set("outcome", install::OutcomeToJson(outcome));

@@ -12,6 +12,8 @@
 #include <winhttp.h>
 #include <appmodel.h>
 #include <shellapi.h>
+#include <evntrace.h>
+#include <sddl.h>
 
 #include <algorithm>
 #include <unordered_set>
@@ -53,6 +55,8 @@ std::vector<std::wstring> ParseArgs(const json::Value& v) {
     return out;
 }
 
+bool ValidTaskPath(const std::wstring& n);
+
 bool ValidTaskOrValueName(const std::wstring& n) {
     if (n.empty() || n.size() > 128) return false;
     for (const wchar_t c : n) {
@@ -81,6 +85,17 @@ std::wstring Quote(const std::wstring& arg) {
     out.push_back(L'"');
     return out;
 }
+
+bool ValidTaskPath(const std::wstring& n) {
+    if (n.empty() || n.size() > 255 || n.front() == L'\\' || n.back() == L'\\') return false;
+    size_t start = 0;
+    for (size_t pos; (pos = n.find(L'\\', start)) != std::wstring::npos; start = pos + 1) {
+        if (!ValidTaskOrValueName(n.substr(start, pos - start))) return false;
+    }
+    return ValidTaskOrValueName(n.substr(start));
+}
+
+bool IsDataTemplate(const std::wstring& t) { return !ExpandDataTemplate(t).empty(); }
 
 bool IsLnkName(const std::wstring& n) {
     return path::IsValidComponent(n) && n.size() > 4 && EqualsIgnoreCase(std::wstring_view(n).substr(n.size() - 4), L".lnk");
@@ -275,7 +290,7 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
         e.cleanup.removeData.push_back(d.asWide());
     }
     for (const auto& t : u["removeScheduledTasks"].array()) {
-        if (!ValidTaskOrValueName(t.asWide())) Bad(L"invalid scheduled task name");
+        if (!ValidTaskPath(t.asWide())) Bad(L"invalid scheduled task name");
         e.cleanup.removeScheduledTasks.push_back(t.asWide());
     }
     for (const auto& r : u["removeRunValues"].array()) {
@@ -283,6 +298,35 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
         e.cleanup.removeRunValues.push_back(r.asWide());
     }
     ParseNames(u["removeShortcuts"], e.cleanup.removeShortcuts, IsLnkName, L"shortcut name");
+    const json::Value& ec = u["elevated"];
+    ParseNames(ec["ifExists"], e.elevatedCleanup.ifExists, IsDataTemplate, L"elevated.ifExists");
+    ParseNames(ec["traceSessions"], e.elevatedCleanup.traceSessions, ValidTaskOrValueName, L"trace session name");
+    ParseNames(ec["scheduledTasks"], e.elevatedCleanup.scheduledTasks, ValidTaskPath, L"scheduled task");
+    ParseNames(ec["removeData"], e.elevatedCleanup.removeData, IsDataTemplate, L"elevated.removeData");
+    for (const auto& s : ec["serviceAccess"].array()) {
+        ServiceAccess access;
+        access.service = s["service"].asWide();
+        if (!ValidTaskOrValueName(access.service) || access.service.find(L' ') != std::wstring::npos) Bad(L"invalid service name");
+        for (const auto& r : s["rights"].array()) {
+            const std::wstring right = r.asWide();
+            if (right.empty() || right.size() > 32 || right.find_first_not_of(L"ABCDEFGHIJKLMNOPQRSTUVWXYZ") != std::wstring::npos) Bad(L"invalid service right");
+            access.rights.push_back(right);
+        }
+        if (access.rights.empty() || access.rights.size() > 8) Bad(L"serviceAccess needs rights");
+        e.elevatedCleanup.serviceAccess.push_back(std::move(access));
+    }
+    if (e.elevatedCleanup.serviceAccess.size() > 8) Bad(L"too many serviceAccess entries");
+    const json::Value& ud = u["userData"];
+    ParseNames(ud["paths"], e.userData.paths, IsDataTemplate, L"userData path");
+    e.userData.removeByDefault = ud["default"].asBool(false);
+    e.relaunchArgs = ParseArgs(root["install"]["relaunchArgs"]);
+    for (const auto& d : root["install"]["addToPath"].array()) {
+        std::wstring rel;
+        const std::wstring raw = d.asWide();
+        if (!raw.empty() && raw != L"." && !path::ValidateRelative(raw, rel)) Bad(L"invalid addToPath entry: " + raw);
+        e.addToPath.push_back(rel);
+    }
+    if (e.addToPath.size() > 8) Bad(L"too many addToPath entries");
     return e;
 }
 
@@ -658,26 +702,126 @@ std::wstring ExpandDataTemplate(const std::wstring& tpl) {
 bool DeleteScheduledTask(const std::wstring& name) {
     const HRESULT init = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     bool deleted = false;
+    const size_t slash = name.rfind(L'\\');
+    const std::wstring folderPath = L"\\" + (slash == std::wstring::npos ? std::wstring() : name.substr(0, slash));
+    const std::wstring taskName = slash == std::wstring::npos ? name : name.substr(slash + 1);
     ITaskService* service = nullptr;
     if (SUCCEEDED(::CoCreateInstance(CLSID_TaskScheduler, nullptr, CLSCTX_INPROC_SERVER, IID_ITaskService, reinterpret_cast<void**>(&service)))) {
         VARIANT empty{};
         if (SUCCEEDED(service->Connect(empty, empty, empty, empty))) {
-            ITaskFolder* root = nullptr;
-            BSTR rootName = ::SysAllocString(L"\\");
-            if (SUCCEEDED(service->GetFolder(rootName, &root))) {
-                BSTR taskName = ::SysAllocString(name.c_str());
-                deleted = SUCCEEDED(root->DeleteTask(taskName, 0));
-                ::SysFreeString(taskName);
-                root->Release();
+            ITaskFolder* folder = nullptr;
+            BSTR folderName = ::SysAllocString(folderPath.c_str());
+            if (SUCCEEDED(service->GetFolder(folderName, &folder))) {
+                BSTR task = ::SysAllocString(taskName.c_str());
+                deleted = SUCCEEDED(folder->DeleteTask(task, 0));
+                ::SysFreeString(task);
+                // Remove the app's own folder once it is empty (never the root).
+                IRegisteredTaskCollection* tasks = nullptr;
+                ITaskFolderCollection* subfolders = nullptr;
+                LONG taskCount = 1, folderCount = 1;
+                if (folderPath != L"\\" && SUCCEEDED(folder->GetTasks(TASK_ENUM_HIDDEN, &tasks)) && SUCCEEDED(tasks->get_Count(&taskCount)) &&
+                    SUCCEEDED(folder->GetFolders(0, &subfolders)) && SUCCEEDED(subfolders->get_Count(&folderCount)) && taskCount == 0 && folderCount == 0) {
+                    ITaskFolder* root = nullptr;
+                    BSTR rootName = ::SysAllocString(L"\\");
+                    BSTR leaf = ::SysAllocString(folderPath.substr(1).c_str());
+                    if (SUCCEEDED(service->GetFolder(rootName, &root))) {
+                        root->DeleteFolder(leaf, 0);
+                        root->Release();
+                    }
+                    ::SysFreeString(leaf);
+                    ::SysFreeString(rootName);
+                }
+                if (tasks) tasks->Release();
+                if (subfolders) subfolders->Release();
+                folder->Release();
             }
-            ::SysFreeString(rootName);
+            ::SysFreeString(folderName);
         }
         service->Release();
     }
     if (SUCCEEDED(init)) ::CoUninitialize();
+    if (deleted) log::Info(L"Removed scheduled task %s", name.c_str());
     return deleted;
 }
 
+bool RemoveDataPath(const std::wstring& tpl) {
+    const std::wstring target = ExpandDataTemplate(tpl);
+    if (target.empty() || !fs::Exists(target) || fs::IsLinkLike(target)) return false;
+    bool ok = false;
+    if (fs::IsDirectory(target)) {
+        ok = fs::DeleteTree(target);
+    } else {
+        ::SetFileAttributesW(path::Long(target).c_str(), FILE_ATTRIBUTE_NORMAL);
+        ok = ::DeleteFileW(path::Long(target).c_str()) != FALSE;
+    }
+    if (ok) log::Info(L"Removed %s", target.c_str());
+    else log::Warn(L"Could not fully remove %s", target.c_str());
+    return ok;
+}
+
+bool AnyExists(const std::vector<std::wstring>& templates) {
+    if (templates.empty()) return true;
+    return std::any_of(templates.begin(), templates.end(), [](const std::wstring& t) {
+        const std::wstring p = ExpandDataTemplate(t);
+        return !p.empty() && fs::Exists(p);
+    });
+}
+
+bool StopTraceSession(const std::wstring& name) {
+    // EVENT_TRACE_PROPERTIES followed by room for the logger and log file names.
+    const size_t size = sizeof(EVENT_TRACE_PROPERTIES) + 2 * 1024 * sizeof(wchar_t);
+    auto buffer = std::make_unique<uint8_t[]>(size);
+    auto* props = reinterpret_cast<EVENT_TRACE_PROPERTIES*>(buffer.get());
+    ZeroMemory(props, size);
+    props->Wnode.BufferSize = static_cast<ULONG>(size);
+    props->LoggerNameOffset = sizeof(EVENT_TRACE_PROPERTIES);
+    props->LogFileNameOffset = sizeof(EVENT_TRACE_PROPERTIES) + 1024 * sizeof(wchar_t);
+    const ULONG rc = ::ControlTraceW(0, name.c_str(), props, EVENT_TRACE_CONTROL_STOP);
+    // The boot-time session ("autosession\<name>" in logman) lives in the WMI Autologger key.
+    const std::wstring key = L"SYSTEM\\CurrentControlSet\\Control\\WMI\\Autologger\\" + name;
+    const LSTATUS del = ::RegDeleteTreeW(HKEY_LOCAL_MACHINE, key.c_str());
+    if (rc == ERROR_SUCCESS || del == ERROR_SUCCESS) log::Info(L"Stopped trace session %s (stop %lu, autologger %ld)", name.c_str(), rc, del);
+    return (rc == ERROR_SUCCESS || rc == ERROR_WMI_INSTANCE_NOT_FOUND) && (del == ERROR_SUCCESS || del == ERROR_FILE_NOT_FOUND);
+}
+
+bool RemoveServiceAccess(const ServiceAccess& access) {
+    SC_HANDLE scm = ::OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+    if (!scm) return false;
+    SC_HANDLE svc = ::OpenServiceW(scm, access.service.c_str(), READ_CONTROL | WRITE_DAC);
+    bool changed = false, ok = false;
+    if (svc) {
+        DWORD needed = 0;
+        ::QueryServiceObjectSecurity(svc, DACL_SECURITY_INFORMATION, nullptr, 0, &needed);
+        std::vector<uint8_t> sd(needed);
+        LPWSTR sddl = nullptr;
+        if (needed && ::QueryServiceObjectSecurity(svc, DACL_SECURITY_INFORMATION, sd.data(), needed, &needed) &&
+            ::ConvertSecurityDescriptorToStringSecurityDescriptorW(sd.data(), SDDL_REVISION_1, DACL_SECURITY_INFORMATION, &sddl, nullptr)) {
+            std::wstring text = sddl;
+            ::LocalFree(sddl);
+            // Remove "(A;;<rights>;;;S-1-5-21-...)": allow ACEs with exactly these rights for user accounts only.
+            for (const auto& right : access.rights) {
+                const std::wstring prefix = L"(A;;" + right + L";;;S-1-5-21-";
+                for (size_t pos; (pos = text.find(prefix)) != std::wstring::npos;) {
+                    const size_t end = text.find(L')', pos);
+                    if (end == std::wstring::npos) break;
+                    text.erase(pos, end - pos + 1);
+                    changed = true;
+                }
+            }
+            ok = true;
+            PSECURITY_DESCRIPTOR updated = nullptr;
+            if (changed) {
+                ok = ::ConvertStringSecurityDescriptorToSecurityDescriptorW(text.c_str(), SDDL_REVISION_1, &updated, nullptr) &&
+                     ::SetServiceObjectSecurity(svc, DACL_SECURITY_INFORMATION, updated);
+                if (updated) ::LocalFree(updated);
+                if (ok) log::Info(L"Removed user access entries from service %s", access.service.c_str());
+            }
+        }
+        ::CloseServiceHandle(svc);
+    }
+    ::CloseServiceHandle(scm);
+    return ok;
+}
 void DeleteRunValue(const std::wstring& name) {
     static constexpr wchar_t kRun[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
     for (HKEY hive : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE}) {
@@ -728,6 +872,76 @@ bool RunNGen(const std::wstring& assembly, bool install) {
         return r.ok;
     }
     return false;
+}
+
+namespace {
+
+constexpr wchar_t kMachineEnv[] = L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
+
+std::vector<std::wstring> SplitPath(const std::wstring& value) {
+    std::vector<std::wstring> parts;
+    for (size_t start = 0; start <= value.size();) {
+        size_t end = value.find(L';', start);
+        if (end == std::wstring::npos) end = value.size();
+        if (end > start) parts.push_back(value.substr(start, end - start));
+        start = end + 1;
+    }
+    return parts;
+}
+
+bool SameDir(std::wstring a, std::wstring b) {
+    while (!a.empty() && a.back() == L'\\') a.pop_back();
+    while (!b.empty() && b.back() == L'\\') b.pop_back();
+    return EqualsIgnoreCase(a, b);
+}
+
+// Rewrites PATH with `edit` applied to its entries; keeps the value type (REG_EXPAND_SZ for %VARS%).
+bool EditPath(bool machine, const std::function<bool(std::vector<std::wstring>&)>& edit) {
+    HKEY key = nullptr;
+    if (::RegOpenKeyExW(machine ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER, machine ? kMachineEnv : L"Environment", 0,
+                        KEY_QUERY_VALUE | KEY_SET_VALUE, &key) != ERROR_SUCCESS) {
+        return false;
+    }
+    DWORD type = REG_EXPAND_SZ, size = 0;
+    std::wstring value;
+    if (::RegQueryValueExW(key, L"Path", nullptr, &type, nullptr, &size) == ERROR_SUCCESS && size > 0 && size < 1024 * 1024) {
+        value.resize(size / sizeof(wchar_t) + 1);
+        ::RegQueryValueExW(key, L"Path", nullptr, &type, reinterpret_cast<BYTE*>(value.data()), &size);
+        value.resize(wcsnlen(value.c_str(), value.size()));
+    }
+    if (type != REG_SZ && type != REG_EXPAND_SZ) type = REG_EXPAND_SZ;
+    std::vector<std::wstring> parts = SplitPath(value);
+    bool ok = true;
+    if (edit(parts)) {
+        std::wstring joined;
+        for (const auto& p : parts) joined += (joined.empty() ? L"" : L";") + p;
+        ok = ::RegSetValueExW(key, L"Path", 0, type, reinterpret_cast<const BYTE*>(joined.c_str()),
+                              static_cast<DWORD>((joined.size() + 1) * sizeof(wchar_t))) == ERROR_SUCCESS;
+        DWORD_PTR result = 0;
+        ::SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, reinterpret_cast<LPARAM>(L"Environment"), SMTO_ABORTIFHUNG, 3000, &result);
+    }
+    ::RegCloseKey(key);
+    return ok;
+}
+
+}  // namespace
+
+bool AddToPath(const std::wstring& dir, bool machine) {
+    const bool ok = EditPath(machine, [&](std::vector<std::wstring>& parts) {
+        if (std::any_of(parts.begin(), parts.end(), [&](const std::wstring& p) { return SameDir(p, dir); })) return false;
+        parts.push_back(dir);
+        return true;
+    });
+    log::Info(L"%s %s to the %s PATH", ok ? L"Added" : L"Could not add", dir.c_str(), machine ? L"machine" : L"user");
+    return ok;
+}
+
+void RemoveFromPath(const std::wstring& dir, bool machine) {
+    EditPath(machine, [&](std::vector<std::wstring>& parts) {
+        const size_t before = parts.size();
+        parts.erase(std::remove_if(parts.begin(), parts.end(), [&](const std::wstring& p) { return SameDir(p, dir); }), parts.end());
+        return parts.size() != before;
+    });
 }
 
 }  // namespace fsetup::install

@@ -46,6 +46,7 @@
     "allowDowngrade": false,
     "minWindowsBuild": 19041,
     "closeCommand": { "run": "EncoDeck.exe", "arguments": ["--exit"] },
+    "relaunchArguments": ["--updated"],
     "closeProcesses": ["EncoDeck.exe"],
     "legacyUninstallKeys": ["{48E531A0-79E2-4001-9F04-1F43A8C52FE9}_is1"]
   },
@@ -88,7 +89,23 @@
     }
   ],
   "uninstall": {
-    "removeRunValues": ["EncoDeck"]
+    "removeRunValues": ["EncoDeck"],
+    "removeData": ["{LocalAppData}\\EncoDeck\\bluetooth-audio-service-access"],
+    "userData": {
+      "paths": ["{LocalAppData}\\EncoDeck"],
+      "default": false
+    },
+    "elevated": {
+      "ifExists": [
+        "{CommonAppData}\\EncoDeck\\Codec",
+        "{LocalAppData}\\EncoDeck\\bluetooth-audio-service-access",
+        "{CommonAppData}\\EncoDeck\\LeHook\\state.txt"
+      ],
+      "traceSessions": ["EncoDeck-BthA2dp"],
+      "scheduledTasks": ["EncoDeck\\LE Audio hook"],
+      "serviceAccess": [{ "service": "BthAvctpSvc", "rights": ["LCRPWP", "RPWPLC"] }],
+      "removeData": ["{CommonAppData}\\EncoDeck\\Codec"]
+    }
   },
   "ui": {
     "theme": "system",

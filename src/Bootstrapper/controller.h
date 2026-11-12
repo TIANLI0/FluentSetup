@@ -62,7 +62,9 @@ public:
 
     [[nodiscard]] json::Value DoneMessage(const install::Outcome& o) const;
     [[nodiscard]] bool CanLaunch() const;
-    void LaunchApp() const;
+    void LaunchApp(const std::vector<std::wstring>& args = {}) const;
+    // After a quiet install started by an app's own updater (/relaunch): start the app again with install.relaunchArgs.
+    void Relaunch() const { LaunchApp(pkg_.ext.relaunchArgs); }
     void MarkClosedByUser() { closedByUser_ = true; }
     [[nodiscard]] int ExitCode() const;
 
@@ -71,7 +73,7 @@ public:
 
 private:
     void Run(install::InstallOptions options, HWND owner);
-    install::Outcome RunElevated(const install::InstallOptions& options, HWND owner);
+    install::Outcome RunElevated(const install::InstallOptions& options, HWND owner, const char* op = nullptr);
     void Publish(const install::Progress& p);
     void Finish(install::Outcome o);
 

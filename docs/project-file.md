@@ -177,6 +177,8 @@ syntax as above. A preserved file:
 | `adoptExistingInstall` | bool | `false` | Takes over an installation made by a previous, non-FluentSetup installer that registered the uninstall key named `app.id`. Its folder and version count as the existing installation. Files of the old version that the new one does not ship are left in place, because no FluentSetup install record exists for them. |
 | `legacyUninstallKeys` | string[] | `[]` | Uninstall key names of **older product names** (e.g. before a rename). If the app is not installed under its own id, the first of these keys that points at an existing folder is adopted the same way (folder from `InstallLocation`, else from `UninstallString` or `DisplayIcon`). After a successful install these keys are deleted. Keys written by FluentSetup are never touched; the app's own id is not allowed here (FS1650). |
 | `ngen` | string[] | `[]` | .NET Framework assemblies among the installed files (`.exe`/`.dll`, max 16). After install they are queued with `ngen install /queue` (compiled when the PC is idle); before an upgrade replaces them and before uninstall, `ngen uninstall` drops the old native images. Only in elevated (per-machine) installs; failures are only logged. |
+| `addToPath` | string[] | `[]` | Folders of the app put on PATH (relative; `""` = the install folder): the user PATH for per-user installs, the machine PATH for per-machine. Added after the install is committed, removed on uninstall; new terminals see it. |
+| `relaunchArguments` | string[] | `[]` | Arguments for the app when an in-app updater ran `Setup.exe /relaunch` (Inno `/RELAUNCH=1`) in quiet mode, e.g. `["--updated"]`. |
 | `closeCommand` | object \| null | `null` | `{ "run": "App.exe", "arguments": ["--exit"] }`: asks a running copy of the **installed** app to exit cleanly (e.g. a tray app that only hides on WM_CLOSE) before files are replaced or removed; `closeProcesses` then handles anything still running. |
 | `cleanup.removeScheduledTasks` | string[] | `[]` | Leftovers of earlier versions removed **during installation**, after the files are in place and before `afterInstall` actions run (so an action can register its replacement). Task names in the root folder. |
 | `cleanup.removeRunValues` | string[] | `[]` | `...\CurrentVersion\Run` value names (HKCU and HKLM). |
@@ -337,6 +339,16 @@ failures are only logged.
 | `removeScheduledTasks` | string[] | `[]` | Task names in the Task Scheduler root folder (max 128 characters, no `\/:*?"<>\|`). |
 | `removeRunValues` | string[] | `[]` | Value names deleted from `HKCU` and `HKLM` `Software\Microsoft\Windows\CurrentVersion\Run`. Same name rules as for tasks. |
 | `removeShortcuts` | string[] | `[]` | Shortcut file names (`.lnk`) deleted from the per-user and all-users Start menu Programs, Desktop and Startup folders (for shortcuts the app or older versions created). |
+| `userData.paths` | string[] | `[]` | Settings and data the user decides about (`{LocalAppData}\X` etc., files or folders): a checkbox on the uninstall page. Silent uninstalls keep them unless `/remove-user-data`. |
+| `userData.default` | bool | `false` | Checkbox pre-selected (delete). |
+| `elevated.ifExists` | string[] | `[]` | Undo changes the app made with administrator rights only if one of these exists (checked before user data is removed; empty = always). |
+| `elevated.traceSessions` | string[] | `[]` | ETW sessions to stop, including their boot-time autologger (`logman ... autosession\<name>`). |
+| `elevated.scheduledTasks` | string[] | `[]` | Scheduled tasks, folders allowed (`"App\\Task"`); an emptied folder is removed. |
+| `elevated.serviceAccess` | object[] | `[]` | `{ "service": "Name", "rights": ["LCRPWP"] }`: removes allow-entries for user accounts (`S-1-5-21-…`) with exactly these SDDL rights from the service's DACL. |
+| `elevated.removeData` | string[] | `[]` | Files or folders removed with administrator rights. |
+
+`elevated` runs directly in a per-machine (elevated) uninstall. A per-user uninstall asks once for UAC after the
+files are removed (interactive only; silent uninstalls skip it and log a warning).
 
 The installed files and shortcuts, the app's uninstall registration and the install folder (if it is empty) are always
 removed. Preserved files and files the installer did not create are kept.
@@ -448,6 +460,9 @@ The installed `uninstall.exe` accepts the same switches.
 | `/desktop-shortcut yes\|no` | Desktop shortcut choice. Honoured only for `optionalOff`/`optionalOn`. |
 | `/start-menu-shortcut yes\|no` | Start menu shortcut choice. Honoured only for `optionalOff`/`optionalOn`. |
 | `/variant <id>` | Package variant to install (see *Variants*). |
+| `/remove-user-data` | Uninstall: also delete `uninstall.userData`. |
+| `/relaunch` | After a quiet install, start the app with `install.relaunchArguments` (for in-app updaters). |
+| Inno / NSIS switches | `/VERYSILENT`, `/SILENT`, `/DIR=`, `/LOG=`, `/LANG=english`, `/TASKS=`, `/MERGETASKS=`, `/NOICONS`, `/CURRENTUSER`, `/ALLUSERS`, `/RELAUNCH=1`, `/S`, `/D=path` (last, may contain spaces) are understood; `/SUPPRESSMSGBOXES`, `/NORESTART`, `/CLOSEAPPLICATIONS`, `/SP-`, `/NCRC`, `_?=` are accepted and have no effect. Upgrades also pre-fill choices from an adopted Inno install's saved tasks. |
 | `/option <id>=yes\|no` | Value of a package option. Can be repeated. Ids the package does not define are ignored. |
 | `/lang en-US\|zh-CN\|ja-JP\|ko-KR` | UI language. Overrides `ui.defaultLanguage`. |
 | `/log <file>` | Write the log to this absolute file path. Default: `%TEMP%\FluentSetup\<appId>-install-<timestamp>.log` (or `-uninstall-`). |

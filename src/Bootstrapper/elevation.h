@@ -13,6 +13,6 @@ UniqueHandle LaunchElevated(const std::wstring& exe, const std::wstring& paramet
 // Opens a file/program as the interactive, non-elevated user. If this process is not elevated it simply uses
 // ShellExecuteEx; if it is elevated it asks the desktop's Explorer process to do it, so that the app never inherits an
 // administrator token from setup.
-bool ShellOpenAsUser(const std::wstring& file, const std::wstring& workingDir);
+bool ShellOpenAsUser(const std::wstring& file, const std::wstring& workingDir, const std::wstring& parameters = {});
 
 }  // namespace fsetup::boot

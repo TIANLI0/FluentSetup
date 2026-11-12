@@ -220,6 +220,7 @@ void MainWindow::ApplyStaticText() {
     Automation::AutomationProperties::SetName(ProgressBarControl(), Str("progress.accessibleName"));
     Automation::AutomationProperties::SetName(ScopeRadios(), Str("options.scope"));
     VariantLabel().Text(Str("options.variant"));
+    RemoveDataCheck().Content(winrt::box_value(Str("uninstall.removeData")));
     Automation::AutomationProperties::SetName(VariantRadios(), Str("options.variant"));
 }
 
@@ -299,6 +300,9 @@ void MainWindow::ApplyHello() {
     SetVisible(VariantPanel(), variants.size() > 1);
     if (variants.size() > 1) VariantRadios().SelectedIndex(selected);
     UpdateNotice();
+    // Uninstall: optionally delete the app's settings and data too.
+    RemoveDataCheck().IsChecked(h["userData"]["value"].asBool());
+    UserDataPaths().Text(h["userData"]["paths"].asWide());
     LicenseText().Text(h["ui"]["licenseText"].asWide());
     UpdateInfoLines();
     UpdateSpaceText();
@@ -424,6 +428,7 @@ void MainWindow::ShowPage(Page page) {
     // Notices about the existing installation only make sense before starting.
     SetVisible(WelcomeInfo(), page == Page::Welcome);
     SetVisible(RunningInfo(), page == Page::Welcome);
+    SetVisible(UserDataPanel(), page == Page::Welcome && IsUninstall() && Hello()["userData"]["visible"].asBool());
     SetVisible(WelcomeDirError(), page == Page::Welcome);
     SetVisible(DescriptionText(), page == Page::Welcome && !DescriptionText().Text().empty());
 
@@ -585,6 +590,7 @@ void MainWindow::StartInstall() {
         return;
     }
     Value options;
+    options.set("removeUserData", IsUninstall() && RemoveDataCheck().IsChecked().Value());
     options.set("installDir", installDir_);
     options.set("scope", scope_);
     options.set("desktopShortcut", DesktopCheck().IsChecked().Value());

@@ -55,6 +55,66 @@ install::InstallOptions Controller::DefaultOptions() const {
         o.choices[opt.id] = opt.defaultValue;
         if (auto it = args_.choices.find(opt.id); it != args_.choices.end()) o.choices[opt.id] = it->second;
     }
+    // An update starts from the user's earlier choices: shortcuts and options from our install record, or the tasks an
+    // adopted Inno Setup install recorded. Explicit switches (below) still win.
+    const auto applyTasks = [&](const std::vector<std::wstring>& tasks, bool exclusive) {
+        if (exclusive) {
+            if (install::OfferVisible(pkg_.desktopShortcut)) o.desktopShortcut = false;
+            for (const auto& opt : pkg_.ext.options) {
+                if (!opt.required) o.choices[opt.id] = false;
+            }
+        }
+        for (std::wstring t : tasks) {
+            const bool on = t.empty() || t.front() != L'!';
+            if (!on) t.erase(0, 1);
+            if (t == L"desktopicon" && install::OfferVisible(pkg_.desktopShortcut)) o.desktopShortcut = on;
+            for (const auto& opt : pkg_.ext.options) {
+                if (!opt.required && EqualsIgnoreCase(Utf8ToWide(opt.id), t)) o.choices[opt.id] = on;
+            }
+        }
+    };
+    if (existing_.product && !existing_.foreign) {
+        try {
+            const install::InstallRecord previous = install::LoadVerifiedRecord(*existing_.product);
+            const auto under = [&](const std::wstring& link, std::initializer_list<KNOWNFOLDERID> ids) {
+                for (const auto& id : ids) {
+                    const std::wstring dir = path::KnownFolder(id);
+                    if (!dir.empty() && path::IsSameOrUnder(link, dir)) return true;
+                }
+                return false;
+            };
+            if (install::OfferVisible(pkg_.desktopShortcut)) {
+                o.desktopShortcut = std::any_of(previous.shortcuts.begin(), previous.shortcuts.end(),
+                                                [&](const std::wstring& l) { return under(l, {FOLDERID_Desktop, FOLDERID_PublicDesktop}); });
+            }
+            if (install::OfferVisible(pkg_.startMenuShortcut)) {
+                o.startMenuShortcut = std::any_of(previous.shortcuts.begin(), previous.shortcuts.end(),
+                                                  [&](const std::wstring& l) { return under(l, {FOLDERID_Programs, FOLDERID_CommonPrograms}); });
+            }
+            for (const auto& [id, on] : previous.choices) {
+                if (o.choices.count(id)) o.choices[id] = on;
+            }
+        } catch (const Failure&) {
+            // No usable record: keep the package defaults.
+        }
+    } else if (existing_.product && !existing_.product->innoTasks.empty()) {
+        std::vector<std::wstring> tasks;
+        for (size_t start = 0; start <= existing_.product->innoTasks.size();) {
+            size_t end = existing_.product->innoTasks.find(L',', start);
+            if (end == std::wstring::npos) end = existing_.product->innoTasks.size();
+            tasks.push_back(ToLower(existing_.product->innoTasks.substr(start, end - start)));
+            start = end + 1;
+        }
+        applyTasks(tasks, true);
+    }
+    if (args_.tasks) applyTasks(*args_.tasks, !args_.tasksMerge);
+    // Explicit switches win over everything above.
+    if (args_.desktopShortcut && install::OfferVisible(pkg_.desktopShortcut)) o.desktopShortcut = *args_.desktopShortcut;
+    if (args_.startMenuShortcut && install::OfferVisible(pkg_.startMenuShortcut)) o.startMenuShortcut = *args_.startMenuShortcut;
+    for (const auto& [id, on] : args_.choices) {
+        if (o.choices.count(id)) o.choices[id] = on;
+    }
+    o.removeUserData = mode_ == Mode::Uninstall && (args_.removeUserData || (!args_.quiet && pkg_.ext.userData.removeByDefault));
     // Variant: /variant, else the one already installed (an update keeps the user's earlier choice), else the default.
     o.variant = pkg_.DefaultVariant();
     if (existing_.product && pkg_.FindVariant(existing_.product->variant)) o.variant = existing_.product->variant;
@@ -208,6 +268,19 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
         }
     }
     h.set("variants", variants);
+    // Uninstall: offer to delete the app's settings and data (kept by default unless the package says otherwise).
+    json::Value userData;
+    if (mode_ == Mode::Uninstall) {
+        std::wstring where;
+        for (const auto& tpl : pkg_.ext.userData.paths) {
+            const std::wstring p = install::ExpandDataTemplate(tpl);
+            if (!p.empty() && fs::Exists(p)) where += (where.empty() ? L"" : L"\n") + p;
+        }
+        userData.set("visible", !where.empty());
+        userData.set("value", defaults.removeUserData);
+        userData.set("paths", where);
+    }
+    h.set("userData", userData);
     h.set("variant", defaults.variant);
     h.set("requiredBytes", engine.RequiredBytes(defaults.variant));
     h.set("freeBytes", fs::FreeSpace(dir));
@@ -319,6 +392,10 @@ void Controller::Run(install::InstallOptions options, HWND owner) {
 
     const bool machine = mode_ == Mode::Install ? options.scope == Scope::Machine
                                                 : (existing_.product && existing_.product->scope == Scope::Machine);
+    // Changes the app made with administrator rights are undone after a per-user uninstall through one UAC prompt
+    // (decided now: the markers may be part of the user data the uninstall removes).
+    const bool elevatedCleanup = mode_ == Mode::Uninstall && !machine && !security::IsElevated() &&
+                                 install::Engine(pkg_, container_).ElevatedCleanupApplies();
     install::Outcome outcome;
     if (machine && !security::IsElevated()) {
         outcome = RunElevated(options, owner);
@@ -329,12 +406,21 @@ void Controller::Run(install::InstallOptions options, HWND owner) {
             ::GetEnvironmentVariableW(L"FLUENTSETUP_TEST_FAULT_AFTER", buffer, 16);
             engine.SetFaultAfterFiles(static_cast<unsigned>(_wtoi(buffer)));
         }
-        outcome = mode_ == Mode::Install ? engine.Install(options, sink, cancel_) : engine.Uninstall(args_.originDir, sink, cancel_);
+        outcome = mode_ == Mode::Install ? engine.Install(options, sink, cancel_) : engine.Uninstall(args_.originDir, sink, cancel_, options.removeUserData);
+    }
+    if (elevatedCleanup && outcome.code == ErrorCode::Ok) {
+        if (args_.quiet) {
+            log::Warn(L"Skipping the administrator cleanup in silent mode (it needs a UAC prompt)");
+        } else {
+            const install::Outcome cleanup = RunElevated(options, owner, "cleanup");
+            outcome.warnings.insert(outcome.warnings.end(), cleanup.warnings.begin(), cleanup.warnings.end());
+            if (cleanup.code != ErrorCode::Ok) outcome.warnings.push_back(strings_.Get("uninstall.adminCleanupSkipped"));
+        }
     }
     Finish(std::move(outcome));
 }
 
-install::Outcome Controller::RunElevated(const install::InstallOptions& options, HWND owner) {
+install::Outcome Controller::RunElevated(const install::InstallOptions& options, HWND owner, const char* op) {
     install::Outcome out;
     out.upgrade = existing_.product.has_value();
     install::Progress waiting;
@@ -379,7 +465,7 @@ install::Outcome Controller::RunElevated(const install::InstallOptions& options,
     }
     json::Value run;
     run.set("t", "run");
-    run.set("op", mode_ == Mode::Uninstall ? "uninstall" : "install");
+    run.set("op", op ? op : mode_ == Mode::Uninstall ? "uninstall" : "install");
     run.set("options", install::OptionsToJson(options));
     server.Send(run);
     {
@@ -443,13 +529,15 @@ bool Controller::CanLaunch() const {
     return result && result->code == ErrorCode::Ok && !result->mainExecutable.empty();
 }
 
-void Controller::LaunchApp() const {
+void Controller::LaunchApp(const std::vector<std::wstring>& args) const {
     const auto result = Result();
     if (!result || result->mainExecutable.empty()) return;
     const std::wstring& exe = result->mainExecutable;
     if (!path::IsStrictlyUnder(exe, result->installDir) || !fs::Exists(exe)) return;
     log::Info(L"Launching %s", exe.c_str());
-    ShellOpenAsUser(exe, result->installDir);
+    std::wstring params;
+    for (const auto& a : args) params += (params.empty() ? L"" : L" ") + QuoteArg(a);
+    ShellOpenAsUser(exe, result->installDir, params);
 }
 
 int Controller::ExitCode() const {

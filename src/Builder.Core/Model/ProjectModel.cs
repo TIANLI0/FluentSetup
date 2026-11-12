@@ -104,6 +104,10 @@ public sealed class InstallSettings
     public List<string> LegacyUninstallKeys { get; set; } = [];
     /// <summary>Asks a running copy to exit cleanly before files are replaced or removed, e.g. { "run": "App.exe", "arguments": ["--exit"] }; closeProcesses then handles the rest.</summary>
     public CommandSettings? CloseCommand { get; set; }
+    /// <summary>Arguments for the app when an in-app updater ran Setup.exe with /relaunch (Inno: /RELAUNCH=1), e.g. ["--updated"].</summary>
+    public List<string> RelaunchArguments { get; set; } = [];
+    /// <summary>Folders of the app to put on PATH (user PATH for per-user installs, machine PATH for per-machine), e.g. ["cli"] or [""] for the install folder. Removed on uninstall.</summary>
+    public List<string> AddToPath { get; set; } = [];
     /// <summary>.NET Framework assemblies (relative paths) to pre-compile with ngen (queued, best effort; per-machine installs).</summary>
     public List<string> Ngen { get; set; } = [];
     /// <summary>Leftovers of earlier versions removed during installation (before afterInstall actions run).</summary>
@@ -307,4 +311,36 @@ public sealed class UninstallSettings
     public List<string> RemoveRunValues { get; set; } = [];
     /// <summary>Shortcut file names removed from Start menu, Desktop and Startup folders (e.g. legacy names).</summary>
     public List<string> RemoveShortcuts { get; set; } = [];
+    /// <summary>Settings and data the user decides about when uninstalling (checkbox; /remove-user-data in scripts).</summary>
+    public UserDataSettings UserData { get; set; } = new();
+    /// <summary>Changes the app made with administrator rights, undone on uninstall (one UAC prompt for per-user installs).</summary>
+    public ElevatedCleanupSettings Elevated { get; set; } = new();
+}
+
+public sealed class UserDataSettings
+{
+    /// <summary>{LocalAppData}\X, {AppData}\X or {CommonAppData}\X files or folders.</summary>
+    public List<string> Paths { get; set; } = [];
+    /// <summary>Checkbox pre-selected (delete) in interactive uninstalls; silent uninstalls keep data unless /remove-user-data.</summary>
+    public bool Default { get; set; }
+}
+
+public sealed class ElevatedCleanupSettings
+{
+    /// <summary>Only when one of these exists (files or folders; empty = always). Checked before user data is removed.</summary>
+    public List<string> IfExists { get; set; } = [];
+    /// <summary>ETW sessions to stop, including their boot-time autologger ("autosession\name" in logman).</summary>
+    public List<string> TraceSessions { get; set; } = [];
+    /// <summary>Scheduled tasks, folders allowed ("App\Task"); an emptied folder is removed.</summary>
+    public List<string> ScheduledTasks { get; set; } = [];
+    /// <summary>Remove allow-entries for user accounts (S-1-5-21-...) with exactly these SDDL rights from a service's DACL.</summary>
+    public List<ServiceAccessSettings> ServiceAccess { get; set; } = [];
+    public List<string> RemoveData { get; set; } = [];
+}
+
+public sealed class ServiceAccessSettings
+{
+    public string Service { get; set; } = "";
+    /// <summary>SDDL rights strings, e.g. "LCRPWP".</summary>
+    public List<string> Rights { get; set; } = [];
 }

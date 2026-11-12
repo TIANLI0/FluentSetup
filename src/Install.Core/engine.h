@@ -62,6 +62,7 @@ struct InstallOptions {
     bool startMenuShortcut = true;
     std::map<std::string, bool> choices;  // package-defined options (id -> selected); missing ids use the default
     std::string variant;                  // package variant to install ("" = the package default)
+    bool removeUserData = false;          // uninstall: also delete uninstall.userData
 };
 json::Value OptionsToJson(const InstallOptions& o);
 bool OptionsFromJson(const json::Value& v, InstallOptions& o);
@@ -111,7 +112,11 @@ public:
 
     Outcome Install(const InstallOptions& options, IProgressSink& sink, const std::atomic<bool>& cancel);
     // originDir: directory of the uninstaller that was started (selects the matching installation), may be empty.
-    Outcome Uninstall(const std::wstring& originDir, IProgressSink& sink, const std::atomic<bool>& cancel);
+    Outcome Uninstall(const std::wstring& originDir, IProgressSink& sink, const std::atomic<bool>& cancel, bool removeUserData = false);
+    // Undoes changes the app made with administrator rights (uninstall.elevated). Needs an elevated process.
+    void RunElevatedCleanup(Outcome& out) const;
+    // True if the package declares elevated cleanup and one of its ifExists markers is present (empty = always).
+    [[nodiscard]] bool ElevatedCleanupApplies() const;
 
     // Test hook: fail with IoError after placing this many files (exercises rollback). 0 = off.
     void SetFaultAfterFiles(unsigned n) noexcept { faultAfter_ = n; }

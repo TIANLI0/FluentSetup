@@ -17,6 +17,7 @@ struct InstalledProduct {
     Scope scope = Scope::User;
     std::wstring appId, name, version, publisher, installDir, recordSha256;
     std::string variant;  // package variant that is installed ("" = none)
+    std::wstring innoTasks;  // adopted Inno Setup install: its "Inno Setup: Selected Tasks" (e.g. "desktopicon,autostart")
 };
 
 struct RecordFile {

@@ -122,11 +122,16 @@ TEST(arguments_strict) {
     CHECK(a.language == L"zh-CN");
     boot::Args b;
     CHECK(boot::ParseArgs(L"setup.exe --ui=win32 -log C:\\logs\\x.log", b, err) && b.ui == boot::UiChoice::Win32 && b.logPath == L"C:\\logs\\x.log");
+    boot::Args inno;
+    CHECK(boot::ParseArgs(L"setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=\"C:\\Apps\\My App\" /TASKS=\"desktopicon,!autostart\" /RELAUNCH=1 /LANG=japanese", inno, err) &&
+          inno.quiet && inno.installDir == L"C:\\Apps\\My App" && inno.relaunch && inno.language == L"ja-JP" && inno.tasks && inno.tasks->size() == 2);
+    boot::Args nsis;
+    CHECK(boot::ParseArgs(L"setup.exe /S /D=C:\\Program Files\\My App", nsis, err) && nsis.quiet && nsis.installDir == L"C:\\Program Files\\My App");
     for (const wchar_t* bad : {L"setup.exe /bogus", L"setup.exe /dir", L"setup.exe /scope everyone", L"setup.exe stray",
                                L"setup.exe /quiet=1", L"setup.exe /log relative.log", L"setup.exe /ui html",
                                L"setup.exe --worker", L"setup.exe --worker --pipe x --parent-pid abc",
                                L"setup.exe --pipe ..\\..\\evil --worker --parent-pid 5", L"setup.exe --ui-simulate rm-rf",
-                               L"setup.exe /lang fr-FR", L"setup.exe --phase2 --origin-dir C:\\x"}) {
+                               L"setup.exe /lang ..\\x", L"setup.exe --phase2 --origin-dir C:\\x"}) {
         boot::Args c;
         CHECK(!boot::ParseArgs(bad, c, err));
     }

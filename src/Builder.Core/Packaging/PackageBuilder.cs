@@ -474,6 +474,8 @@ public sealed class PackageBuilder
                 w.WriteEndArray();
                 if (p.Install.AdoptExistingInstall) w.WriteString("adoptUninstallKey", p.App.Id);
                 WriteStrings(w, "legacyUninstallKeys", p.Install.LegacyUninstallKeys);
+                WriteStrings(w, "relaunchArgs", p.Install.RelaunchArguments);
+                WriteStrings(w, "addToPath", p.Install.AddToPath.Select(x => x.Replace('/', '\\')));
                 if (p.Install.CloseCommand is { Run.Length: > 0 } cc)
                 {
                     w.WriteStartObject("closeCommand");
@@ -709,6 +711,26 @@ public sealed class PackageBuilder
                 foreach (var s in list) w.WriteStringValue(s);
                 w.WriteEndArray();
             }
+            w.WriteStartObject("userData");
+            WriteStrings(w, "paths", p.Uninstall.UserData.Paths);
+            w.WriteBoolean("default", p.Uninstall.UserData.Default);
+            w.WriteEndObject();
+            var ec = p.Uninstall.Elevated;
+            w.WriteStartObject("elevated");
+            WriteStrings(w, "ifExists", ec.IfExists);
+            WriteStrings(w, "traceSessions", ec.TraceSessions);
+            WriteStrings(w, "scheduledTasks", ec.ScheduledTasks);
+            WriteStrings(w, "removeData", ec.RemoveData);
+            w.WriteStartArray("serviceAccess");
+            foreach (var s in ec.ServiceAccess)
+            {
+                w.WriteStartObject();
+                w.WriteString("service", s.Service);
+                WriteStrings(w, "rights", s.Rights);
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
+            w.WriteEndObject();
             w.WriteEndObject();
         }
 

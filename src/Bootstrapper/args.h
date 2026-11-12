@@ -21,6 +21,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace fsetup::boot {
 
@@ -39,6 +40,10 @@ struct Args {
     UiChoice ui = UiChoice::Auto;
     std::map<std::string, bool> choices;  // /option id=yes|no (package-defined options)
     std::string variant;                  // /variant id (package variant, e.g. shared or selfContained)
+    bool removeUserData = false;          // /remove-user-data (uninstall)
+    bool relaunch = false;                // /relaunch, Inno /RELAUNCH=1: start the app after a quiet install (in-app updaters)
+    std::optional<std::vector<std::wstring>> tasks;  // Inno /TASKS (exact) or /MERGETASKS (added): option ids, desktopicon
+    bool tasksMerge = false;
     std::wstring uiSimulate;
 
     // internal

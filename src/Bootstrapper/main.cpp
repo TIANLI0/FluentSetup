@@ -236,6 +236,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
             controller.Start(options, nullptr);
             controller.WaitDone(INFINITE);
             exitCode = controller.ExitCode();
+            // An app's own updater ran us silently and exited; start it again (Inno-style /RELAUNCH=1).
+            if (exitCode == 0 && args.relaunch && mode == boot::Mode::Install) controller.Relaunch();
         }
     } else {
         bool finished = false, resume = false;

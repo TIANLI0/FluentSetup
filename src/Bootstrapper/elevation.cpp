@@ -29,7 +29,7 @@ struct Com {
 };
 
 // Raymond Chen, "How can I launch an unelevated process from my elevated process?" - via the desktop's shell view.
-bool ShellExecuteViaExplorer(const std::wstring& file, const std::wstring& dir) {
+bool ShellExecuteViaExplorer(const std::wstring& file, const std::wstring& dir, const std::wstring& parameters) {
     Com<IShellWindows> windows;
     if (FAILED(::CoCreateInstance(CLSID_ShellWindows, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(windows.put())))) return false;
     VARIANT empty{};
@@ -52,6 +52,10 @@ bool ShellExecuteViaExplorer(const std::wstring& file, const std::wstring& dir) 
     if (FAILED(app->QueryInterface(IID_PPV_ARGS(shell.put())))) return false;
     BSTR bFile = ::SysAllocString(file.c_str());
     VARIANT vArgs{}, vDir{}, vOp{}, vShow{};
+    if (!parameters.empty()) {
+        vArgs.vt = VT_BSTR;
+        vArgs.bstrVal = ::SysAllocString(parameters.c_str());
+    }
     vDir.vt = VT_BSTR;
     vDir.bstrVal = ::SysAllocString(dir.c_str());
     vOp.vt = VT_BSTR;
@@ -60,6 +64,7 @@ bool ShellExecuteViaExplorer(const std::wstring& file, const std::wstring& dir) 
     vShow.lVal = SW_SHOWNORMAL;
     const HRESULT hr = shell->ShellExecute(bFile, vArgs, vDir, vOp, vShow);
     ::SysFreeString(bFile);
+    ::VariantClear(&vArgs);
     ::VariantClear(&vDir);
     ::VariantClear(&vOp);
     return SUCCEEDED(hr);
@@ -82,17 +87,18 @@ UniqueHandle LaunchElevated(const std::wstring& exe, const std::wstring& paramet
     return UniqueHandle(sei.hProcess);
 }
 
-bool ShellOpenAsUser(const std::wstring& file, const std::wstring& workingDir) {
+bool ShellOpenAsUser(const std::wstring& file, const std::wstring& workingDir, const std::wstring& parameters) {
     const HRESULT init = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     bool ok = false;
     if (security::IsElevated()) {
-        ok = ShellExecuteViaExplorer(file, workingDir);
+        ok = ShellExecuteViaExplorer(file, workingDir, parameters);
         if (!ok) log::Warn(L"Could not start %s as the desktop user; not starting it elevated", file.c_str());
     } else {
         SHELLEXECUTEINFOW sei{sizeof(sei)};
         sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
         sei.lpVerb = L"open";
         sei.lpFile = file.c_str();
+        sei.lpParameters = parameters.empty() ? nullptr : parameters.c_str();
         sei.lpDirectory = workingDir.empty() ? nullptr : workingDir.c_str();
         sei.nShow = SW_SHOWNORMAL;
         ok = ::ShellExecuteExW(&sei) != FALSE;

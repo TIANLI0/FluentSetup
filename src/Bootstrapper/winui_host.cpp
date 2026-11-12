@@ -242,6 +242,7 @@ WinUiResult RunWinUi(Controller& controller, const std::wstring& simulate) {
             channel.Send(controller.CheckPath(m["path"].asWide(), scope == "machine" ? install::Scope::Machine : install::Scope::User));
         } else if (t == "start") {
             install::InstallOptions options = controller.DefaultOptions();
+            if (controller.mode() == Mode::Uninstall) options.removeUserData = m["options"]["removeUserData"].asBool(false);
             if (controller.mode() == Mode::Install && !controller.SanitizeOptions(m["options"], options)) {
                 log::Warn(L"UI sent options that are not allowed; ignoring the request");
                 install::Outcome rejected;

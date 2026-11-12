@@ -34,6 +34,18 @@ bool ParseUnsigned(std::wstring_view v, unsigned long long& out) {
 }  // namespace
 
 bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
+    // NSIS: "/D=<path>" must be last and is taken verbatim (spaces, no quotes); "_?=<dir>" (uninstaller) likewise.
+    std::wstring line = commandLine ? commandLine : L"";
+    for (const wchar_t* tail : {L" /D=", L" _?="}) {
+        if (const size_t pos = line.rfind(tail); pos != std::wstring::npos) {
+            std::wstring dir = line.substr(pos + 4);
+            while (!dir.empty() && (dir.back() == L' ' || dir.back() == L'\t')) dir.pop_back();
+            if (dir.size() >= 2 && dir.front() == L'"' && dir.back() == L'"') dir = dir.substr(1, dir.size() - 2);
+            if (tail[1] == L'/' && !dir.empty()) out.installDir = dir;
+            line.erase(pos);
+        }
+    }
+    commandLine = line.c_str();
     int argc = 0;
     LPWSTR* argv = ::CommandLineToArgvW(commandLine, &argc);
     if (!argv) {
@@ -81,15 +93,50 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
         std::wstring v;
         unsigned long long n = 0;
 
-        if (name == L"quiet" || name == L"silent" || name == L"q" || name == L"s") {
+        // Switches of other installers, so apps and scripts written for them keep working (Inno Setup, NSIS).
+        static const wchar_t* const kIgnored[] = {L"suppressmsgboxes", L"norestart", L"closeapplications", L"nocloseapplications",
+                                                  L"forcecloseapplications", L"logcloseapplications", L"restartapplications",
+                                                  L"norestartapplications", L"nocancel", L"sp-", L"ncrc", L"group", L"noicons-"};
+        if (std::any_of(std::begin(kIgnored), std::end(kIgnored), [&](const wchar_t* n) { return name == n; })) continue;
+        if (name == L"quiet" || name == L"silent" || name == L"verysilent" || name == L"q" || name == L"s") {
             if (!flag()) return false;
             out.quiet = true;
+        } else if (name == L"remove-user-data" || name == L"delete-user-data") {
+            if (!flag()) return false;
+            out.removeUserData = true;
+        } else if (name == L"relaunch") {  // /relaunch or Inno-style /RELAUNCH=1
+            out.relaunch = !inlineValue || *inlineValue == L"1" || EqualsIgnoreCase(*inlineValue, L"yes") || EqualsIgnoreCase(*inlineValue, L"true");
+        } else if (name == L"noicons") {
+            if (!flag()) return false;
+            out.startMenuShortcut = false;
+        } else if (name == L"currentuser") {
+            if (!flag()) return false;
+            out.machineScope = false;
+        } else if (name == L"allusers") {
+            if (!flag()) return false;
+            out.machineScope = true;
+        } else if (name == L"tasks" || name == L"mergetasks") {
+            if (!value(v)) return false;
+            std::vector<std::wstring> list;
+            for (size_t start = 0; start <= v.size();) {
+                size_t end = v.find(L',', start);
+                if (end == std::wstring::npos) end = v.size();
+                std::wstring item = v.substr(start, end - start);
+                while (!item.empty() && item.front() == L' ') item.erase(0, 1);
+                while (!item.empty() && item.back() == L' ') item.pop_back();
+                if (!item.empty() && item.size() <= 64) list.push_back(ToLower(item));
+                start = end + 1;
+            }
+            out.tasks = std::move(list);
+            out.tasksMerge = name == L"mergetasks";
         } else if (name == L"uninstall" || name == L"u") {
             if (!flag()) return false;
             out.uninstall = true;
         } else if (name == L"help" || name == L"?" || name == L"h") {
             if (!flag()) return false;
             out.help = true;
+        } else if (name == L"log" && !inlineValue && (i + 1 >= args.size() || args[i + 1].empty() || args[i + 1][0] == L'/')) {
+            // Inno "/LOG" without a file: the default log location is used anyway.
         } else if (name == L"log") {
             if (!value(v)) return false;
             std::wstring normalized;
@@ -127,6 +174,16 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
                 if (!(iswalnum(c) || c == L'_' || c == L'-')) return error = L"invalid /option name", false;
             }
             out.choices[WideToUtf8(id)] = on;
+        } else if (name == L"lang" && inlineValue && !inlineValue->empty() && inlineValue->find(L'-') == std::wstring::npos &&
+                   inlineValue->size() > 3) {
+            // Inno language names (/LANG=english) -> tags.
+            static const std::pair<const wchar_t*, const wchar_t*> kInno[] = {
+                {L"english", L"en-US"}, {L"chinesesimplified", L"zh-CN"}, {L"japanese", L"ja-JP"}, {L"korean", L"ko-KR"},
+                {L"german", L"de-DE"}, {L"french", L"fr-FR"}, {L"spanish", L"es-ES"}, {L"russian", L"ru-RU"},
+                {L"chinesetraditional", L"zh-TW"}, {L"italian", L"it-IT"}, {L"portuguese", L"pt-PT"}, {L"brazilianportuguese", L"pt-BR"}};
+            for (const auto& [innoName, tag] : kInno) {
+                if (EqualsIgnoreCase(*inlineValue, innoName)) out.language = tag;
+            }
         } else if (name == L"variant") {
             std::wstring variantName;
             if (!value(variantName)) return false;

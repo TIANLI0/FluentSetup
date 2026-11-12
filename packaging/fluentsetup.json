@@ -1,0 +1,67 @@
+{
+  "$schema": "../shared/schemas/fluentsetup.project.schema.json",
+  "schemaVersion": 1,
+  "app": {
+    "id": "FluentSetup",
+    "name": "FluentSetup",
+    "publisher": "TIANLI0",
+    "version": "1.0.0",
+    "description": "Builder for native Windows 11-style installers (Builder app + fluentsetup CLI)",
+    "website": "https://github.com/TIANLI0/WinuiSetup",
+    "icon": "../assets/default-app.ico",
+    "mainExecutable": "FluentSetup.Builder.exe"
+  },
+  "files": {
+    "source": "../out/product/app",
+    "include": ["**/*"],
+    "exclude": ["**/*.pdb", "./onnxruntime.dll", "./DirectML.dll"],
+    "extra": [
+      { "source": "../LICENSE", "target": "" },
+      { "source": "../THIRD-PARTY-NOTICES.md", "target": "" },
+      { "source": "../README.md", "target": "" },
+      { "source": "../docs/ai-guide.md", "target": "docs" }
+    ]
+  },
+  "install": {
+    "scope": "userOrMachine",
+    "defaultScope": "user",
+    "userDir": "{LocalAppData}\\Programs\\{AppName}",
+    "machineDir": "{ProgramFiles}\\{AppName}",
+    "allowCustomDir": true,
+    "desktopShortcut": "optionalOff",
+    "startMenuShortcut": "on",
+    "launchAfterInstall": "optionalOff",
+    "minWindowsBuild": 17763,
+    "closeProcesses": ["FluentSetup.Builder.exe", "fluentsetup.exe"],
+    "addToPath": ["cli"]
+  },
+  "requirements": {
+    "dotNet": [
+      {
+        "runtime": "core",
+        "version": "10.0.0",
+        "download": { "url": "https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.15/dotnet-runtime-10.0.15-win-x64.exe", "sha256": "59b0da003d18b76e8dcc0dc05bf7e54a0e6e83e7c569d57e1ee5c270664bb128", "size": 30661872 },
+        "arguments": ["/install", "/quiet", "/norestart"],
+        "onFailure": "fail",
+        "helpUrl": "https://dotnet.microsoft.com/download/dotnet/10.0"
+      }
+    ],
+    "windowsAppRuntime": {
+      "required": true,
+      "version": "2.5.1",
+      "download": { "url": "https://download.microsoft.com/download/de664922-b046-432f-bb2a-54aec3c5f1f6/WindowsAppRuntimeInstall-x64.exe", "sha256": "931a421e8dc3e6e67724806cb67fecdbb88dfe323f0170842eb4a4b4b149f1e2", "size": 120199480 },
+      "arguments": ["--quiet"],
+      "onFailure": "warn",
+      "helpUrl": "https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads"
+    }
+  },
+  "ui": { "license": "../LICENSE", "defaultLanguage": "auto" },
+  "output": {
+    "directory": "../out/product/dist",
+    "fileName": "FluentSetup-{Version}-Setup.exe",
+    "architecture": "x64",
+    "compression": "max",
+    "includeWinUI": true
+  },
+  "signing": { "enabled": false }
+}

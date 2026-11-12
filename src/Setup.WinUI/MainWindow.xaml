@@ -84,6 +84,11 @@
                         </Grid>
                         <TextBlock x:Name="DescriptionText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" MaxLines="3"
                                    TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,8,0,0" />
+                        <StackPanel x:Name="UserDataPanel" Margin="0,16,0,0" Visibility="Collapsed">
+                            <CheckBox x:Name="RemoveDataCheck" />
+                            <TextBlock x:Name="UserDataPaths" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" Margin="28,0,0,0"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
 
                         <!-- Details: aligned label / value pairs. Rows collapse when they have nothing to say. -->
                         <Grid x:Name="DetailsGrid" Margin="0,20,0,0" ColumnSpacing="24">

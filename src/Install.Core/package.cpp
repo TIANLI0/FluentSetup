@@ -132,11 +132,13 @@ FileSet ParseFileSet(const json::Value& v, const wchar_t* what, const std::funct
         if (streamFill[i] != set.streams[i].rawSize) Bad(L"stream size does not match its files");
     }
 
-    // A file may not also be a directory of another file ("a" and "a\b").
+    // A file may not also be a directory of another file ("a" and "a\b"), whatever variants the two belong to.
+    std::unordered_set<std::wstring> paths;
+    for (const auto& file : set.files) paths.insert(ToLower(file.path));
     for (const auto& file : set.files) {
         std::wstring lower = ToLower(file.path);
         for (size_t pos = lower.find(L'\\'); pos != std::wstring::npos; pos = lower.find(L'\\', pos + 1)) {
-            if (seen.count(lower.substr(0, pos))) Bad(L"path is both a file and a directory: " + file.path.substr(0, pos));
+            if (paths.count(lower.substr(0, pos))) Bad(L"path is both a file and a directory: " + file.path.substr(0, pos));
         }
     }
 

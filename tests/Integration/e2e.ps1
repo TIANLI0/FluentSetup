@@ -370,6 +370,42 @@ Remove-Existing
 Check 'uninstall removed the startup entry' { $null -eq (Get-ItemProperty $runKey).'FluentSetupE2E-Startup' }
 Get-Process DemoApp -ErrorAction SilentlyContinue | Stop-Process -Force
 
+Write-Host '==> Inno/NSIS command lines, upgrade keeps earlier choices, user data, elevated cleanup' -ForegroundColor Cyan
+Remove-Existing
+$dataDir = Join-Path $env:LOCALAPPDATA 'FluentSetupE2E-Data'
+$innoDir = Join-Path $env:LOCALAPPDATA 'Programs\FluentSetup E2E Inno Dir'
+$nsisDir = Join-Path $env:LOCALAPPDATA 'Programs\FluentSetup E2E NSIS Dir'
+$desktopLink = Join-Path ([Environment]::GetFolderPath('Desktop')) "$appName.lnk"
+$compat = New-Package '10.0.0' { param($s) } @{ relaunchArguments = @('--version') } @{
+    options = @(@{ id = 'autostart'; label = @{ 'en-US' = 'Start with Windows' }; default = $true; startup = @{ name = 'FluentSetupE2E-Auto2'; arguments = @() } })
+    uninstall = @{ userData = @{ paths = @('{LocalAppData}\FluentSetupE2E-Data') }; elevated = @{ ifExists = @('{LocalAppData}\FluentSetupE2E-Data\marker'); traceSessions = @('FluentSetupE2E-NoSuchSession') } }
+}
+# Inno: what EncoDeck's in-app updater passes, plus /DIR= /TASKS= /LOG=
+$innoLog = Join-Path $logs 'inno.log'
+$p = Start-Process $compat -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS', '/SP-', "/DIR=`"$innoDir`"", '/TASKS="desktopicon"', '/RELAUNCH=1', "/LOG=`"$innoLog`"" -Wait -PassThru
+Start-Sleep -Seconds 2
+Check 'Inno switches: installed into /DIR, exit 0' { $p.ExitCode -eq 0 -and (Test-Path "$innoDir\DemoApp.exe") }
+Check 'Inno /TASKS: desktop icon on, autostart (not listed) off' { (Test-Path $desktopLink) -and $null -eq (Get-ItemProperty $runKey).'FluentSetupE2E-Auto2' }
+Check 'Inno /RELAUNCH=1: app started again with relaunchArguments' { Test-Path "$innoDir\version-check.txt" }
+# Upgrade: a plain quiet run keeps the earlier choices (desktop icon on, autostart off) and the folder
+$code = Run-Setup $compat @('/quiet') 'prefill'
+Check 'update keeps earlier choices (desktop icon, autostart off, folder)' { $code -eq 0 -and (Test-Path $desktopLink) -and $null -eq (Get-ItemProperty $runKey).'FluentSetupE2E-Auto2' -and (Get-ItemProperty $arpKey).InstallLocation -eq $innoDir }
+# Uninstall keeps user data by default; elevated cleanup is skipped in silent mode
+New-Item -ItemType Directory -Force $dataDir | Out-Null; 'x' | Set-Content "$dataDir\marker"
+$quiet = (Get-ItemProperty $arpKey).QuietUninstallString
+$code = -1
+if ($quiet -match '^"([^"]+)"\s*(.*)$') { $code = (Start-Process $Matches[1] -ArgumentList "$($Matches[2]) /log `"$(Join-Path $logs 'uninst-keep.log')`"" -Wait -PassThru).ExitCode }
+Check 'silent uninstall keeps user data' { $code -eq 0 -and (Test-Path $dataDir) }
+Check 'elevated cleanup skipped in silent mode (needs UAC)' { (Get-ChildItem $logs -Filter 'uninst-keep*' | Get-Content -Raw) -match 'Skipping the administrator cleanup' }
+# NSIS: /S /D=<path with spaces> (last, unquoted); then uninstall with /remove-user-data
+$p = Start-Process $compat -ArgumentList "/S /D=$nsisDir" -Wait -PassThru
+Check 'NSIS /S /D=path with spaces' { $p.ExitCode -eq 0 -and (Test-Path "$nsisDir\DemoApp.exe") }
+$quiet = (Get-ItemProperty $arpKey).QuietUninstallString
+$code = -1
+if ($quiet -match '^"([^"]+)"\s*(.*)$') { $code = (Start-Process $Matches[1] -ArgumentList "$($Matches[2]) /remove-user-data" -Wait -PassThru).ExitCode }
+Check 'uninstall /remove-user-data deletes the user data' { $code -eq 0 -and -not (Test-Path $dataDir) }
+Remove-Item -Recurse -Force $innoDir, $nsisDir, $dataDir -ErrorAction SilentlyContinue
+
 Write-Host '==> A language the installer does not ship, supplied by the package' -ForegroundColor Cyan
 Remove-Existing
 New-Item -ItemType Directory -Force (Join-Path $work 'locales') | Out-Null

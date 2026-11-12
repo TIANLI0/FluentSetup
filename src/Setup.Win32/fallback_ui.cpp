@@ -37,7 +37,7 @@ enum Id : int {
     kStatus = 100, kTitle, kDescription, kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
     kLblSize, kSize, kInfo, kDirError,
     kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog,
-    kOScopeLabel = 300, kOScopeUser, kOScopeMachine, kODesktop, kOStartMenu, kOVariantLabel, kOVariantDesc,
+    kOScopeLabel = 300, kOScopeUser, kOScopeMachine, kODesktop, kOStartMenu, kOVariantLabel, kOVariantDesc, kRemoveData, kUserDataPaths,
     kLHeading = 400, kLSub, kLText, kLAccept,
     kLaunch = 500, kPStage, kPPercent, kPBar, kPDetail,
     kSecondary = 700,
@@ -260,6 +260,8 @@ void Window::Create() {
     Make(WC_STATICW, kOScopeLabel, text);
     Make(WC_BUTTONW, kOScopeUser, BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, kOScopeMachine, BS_AUTORADIOBUTTON);
+    Make(WC_BUTTONW, kRemoveData, BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP);
+    Make(WC_STATICW, kUserDataPaths, text);
     Make(WC_STATICW, kOVariantLabel, text);
     for (size_t i = 0; i < VariantCount(); ++i) {
         Make(WC_BUTTONW, kVariantBase + static_cast<int>(i), BS_AUTORADIOBUTTON | WS_TABSTOP | (i == 0 ? WS_GROUP : 0));
@@ -291,6 +293,7 @@ void Window::Create() {
     SetText(kOScopeUser, S("options.scope.userShort"));
     SetText(kOScopeMachine, S("options.scope.machineShort"));
     SetText(kOVariantLabel, S("options.variant"));
+    SetText(kRemoveData, S("fallback.removeData"));
     for (size_t i = 0; i < VariantCount(); ++i) {
         const Value& v = hello_["variants"].array()[i];
         SetText(kVariantBase + static_cast<int>(i), v["label"].asWide() + L" (" + FormatBytes(v["requiredBytes"].asUint()) + L")");
@@ -318,6 +321,8 @@ void Window::ApplyFonts() {
     for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) set(kChoiceBase + static_cast<int>(i), theme_.body);
     for (int id : std::initializer_list<int>{kPDetail, kResultCode, kOVariantDesc}) set(id, theme_.caption);
     set(kOVariantLabel, theme_.body);
+    set(kRemoveData, theme_.body);
+    set(kUserDataPaths, theme_.caption);
     for (size_t i = 0; i < VariantCount(); ++i) set(kVariantBase + static_cast<int>(i), theme_.body);
     for (int id : std::initializer_list<int>{kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
                                              kLblSize, kSize, kDescription, kInfo, kDirError,
@@ -384,6 +389,12 @@ void Window::ApplyHello() {
         ::EnableWindow(Ctl(kChoiceBase + static_cast<int>(i)), !choices[i]["required"].asBool());  // required: locked on
     }
     baseInfo_ = info;
+    Button_SetCheck(Ctl(kRemoveData), hello_["userData"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
+    {
+        std::wstring paths = hello_["userData"]["paths"].asWide();
+        for (size_t p = 0; (p = paths.find(L'\n', p)) != std::wstring::npos; p += 2) paths.replace(p, 1, L"\r\n");
+        SetText(kUserDataPaths, paths);
+    }
     variant_ = hello_["variant"].asString();
     for (size_t i = 0; i < VariantCount(); ++i) {
         const bool on = hello_["variants"].array()[i]["id"].asString() == variant_;
@@ -489,6 +500,9 @@ void Window::ShowPage(Page p) {
     }
 
     for (int id : {kOScopeLabel, kOScopeUser, kOScopeMachine}) Show(id, editable && o["canChangeScope"].asBool());
+    const bool userData = welcome && IsUninstall() && hello_["userData"]["visible"].asBool();
+    Show(kRemoveData, userData);
+    Show(kUserDataPaths, userData);
     const bool variants = editable && VariantCount() > 1;
     Show(kOVariantLabel, variants);
     for (size_t i = 0; i < VariantCount(); ++i) Show(kVariantBase + static_cast<int>(i), variants);
@@ -661,6 +675,14 @@ void Window::Layout() {
                 infoRect_ = {left, y, right, y + h + 2 * pad};
                 place(kInfo, left + pad, y + pad, width - 2 * pad, h);
                 y += h + 2 * pad + Px(12);
+            }
+            if (Visible(kRemoveData)) {
+                y += Px(4);
+                place(kRemoveData, left, y, std::min(right - left, TextWidth(kRemoveData) + Px(32)), Px(24));
+                y += Px(26);
+                const int ph = TextHeight(kUserDataPaths, right - left - Px(26));
+                place(kUserDataPaths, left + Px(26), y, right - left - Px(26), ph);
+                y += ph + Px(8);
             }
             stack(kDirError, Px(12), right - left);
             stack(kResultBody, Px(8), right - left);
@@ -862,6 +884,7 @@ void Window::RequestClose() {
 
 void Window::StartInstall() {
     install::InstallOptions o = c_.DefaultOptions();
+    if (IsUninstall()) o.removeUserData = Checked(kRemoveData);
     if (!IsUninstall()) {
         Value v;
         v.set("installDir", installDir_);
@@ -1050,7 +1073,7 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             COLORREF bg = c.base, fg = c.text;
             if (id == kInfo) brush = theme_.infoBrush(), bg = c.infoFill;
             if (id == kLText || id == kResultDetail) brush = theme_.editBrush(), bg = c.editFill;
-            if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kOScopeLabel || id == kOVariantLabel || id == kOVariantDesc || id == kDescription || id == kPDetail || id == kPPercent || id == kResultCode) fg = c.textSecondary;
+            if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kOScopeLabel || id == kOVariantLabel || id == kOVariantDesc || id == kUserDataPaths || id == kDescription || id == kPDetail || id == kPPercent || id == kResultCode) fg = c.textSecondary;
             if (id == kDirError) fg = c.critical;
             ::SetTextColor(dc, fg);
             ::SetBkColor(dc, bg);
