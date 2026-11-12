@@ -156,6 +156,7 @@ RollbackStats Rollback(const std::vector<json::Value>& entries, const std::wstri
             if (!backup.empty() && path::IsSameOrUnder(backup, workDir) && fs::Exists(backup)) {
                 note(fs::Move(backup, p, true) == 0, L"shortcut", p);
             } else {
+                RemoveEmptyShortcutFolder(p, scope);  // a Start menu folder created for it
                 ++stats.undone;
             }
         } else if (op == "reg") {

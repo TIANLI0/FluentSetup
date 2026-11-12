@@ -218,6 +218,8 @@ void Window::Run() {
     } else if (started) {
         ShowPage(Page::Progress);
         OnProgressMsg(last);
+    } else if (hello_["passive"].asBool()) {
+        StartInstall();  // passive mode (/passive, Inno /SILENT): no questions
     } else {
         ShowPage(Page::Welcome);
     }
@@ -950,6 +952,10 @@ void Window::OnDoneMsg(const Value& m) {
     if (!m["installDir"].asWide().empty()) installDir_ = m["installDir"].asWide();
     retryable_ = m["retryable"].asBool(true);
     canLaunch_ = !uninstall && r == "success" && m["canLaunch"].asBool();
+    if (r == "success" && hello_["passive"].asBool()) {  // passive mode closes itself after a success
+        Finish(false);
+        return;
+    }
     if (canLaunch_ && LaunchOffered() && Checked(kLaunch)) {  // "Launch when ready"
         Finish(true);
         return;

@@ -11,6 +11,11 @@ public sealed class SetupProject
     public string? Schema { get; set; } = "https://fluentsetup.dev/schemas/fluentsetup.project.schema.json";
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+    /// <summary>
+    /// Values for $(Name) placeholders in any string of the project, e.g. { "Version": "1.2.0" } with
+    /// "version": "$(Version)". <c>fluentsetup build -D Version=1.2.1</c> overrides them (CI release builds).
+    /// </summary>
+    public Dictionary<string, string> Variables { get; set; } = [];
     public AppInfo App { get; set; } = new();
     public FileSettings Files { get; set; } = new();
     public InstallSettings Install { get; set; } = new();
@@ -106,6 +111,8 @@ public sealed class InstallSettings
     public CommandSettings? CloseCommand { get; set; }
     /// <summary>Arguments for the app when an in-app updater ran Setup.exe with /relaunch (Inno: /RELAUNCH=1), e.g. ["--updated"].</summary>
     public List<string> RelaunchArguments { get; set; } = [];
+    /// <summary>Start menu sub-folder for the app's shortcut (e.g. "Contoso"); empty = directly in Programs.</summary>
+    public string StartMenuFolder { get; set; } = "";
     /// <summary>Folders of the app to put on PATH (user PATH for per-user installs, machine PATH for per-machine), e.g. ["cli"] or [""] for the install folder. Removed on uninstall.</summary>
     public List<string> AddToPath { get; set; } = [];
     /// <summary>.NET Framework assemblies (relative paths) to pre-compile with ngen (queued, best effort; per-machine installs).</summary>
@@ -239,10 +246,22 @@ public sealed class UserOptionSettings
     /// <summary>Label per language, e.g. { "en-US": "Start when I sign in", "zh-CN": "登录时启动" }.</summary>
     public Dictionary<string, string> Label { get; set; } = [];
     public bool Default { get; set; }
+    /// <summary>Value in quiet and passive installs that are not updates (Inno Setup "skipifsilent"); null = <see cref="Default"/>.</summary>
+    public bool? QuietDefault { get; set; }
     /// <summary>A component that is always installed: shown checked and locked (e.g. a driver the app needs).</summary>
     public bool Required { get; set; }
+    /// <summary>On updates, start from what is on the PC: selected if this Run value or scheduled task exists. A startup option detects its own Run value.</summary>
+    public OptionDetectSettings? Detect { get; set; }
     /// <summary>While selected, start the main executable with Windows: HKCU\...\Run\&lt;name&gt; = "&lt;exe&gt;" &lt;arguments&gt;. Removed on uninstall.</summary>
     public RunValueSettings? Startup { get; set; }
+}
+
+public sealed class OptionDetectSettings
+{
+    /// <summary>Name of a HKCU/HKLM ...\CurrentVersion\Run value.</summary>
+    public string RunValue { get; set; } = "";
+    /// <summary>Scheduled task (folders allowed: "App\Task").</summary>
+    public string ScheduledTask { get; set; } = "";
 }
 
 public sealed class CommandSettings
@@ -290,6 +309,8 @@ public sealed class InstallCleanupSettings
     public List<string> RemoveShortcuts { get; set; } = [];
     /// <summary>Uninstall entries of other (older) product names to remove.</summary>
     public List<string> RemoveUninstallKeys { get; set; } = [];
+    /// <summary>Files in the install folder left by an earlier installer, e.g. "unins*.exe" (wildcards in the file name only).</summary>
+    public List<string> RemoveFiles { get; set; } = [];
 }
 
 public sealed class RegistryVersionCondition
@@ -311,6 +332,8 @@ public sealed class UninstallSettings
     public List<string> RemoveRunValues { get; set; } = [];
     /// <summary>Shortcut file names removed from Start menu, Desktop and Startup folders (e.g. legacy names).</summary>
     public List<string> RemoveShortcuts { get; set; } = [];
+    /// <summary>Per-user registry keys the app or an older installer created, e.g. "HKCU\Software\Contoso\App".</summary>
+    public List<string> RemoveRegistryKeys { get; set; } = [];
     /// <summary>Settings and data the user decides about when uninstalling (checkbox; /remove-user-data in scripts).</summary>
     public UserDataSettings UserData { get; set; } = new();
     /// <summary>Changes the app made with administrator rights, undone on uninstall (one UAC prompt for per-user installs).</summary>
@@ -336,6 +359,8 @@ public sealed class ElevatedCleanupSettings
     /// <summary>Remove allow-entries for user accounts (S-1-5-21-...) with exactly these SDDL rights from a service's DACL.</summary>
     public List<ServiceAccessSettings> ServiceAccess { get; set; } = [];
     public List<string> RemoveData { get; set; } = [];
+    /// <summary>Registry keys removed with administrator rights, e.g. "HKLM\Software\Contoso\App".</summary>
+    public List<string> RemoveRegistryKeys { get; set; } = [];
 }
 
 public sealed class ServiceAccessSettings

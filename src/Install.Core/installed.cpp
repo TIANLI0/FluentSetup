@@ -247,10 +247,20 @@ bool IsAllowedShortcutPath(const std::wstring& p, Scope scope) {
     std::wstring normalized;
     if (path::ValidateAbsoluteSyntax(p, normalized) != path::Problem::None) return false;
     const std::wstring parent = path::Parent(normalized);
-    for (const auto& folder : ShortcutFolders(scope)) {
+    const auto folders = ShortcutFolders(scope);
+    for (const auto& folder : folders) {
         if (!folder.empty() && EqualsIgnoreCase(parent, folder)) return true;
     }
-    return false;
+    // install.startMenuFolder: exactly one level below the Start menu Programs folder.
+    return !folders.empty() && !folders[0].empty() && EqualsIgnoreCase(path::Parent(parent), folders[0]) &&
+           path::IsValidComponent(path::FileName(parent));
+}
+
+void RemoveEmptyShortcutFolder(const std::wstring& linkPath, Scope scope) {
+    const auto folders = ShortcutFolders(scope);
+    const std::wstring parent = path::Parent(linkPath);
+    if (folders.empty() || folders[0].empty() || !EqualsIgnoreCase(path::Parent(parent), folders[0])) return;
+    if (fs::IsDirectory(parent) && !fs::IsLinkLike(parent) && fs::IsDirectoryEmpty(parent)) ::RemoveDirectoryW(path::Long(parent).c_str());
 }
 
 json::Value SnapshotArp(const std::wstring& appId, Scope scope) {

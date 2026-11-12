@@ -61,7 +61,11 @@ InstallRecord LoadVerifiedRecord(const InstalledProduct& product);
 
 // Folders where shortcuts of a given scope may be created (and therefore deleted).
 std::vector<std::wstring> ShortcutFolders(Scope scope);
+// A .lnk directly in one of ShortcutFolders(scope), or one folder level below the Start menu Programs folder
+// (install.startMenuFolder, e.g. "Programs\App\App.lnk").
 bool IsAllowedShortcutPath(const std::wstring& p, Scope scope);
+// After a shortcut in a Start menu sub-folder was removed: removes that sub-folder if it is now empty.
+void RemoveEmptyShortcutFolder(const std::wstring& linkPath, Scope scope);
 
 // ARP snapshot: every value of the key as JSON (null if the key does not exist). Used for rollback.
 json::Value SnapshotArp(const std::wstring& appId, Scope scope);

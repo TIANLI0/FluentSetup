@@ -22,6 +22,17 @@
       "default": 1,
       "description": "Project format version. Files with a value greater than 1 are rejected by this FluentSetup; the value is rewritten to 1 on load."
     },
+    "variables": {
+      "type": "object",
+      "default": {},
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Values for $(Name) placeholders in any string of the project, e.g. { \"Version\": \"1.2.0\" } with \"version\": \"$(Version)\". \"fluentsetup build -D Version=1.2.1\" overrides them (CI release builds). \"$$(\" writes a literal \"$(\"."
+    },
     "app": {
       "$ref": "#/$defs/app"
     },
@@ -375,6 +386,13 @@
           "default": "on",
           "description": "Start menu shortcut to app.mainExecutable: off | on | optionalOff | optionalOn."
         },
+        "startMenuFolder": {
+          "type": "string",
+          "maxLength": 64,
+          "default": "",
+          "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]*$",
+          "description": "Start menu folder for the app's shortcut, e.g. \"Contoso\" (Programs\\\\Contoso\\\\<App>.lnk), like installers that create a program group. Empty = directly in Programs. Removed on uninstall once empty."
+        },
         "launchAfterInstall": {
           "type": "string",
           "enum": [
@@ -465,12 +483,12 @@
               "type": "array",
               "maxItems": 32,
               "default": [],
-              "description": "Shortcut file names removed from the Start menu, Desktop and Startup folders.",
+              "description": "Shortcut file names removed from the Start menu, Desktop and Startup folders; \"Folder\\\\App.lnk\" for a Start menu folder of an older installer (removed once empty).",
               "items": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 128,
-                "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$"
+                "maxLength": 200,
+                "pattern": "^([^\\\\/:*?\"<>|\\u0000-\\u001f]+\\\\)?[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$"
               }
             },
             "removeUninstallKeys": {
@@ -483,6 +501,17 @@
                 "minLength": 1,
                 "maxLength": 128,
                 "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$"
+              }
+            },
+            "removeFiles": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "description": "Files in the install folder that no install record knows about, e.g. the uninstaller of an adopted Inno Setup install (\"unins*.exe\", \"unins*.dat\"). Relative paths; * and ? only in the file name. Removed during the install (journaled: a rollback restores them); files the package installs are never touched.",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 260
               }
             }
           }
@@ -767,7 +796,11 @@
         "default": {
           "type": "boolean",
           "default": false,
-          "description": "Initial state of the checkbox (and the value used in /quiet mode unless /option overrides it)."
+          "description": "Initial state of the checkbox on a first install, and the value used in /quiet and /passive mode unless quietDefault or /option overrides it. Updates start from the previous choice (or detect)."
+        },
+        "quietDefault": {
+          "type": "boolean",
+          "description": "Value in quiet and passive first installs (not updates), e.g. false for an \"Enable now\" checkbox that is checked in the UI but must not run in scripted installs (Inno Setup \"skipifsilent\"). Unset = default."
         },
         "required": {
           "type": "boolean",
@@ -793,6 +826,20 @@
                 "type": "string",
                 "maxLength": 1024
               }
+            }
+          }
+        },
+        "detect": {
+          "type": "object",
+          "description": "On updates the option starts from what is on the PC: selected if this Run value (HKCU or HKLM) or scheduled task exists, so an app that turns its own autostart on and off is updated in its current state. A startup option detects its own Run value without this.",
+          "properties": {
+            "runValue": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "scheduledTask": {
+              "type": "string",
+              "maxLength": 255
             }
           }
         }
@@ -958,10 +1005,10 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^\\{(CommonAppData|LocalAppData|AppData)\\}\\\\(?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*[^<>:\"/\\\\|?*\\x00-\\x1F. ](?:[\\\\/](?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*[^<>:\"/\\\\|?*\\x00-\\x1F. ])*$"
+            "pattern": "^\\{(CommonAppData|LocalAppData|AppData|InstallDir)\\}\\\\.+"
           },
           "default": [],
-          "description": "Files or folders deleted after uninstalling: {CommonAppData}\\X, {LocalAppData}\\X or {AppData}\\X."
+          "description": "Files or folders deleted after uninstalling: {CommonAppData}\\\\X, {LocalAppData}\\\\X, {AppData}\\\\X, or {InstallDir}\\\\X for something the app writes into its own folder (logs, caches)."
         },
         "removeScheduledTasks": {
           "type": "array",
@@ -993,8 +1040,19 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128,
-            "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$"
+            "maxLength": 200,
+            "pattern": "^([^\\\\/:*?\"<>|\\u0000-\\u001f]+\\\\)?[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$"
+          }
+        },
+        "removeRegistryKeys": {
+          "type": "array",
+          "maxItems": 32,
+          "default": [],
+          "description": "Per-user registry keys deleted with all their values and subkeys, e.g. \"HKCU\\\\Software\\\\Contoso\\\\App\". Software\\\\<Vendor> or deeper; never Software\\\\Microsoft, Classes or Policies.",
+          "items": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": "^HKCU\\\\Software\\\\[^\\\\]+(\\\\[^\\\\]+)*$"
           }
         },
         "userData": {
@@ -1008,8 +1066,8 @@
               "default": [],
               "items": {
                 "type": "string",
-                "pattern": "^\\{(CommonAppData|LocalAppData|AppData)\\}\\\\.+",
-                "description": "{CommonAppData}|{LocalAppData}|{AppData}\\<path> (file or folder)"
+                "pattern": "^\\{(CommonAppData|LocalAppData|AppData|InstallDir)\\}\\\\.+",
+                "description": "{CommonAppData}|{LocalAppData}|{AppData}|{InstallDir}\\\\<path> (file or folder)"
               }
             },
             "default": {
@@ -1096,6 +1154,17 @@
                 "description": "{CommonAppData}|{LocalAppData}|{AppData}\\<path> (file or folder)"
               },
               "description": "Files or folders removed with administrator rights."
+            },
+            "removeRegistryKeys": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "description": "Registry keys removed with administrator rights, e.g. \"HKLM\\\\Software\\\\Contoso\\\\App\".",
+              "items": {
+                "type": "string",
+                "maxLength": 255,
+                "pattern": "^HK(LM|CU)\\\\Software\\\\[^\\\\]+(\\\\[^\\\\]+)*$"
+              }
             }
           }
         }

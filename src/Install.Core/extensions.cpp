@@ -5,6 +5,7 @@
 #include "Common/log.h"
 #include "Common/path.h"
 #include "Common/text.h"
+#include "Install.Core/package.h"
 
 #include <comdef.h>
 #include <taskschd.h>
@@ -95,7 +96,9 @@ bool ValidTaskPath(const std::wstring& n) {
     return ValidTaskOrValueName(n.substr(start));
 }
 
-bool IsDataTemplate(const std::wstring& t) { return !ExpandDataTemplate(t).empty(); }
+bool IsDataTemplate(const std::wstring& t) { return !ExpandDataTemplate(t, L"C:\\InstallDir").empty(); }
+// The elevated cleanup may run after the install record is gone (per-user uninstall + UAC): no {InstallDir} there.
+bool IsElevatedDataTemplate(const std::wstring& t) { return !ExpandDataTemplate(t).empty(); }
 
 bool IsLnkName(const std::wstring& n) {
     return path::IsValidComponent(n) && n.size() > 4 && EqualsIgnoreCase(std::wstring_view(n).substr(n.size() - 4), L".lnk");
@@ -152,8 +155,11 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
     const json::Value& ic = inst["cleanup"];
     ParseNames(ic["removeScheduledTasks"], e.installCleanup.removeScheduledTasks, ValidTaskOrValueName, L"scheduled task name");
     ParseNames(ic["removeRunValues"], e.installCleanup.removeRunValues, ValidTaskOrValueName, L"Run value name");
-    ParseNames(ic["removeShortcuts"], e.installCleanup.removeShortcuts, IsLnkName, L"shortcut name");
+    ParseNames(ic["removeShortcuts"], e.installCleanup.removeShortcuts, IsShortcutName, L"shortcut name");
     ParseNames(ic["removeUninstallKeys"], e.installCleanup.removeUninstallKeys, ValidTaskOrValueName, L"uninstall key");
+    ParseNames(ic["removeFiles"], e.installCleanup.removeFiles, IsFilePattern, L"removeFiles pattern");
+    e.startMenuFolder = inst["startMenuFolder"].asWide();
+    if (!e.startMenuFolder.empty() && (!path::IsValidComponent(e.startMenuFolder) || e.startMenuFolder.size() > 64)) Bad(L"invalid startMenuFolder");
 
     for (const auto& r : root["requirements"].array()) {
         Requirement req;
@@ -237,6 +243,15 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
             if (!ValidTaskOrValueName(opt.startupName)) Bad(L"invalid option startup name");
             opt.startupArgs = ParseArgs(s["args"]);
         }
+        if (const json::Value& d = o["detect"]; d.isObject()) {
+            opt.detectRunValue = d["runValue"].asWide();
+            opt.detectScheduledTask = d["scheduledTask"].asWide();
+            if ((!opt.detectRunValue.empty() && !ValidTaskOrValueName(opt.detectRunValue)) ||
+                (!opt.detectScheduledTask.empty() && !ValidTaskPath(opt.detectScheduledTask))) {
+                Bad(L"invalid option detect");
+            }
+        }
+        if (o["quietDefault"].isBool()) opt.quietDefault = o["quietDefault"].asBool();
         opt.defaultValue = opt.required || o["default"].asBool(false);
         e.options.push_back(std::move(opt));
     }
@@ -286,7 +301,7 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
 
     const json::Value& u = root["uninstall"];
     for (const auto& d : u["removeData"].array()) {
-        if (ExpandDataTemplate(d.asWide()).empty()) Bad(L"removeData entries must be {CommonAppData}|{LocalAppData}|{AppData}\\<folder>: " + d.asWide());
+        if (!IsDataTemplate(d.asWide())) Bad(L"removeData entries must be {CommonAppData}|{LocalAppData}|{AppData}|{InstallDir}\\<folder>: " + d.asWide());
         e.cleanup.removeData.push_back(d.asWide());
     }
     for (const auto& t : u["removeScheduledTasks"].array()) {
@@ -297,12 +312,17 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
         if (!ValidTaskOrValueName(r.asWide())) Bad(L"invalid Run value name");
         e.cleanup.removeRunValues.push_back(r.asWide());
     }
-    ParseNames(u["removeShortcuts"], e.cleanup.removeShortcuts, IsLnkName, L"shortcut name");
+    ParseNames(u["removeShortcuts"], e.cleanup.removeShortcuts, IsShortcutName, L"shortcut name");
+    ParseNames(u["removeRegistryKeys"], e.cleanup.removeRegistryKeys, IsRemovableRegistryKey, L"registry key");
+    for (const auto& k : e.cleanup.removeRegistryKeys) {
+        if (k.rfind(L"HKCU\\", 0) != 0) Bad(L"uninstall.removeRegistryKeys are per-user (HKCU) keys; use elevated.removeRegistryKeys for HKLM");
+    }
     const json::Value& ec = u["elevated"];
-    ParseNames(ec["ifExists"], e.elevatedCleanup.ifExists, IsDataTemplate, L"elevated.ifExists");
+    ParseNames(ec["ifExists"], e.elevatedCleanup.ifExists, IsElevatedDataTemplate, L"elevated.ifExists");
     ParseNames(ec["traceSessions"], e.elevatedCleanup.traceSessions, ValidTaskOrValueName, L"trace session name");
     ParseNames(ec["scheduledTasks"], e.elevatedCleanup.scheduledTasks, ValidTaskPath, L"scheduled task");
-    ParseNames(ec["removeData"], e.elevatedCleanup.removeData, IsDataTemplate, L"elevated.removeData");
+    ParseNames(ec["removeData"], e.elevatedCleanup.removeData, IsElevatedDataTemplate, L"elevated.removeData");
+    ParseNames(ec["removeRegistryKeys"], e.elevatedCleanup.removeRegistryKeys, IsRemovableRegistryKey, L"elevated.removeRegistryKeys");
     for (const auto& s : ec["serviceAccess"].array()) {
         ServiceAccess access;
         access.service = s["service"].asWide();
@@ -680,7 +700,16 @@ ActionResult RunProgram(const std::wstring& exe, const std::vector<std::wstring>
 
 // ---- uninstall cleanup -------------------------------------------------------------------------------------------
 
-std::wstring ExpandDataTemplate(const std::wstring& tpl) {
+std::wstring ExpandDataTemplate(const std::wstring& tpl, const std::wstring& installDir) {
+    static constexpr wchar_t kInstallDir[] = L"{InstallDir}\\";
+    if (tpl.compare(0, wcslen(kInstallDir), kInstallDir) == 0) {
+        // Something the app writes into its own folder (logs, caches): a relative path that never reaches the
+        // installer's work folder.
+        std::wstring rel;
+        if (installDir.empty() || !path::ValidateRelative(tpl.substr(wcslen(kInstallDir)), rel)) return {};
+        if (EqualsIgnoreCase(rel.substr(0, rel.find(L'\\')), kWorkDirName)) return {};
+        return path::Join(installDir, rel);
+    }
     struct Root {
         const wchar_t* token;
         REFKNOWNFOLDERID id;
@@ -744,9 +773,9 @@ bool DeleteScheduledTask(const std::wstring& name) {
     return deleted;
 }
 
-bool RemoveDataPath(const std::wstring& tpl) {
-    const std::wstring target = ExpandDataTemplate(tpl);
-    if (target.empty() || !fs::Exists(target) || fs::IsLinkLike(target)) return false;
+bool RemoveDataPath(const std::wstring& tpl, const std::wstring& installDir) {
+    const std::wstring target = ExpandDataTemplate(tpl, installDir);
+    if (target.empty() || !fs::Exists(target) || fs::IsLinkLike(target) || fs::HasLinkInPath(path::Parent(target))) return false;
     bool ok = false;
     if (fs::IsDirectory(target)) {
         ok = fs::DeleteTree(target);
@@ -759,10 +788,10 @@ bool RemoveDataPath(const std::wstring& tpl) {
     return ok;
 }
 
-bool AnyExists(const std::vector<std::wstring>& templates) {
+bool AnyExists(const std::vector<std::wstring>& templates, const std::wstring& installDir) {
     if (templates.empty()) return true;
-    return std::any_of(templates.begin(), templates.end(), [](const std::wstring& t) {
-        const std::wstring p = ExpandDataTemplate(t);
+    return std::any_of(templates.begin(), templates.end(), [&](const std::wstring& t) {
+        const std::wstring p = ExpandDataTemplate(t, installDir);
         return !p.empty() && fs::Exists(p);
     });
 }
@@ -834,7 +863,9 @@ void DeleteRunValue(const std::wstring& name) {
 }
 
 bool WriteRunValue(const std::wstring& name, const std::wstring& exe, const std::vector<std::wstring>& args) {
-    std::wstring command = Quote(exe);
+    // Always quoted ("C:\App\App.exe" --background), the form Inno Setup, NSIS and most apps write themselves, so an
+    // app that compares its own Run value finds the same text.
+    std::wstring command = L"\"" + exe + L"\"";
     for (const auto& a : args) command += L" " + Quote(a);
     HKEY key = nullptr;
     if (::RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, nullptr, 0, KEY_SET_VALUE,
@@ -847,15 +878,168 @@ bool WriteRunValue(const std::wstring& name, const std::wstring& exe, const std:
     return ok;
 }
 
+bool IsShortcutName(const std::wstring& n) {
+    const size_t slash = n.find(L'\\');
+    if (slash == std::wstring::npos) return IsLnkName(n);
+    return path::IsValidComponent(n.substr(0, slash)) && IsLnkName(n.substr(slash + 1));  // "Folder\App.lnk"
+}
+
 void DeleteShortcutsNamed(const std::wstring& name) {
-    if (!IsLnkName(name)) return;
+    if (!IsShortcutName(name)) return;
+    const bool inFolder = name.find(L'\\') != std::wstring::npos;
     for (REFKNOWNFOLDERID id : {FOLDERID_Programs, FOLDERID_CommonPrograms, FOLDERID_Desktop, FOLDERID_PublicDesktop,
                                 FOLDERID_Startup, FOLDERID_CommonStartup}) {
         const std::wstring dir = path::KnownFolder(id);
         if (dir.empty()) continue;
         const std::wstring link = path::Join(dir, name);
+        const std::wstring folder = path::Parent(link);
+        if (inFolder && fs::HasLinkInPath(folder)) continue;
         if (fs::Exists(link) && !fs::IsLinkLike(link) && ::DeleteFileW(path::Long(link).c_str())) log::Info(L"Removed shortcut %s", link.c_str());
+        // A Start menu folder of an older installer ("App\Uninstall App.lnk"): removed once it is empty.
+        if (inFolder && fs::IsDirectory(folder) && fs::IsDirectoryEmpty(folder)) ::RemoveDirectoryW(path::Long(folder).c_str());
     }
+}
+
+namespace {
+
+constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+
+// Case-insensitive * and ? matching of one file name.
+bool WildcardMatch(std::wstring_view pattern, std::wstring_view name) {
+    size_t p = 0, n = 0, star = std::wstring_view::npos, mark = 0;
+    while (n < name.size()) {
+        if (p < pattern.size() && (pattern[p] == L'?' || ::towlower(pattern[p]) == ::towlower(name[n]))) {
+            ++p, ++n;
+        } else if (p < pattern.size() && pattern[p] == L'*') {
+            star = p++;
+            mark = n;
+        } else if (star != std::wstring_view::npos) {
+            p = star + 1;
+            n = ++mark;
+        } else {
+            return false;
+        }
+    }
+    while (p < pattern.size() && pattern[p] == L'*') ++p;
+    return p == pattern.size();
+}
+
+bool SplitRegistryKey(const std::wstring& key, HKEY& hive, std::wstring& sub) {
+    if (key.rfind(L"HKCU\\", 0) == 0) hive = HKEY_CURRENT_USER;
+    else if (key.rfind(L"HKLM\\", 0) == 0) hive = HKEY_LOCAL_MACHINE;
+    else return false;
+    sub = key.substr(5);
+    return true;
+}
+
+}  // namespace
+
+bool IsFilePattern(const std::wstring& pattern) {
+    if (pattern.empty() || pattern.size() > 260) return false;
+    const size_t slash = pattern.rfind(L'\\');
+    const std::wstring folder = slash == std::wstring::npos ? std::wstring() : pattern.substr(0, slash);
+    const std::wstring name = slash == std::wstring::npos ? pattern : pattern.substr(slash + 1);
+    if (!folder.empty()) {
+        std::wstring rel;
+        if (folder.find_first_of(L"*?") != std::wstring::npos || !path::ValidateRelative(folder, rel)) return false;
+        if (EqualsIgnoreCase(rel.substr(0, rel.find(L'\\')), kWorkDirName)) return false;
+    }
+    std::wstring probe = name;  // the file name with its wildcards replaced must be a valid name
+    std::replace(probe.begin(), probe.end(), L'*', L'x');
+    std::replace(probe.begin(), probe.end(), L'?', L'x');
+    // At least one literal character: "*" or "*.*" would empty the folder.
+    return path::IsValidComponent(probe) && name.find_first_not_of(L"*?.") != std::wstring::npos;
+}
+
+std::vector<std::wstring> MatchFiles(const std::wstring& dir, const std::wstring& pattern) {
+    std::vector<std::wstring> out;
+    if (!IsFilePattern(pattern)) return out;
+    const size_t slash = pattern.rfind(L'\\');
+    const std::wstring folder = slash == std::wstring::npos ? dir : path::Join(dir, pattern.substr(0, slash));
+    const std::wstring name = slash == std::wstring::npos ? pattern : pattern.substr(slash + 1);
+    if (!fs::IsDirectory(folder) || fs::HasLinkInPath(folder)) return out;
+    WIN32_FIND_DATAW fd{};
+    UniqueFind find(::FindFirstFileExW(path::Long(path::Join(folder, L"*")).c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr, 0));
+    for (bool more = find.valid(); more; more = ::FindNextFileW(find.get(), &fd)) {
+        if (fd.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) continue;
+        if (WildcardMatch(name, fd.cFileName)) out.push_back(path::Join(folder, fd.cFileName));
+    }
+    return out;
+}
+
+bool IsRemovableRegistryKey(const std::wstring& key) {
+    HKEY hive = nullptr;
+    std::wstring sub;
+    if (key.size() > 255 || !SplitRegistryKey(key, hive, sub)) return false;
+    std::vector<std::wstring> parts;
+    for (size_t start = 0; start <= sub.size();) {
+        size_t end = sub.find(L'\\', start);
+        if (end == std::wstring::npos) end = sub.size();
+        parts.push_back(sub.substr(start, end - start));
+        start = end + 1;
+    }
+    if (parts.size() < 2 || !EqualsIgnoreCase(parts[0], L"Software")) return false;
+    for (const auto& p : parts) {
+        if (p.empty() || p.size() > 128 || std::any_of(p.begin(), p.end(), [](wchar_t c) { return c < 0x20; })) return false;
+    }
+    // Trees that other software shares are never deleted wholesale.
+    for (const wchar_t* shared : {L"Microsoft", L"Classes", L"Policies", L"Wow6432Node", L"RegisteredApplications", L"Clients"}) {
+        if (EqualsIgnoreCase(parts[1], shared)) return false;
+    }
+    return true;
+}
+
+bool DeleteRegistryKey(const std::wstring& key) {
+    HKEY hive = nullptr;
+    std::wstring sub;
+    if (!IsRemovableRegistryKey(key) || !SplitRegistryKey(key, hive, sub)) return false;
+    const size_t slash = sub.rfind(L'\\');
+    HKEY parent = nullptr;
+    if (::RegOpenKeyExW(hive, sub.substr(0, slash).c_str(), 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, &parent) != ERROR_SUCCESS) return false;
+    const std::wstring leaf = sub.substr(slash + 1);
+    LSTATUS rc = ::RegDeleteTreeW(parent, leaf.c_str());
+    if (rc == ERROR_SUCCESS) rc = ::RegDeleteKeyExW(parent, leaf.c_str(), KEY_WOW64_64KEY, 0);
+    ::RegCloseKey(parent);
+    if (rc == ERROR_SUCCESS) log::Info(L"Removed registry key %s", key.c_str());
+    return rc == ERROR_SUCCESS;
+}
+
+bool RunValueExists(const std::wstring& name) {
+    for (HKEY hive : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE}) {
+        HKEY key = nullptr;
+        if (::RegOpenKeyExW(hive, kRunKey, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS) continue;
+        const bool found = ::RegQueryValueExW(key, name.c_str(), nullptr, nullptr, nullptr, nullptr) == ERROR_SUCCESS;
+        ::RegCloseKey(key);
+        if (found) return true;
+    }
+    return false;
+}
+
+bool ScheduledTaskExists(const std::wstring& name) {
+    const HRESULT init = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    bool found = false;
+    ITaskService* service = nullptr;
+    if (SUCCEEDED(::CoCreateInstance(CLSID_TaskScheduler, nullptr, CLSCTX_INPROC_SERVER, IID_ITaskService, reinterpret_cast<void**>(&service)))) {
+        VARIANT empty{};
+        if (SUCCEEDED(service->Connect(empty, empty, empty, empty))) {
+            ITaskFolder* folder = nullptr;
+            BSTR root = ::SysAllocString(L"\\");
+            if (SUCCEEDED(service->GetFolder(root, &folder))) {
+                IRegisteredTask* task = nullptr;
+                BSTR taskPath = ::SysAllocString(name.c_str());
+                // A task this user may not read (registered elevated) reports access denied, not absence.
+                const HRESULT hr = folder->GetTask(taskPath, &task);
+                found = SUCCEEDED(hr) || hr == E_ACCESSDENIED;
+                if (task) task->Release();
+                ::SysFreeString(taskPath);
+                folder->Release();
+            }
+            ::SysFreeString(root);
+        }
+        service->Release();
+    }
+    if (SUCCEEDED(init)) ::CoUninitialize();
+    return found;
 }
 
 bool RunNGen(const std::wstring& assembly, bool install) {

@@ -62,6 +62,13 @@ struct UserOption {
     // When selected: HKCU\...\Run\<startupName> = "<main executable>" <startupArgs>; removed on uninstall.
     std::wstring startupName;
     std::vector<std::wstring> startupArgs;
+    // On an update the option starts from what is on the PC: selected if this Run value (HKCU or HKLM) or scheduled
+    // task exists. A startup option detects its own Run value unless told otherwise.
+    std::wstring detectRunValue;
+    std::wstring detectScheduledTask;
+    [[nodiscard]] bool HasDetection() const noexcept { return !detectRunValue.empty() || !detectScheduledTask.empty() || !startupName.empty(); }
+    // Value in quiet and passive installs that are not updates (Inno Setup "skipifsilent"); unset = defaultValue.
+    std::optional<bool> quietDefault;
 };
 
 struct RegistryVersionCondition {
@@ -88,11 +95,13 @@ struct Action {
 };
 
 struct Cleanup {
-    std::vector<std::wstring> removeData;  // templates like {CommonAppData}\App (uninstall only)
+    std::vector<std::wstring> removeData;  // templates like {CommonAppData}\App or {InstallDir}\logs (uninstall only)
     std::vector<std::wstring> removeScheduledTasks;
     std::vector<std::wstring> removeRunValues;
     std::vector<std::wstring> removeShortcuts;      // .lnk file names in Start menu, Desktop and Startup folders
     std::vector<std::wstring> removeUninstallKeys;  // foreign uninstall entries (install only)
+    std::vector<std::wstring> removeFiles;          // install only: files in the install folder ("unins*.exe")
+    std::vector<std::wstring> removeRegistryKeys;   // uninstall only: HKCU\Software\<Vendor>\... keys
 };
 using UninstallCleanup = Cleanup;
 
@@ -109,8 +118,9 @@ struct ElevatedCleanup {
     std::vector<std::wstring> scheduledTasks;  // task paths, e.g. "App\Restore hook"
     std::vector<ServiceAccess> serviceAccess;
     std::vector<std::wstring> removeData;
+    std::vector<std::wstring> removeRegistryKeys;  // HKLM\Software\<Vendor>\... (or HKCU) keys
     [[nodiscard]] bool Empty() const noexcept {
-        return traceSessions.empty() && scheduledTasks.empty() && serviceAccess.empty() && removeData.empty();
+        return traceSessions.empty() && scheduledTasks.empty() && serviceAccess.empty() && removeData.empty() && removeRegistryKeys.empty();
     }
 };
 
@@ -132,6 +142,7 @@ struct Extensions {
     ElevatedCleanup elevatedCleanup;
     UserData userData;
     std::vector<std::wstring> relaunchArgs;  // arguments for the app when an updater asked for /relaunch
+    std::wstring startMenuFolder;            // Start menu sub-folder for the app's shortcut ("" = Programs itself)
     std::vector<std::wstring> addToPath;     // install sub-folders ("" = the install folder) added to PATH
     std::vector<Requirement> requirements;
     std::vector<UserOption> options;
@@ -174,22 +185,34 @@ struct ActionResult {
 // timeout. No shell, no PATH lookup.
 ActionResult RunProgram(const std::wstring& exe, const std::vector<std::wstring>& args, uint32_t timeoutSeconds, bool visible = false);
 
-// Expands {CommonAppData}/{LocalAppData}/{AppData} in a removeData template; empty if invalid.
-std::wstring ExpandDataTemplate(const std::wstring& tpl);
+// Expands {CommonAppData}/{LocalAppData}/{AppData}/{InstallDir} in a removeData template; empty if invalid (or
+// {InstallDir} without an install folder). Never anything inside the installer's own work folder.
+std::wstring ExpandDataTemplate(const std::wstring& tpl, const std::wstring& installDir = {});
 // `name` may include folders ("Folder\Task"); an emptied folder is removed too.
 bool DeleteScheduledTask(const std::wstring& name);
-// Deletes a file or a folder tree from a removeData template; false if nothing was there or it is a link.
-bool RemoveDataPath(const std::wstring& tpl);
+// Deletes a file or a folder tree from a removeData template; false if nothing was there or it goes through a link.
+bool RemoveDataPath(const std::wstring& tpl, const std::wstring& installDir = {});
 bool StopTraceSession(const std::wstring& name);  // stops the ETW session and deletes its autologger (boot-time) key
 bool RemoveServiceAccess(const ServiceAccess& access);
-bool AnyExists(const std::vector<std::wstring>& templates);
+bool AnyExists(const std::vector<std::wstring>& templates, const std::wstring& installDir = {});
+// "HKCU\Software\Vendor\App" / "HKLM\Software\Vendor\App": never Software itself or a shared tree (Microsoft, Classes, ...).
+bool IsRemovableRegistryKey(const std::wstring& key);
+bool DeleteRegistryKey(const std::wstring& key);  // whole tree, 64-bit view; false if it was not there
+bool RunValueExists(const std::wstring& name);   // HKCU or HKLM ...\CurrentVersion\Run
+bool ScheduledTaskExists(const std::wstring& name);
+// install.cleanup.removeFiles: a relative path whose file name may use * and ? ("unins*.exe", "bin\old?.dll").
+bool IsFilePattern(const std::wstring& pattern);
+// Files in `dir` matching a removeFiles pattern (regular files only, no links on the way).
+std::vector<std::wstring> MatchFiles(const std::wstring& dir, const std::wstring& pattern);
 // Adds/removes a folder in the user (HKCU\Environment) or machine PATH and tells running programs (WM_SETTINGCHANGE).
 bool AddToPath(const std::wstring& dir, bool machine);
 void RemoveFromPath(const std::wstring& dir, bool machine);
 void DeleteRunValue(const std::wstring& name);
 bool WriteRunValue(const std::wstring& name, const std::wstring& exe, const std::vector<std::wstring>& args);
-// Deletes <name> from the per-user and all-users Start menu Programs, Desktop and Startup folders.
+// Deletes <name> ("App.lnk", or "Folder\App.lnk" for a Start menu folder, which is removed once empty) from the
+// per-user and all-users Start menu Programs, Desktop and Startup folders.
 void DeleteShortcutsNamed(const std::wstring& name);
+bool IsShortcutName(const std::wstring& name);
 // ngen.exe install /queue (install = true) or uninstall for an assembly; best effort, false if ngen is unavailable.
 bool RunNGen(const std::wstring& assembly, bool install);
 

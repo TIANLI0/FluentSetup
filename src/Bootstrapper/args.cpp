@@ -98,9 +98,17 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
                                                   L"forcecloseapplications", L"logcloseapplications", L"restartapplications",
                                                   L"norestartapplications", L"nocancel", L"sp-", L"ncrc", L"group", L"noicons-"};
         if (std::any_of(std::begin(kIgnored), std::end(kIgnored), [&](const wchar_t* n) { return name == n; })) continue;
-        if (name == L"quiet" || name == L"silent" || name == L"verysilent" || name == L"q" || name == L"s") {
+        if (name == L"quiet" || name == L"verysilent" || name == L"q" || name == L"s") {  // NSIS /S, Inno /VERYSILENT
             if (!flag()) return false;
             out.quiet = true;
+        } else if (name == L"passive" || name == L"silent") {
+            // Progress window only, no questions (msiexec /passive, Inno Setup /SILENT).
+            if (!flag()) return false;
+            out.passive = true;
+        } else if (name == L"update") {
+            // NSIS-style in-app updaters ("Setup.exe /S /UPDATE"): start the app again afterwards, like /relaunch.
+            if (!flag()) return false;
+            out.relaunch = true;
         } else if (name == L"remove-user-data" || name == L"delete-user-data") {
             if (!flag()) return false;
             out.removeUserData = true;

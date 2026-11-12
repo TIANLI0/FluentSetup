@@ -182,6 +182,98 @@ public class ValidatorTests
         p.Install.UserDir = "{ProgramFiles}\\Test";
         Assert.Contains(ProjectValidator.Validate(p, dir.Path).Items, d => d.Code == "FS1203");
     }
+
+    [Fact]
+    public void MigrationFeaturesValidate()
+    {
+        using var dir = new TempDir();
+        var p = Valid(dir);
+        p.Install.StartMenuFolder = "Contoso";
+        p.Install.Cleanup.RemoveFiles.AddRange(["unins*.exe", "unins???.dat", "bin\\old.dll"]);
+        p.Install.Cleanup.RemoveShortcuts.Add("Contoso\\Uninstall Test.lnk");
+        p.Options.Add(new UserOptionSettings { Id = "auto", Label = new() { ["en-US"] = "Auto" }, QuietDefault = false, Detect = new() { RunValue = "Test", ScheduledTask = "Test\\Task" } });
+        p.Uninstall.RemoveData.Add("{InstallDir}\\logs");
+        p.Uninstall.UserData.Paths.Add("{InstallDir}\\config");
+        p.Uninstall.RemoveRegistryKeys.Add("HKCU\\Software\\Contoso\\Test");
+        p.Uninstall.Elevated.RemoveRegistryKeys.Add("HKLM\\Software\\Contoso");
+        var bag = ProjectValidator.Validate(p, dir.Path);
+        Assert.False(bag.HasErrors, string.Join("\n", bag.Items));
+    }
+
+    [Theory]
+    [InlineData("*")]
+    [InlineData("*.*")]
+    [InlineData("bin*\\x.dll")]
+    [InlineData("..\\x.exe")]
+    [InlineData(".fsetup\\journal.jsonl")]
+    public void RejectsDangerousFilePatterns(string pattern) => Assert.False(ExtensionValidator.IsFilePattern(pattern));
+
+    [Theory]
+    [InlineData("HKCU\\Software")]
+    [InlineData("HKCU\\Software\\Microsoft\\Windows")]
+    [InlineData("HKCU\\Software\\Classes\\App")]
+    [InlineData("HKCR\\Software\\App")]
+    [InlineData("HKLM\\System\\App")]
+    public void RejectsSharedRegistryKeys(string key) => Assert.False(ExtensionValidator.IsRemovableRegistryKey(key));
+
+    [Fact]
+    public void RejectsInvalidMigrationSettings()
+    {
+        using var dir = new TempDir();
+        var p = Valid(dir);
+        p.Install.StartMenuFolder = "A\\B";
+        p.Uninstall.RemoveData.Add("{InstallDir}\\.fsetup");
+        p.Uninstall.Elevated.RemoveData.Add("{InstallDir}\\logs");
+        p.Uninstall.RemoveRegistryKeys.Add("HKLM\\Software\\Contoso");  // per-user list: HKCU only
+        var codes = ProjectValidator.Validate(p, dir.Path).Items.Where(d => d.Severity == Severity.Error).Select(d => d.Code).ToHashSet();
+        foreach (var c in new[] { "FS1667", "FS1630", "FS1655", "FS1653" }) Assert.Contains(c, codes);
+    }
+}
+
+public class VariableTests
+{
+    [Fact]
+    public void ExpandsProjectValuesAndOverrides()
+    {
+        var p = new SetupProject { Variables = new() { ["Version"] = "1.0.0", ["Driver"] = "2.2.0.0" } };
+        p.App.Version = "$(Version)";
+        p.App.Description = "Driver $(driver), literal $$(x)";
+        p.Actions.Add(new ActionSettings { Run = "a.exe", Arguments = ["--v=$(Version)"] });
+        var bag = new DiagnosticBag();
+        var e = ProjectVariables.Expand(p, new Dictionary<string, string> { ["Version"] = "1.0.1" }, bag);
+        Assert.False(bag.HasErrors);
+        Assert.Equal("1.0.1", e.App.Version);
+        Assert.Equal("Driver 2.2.0.0, literal $(x)", e.App.Description);
+        Assert.Equal("--v=1.0.1", e.Actions[0].Arguments[0]);
+        Assert.Equal("$(Version)", p.App.Version);  // the original is untouched
+    }
+
+    [Fact]
+    public void ReportsUnknownVariables()
+    {
+        var p = new SetupProject();
+        p.App.Version = "$(Nope)";
+        var bag = new DiagnosticBag();
+        var e = ProjectVariables.Expand(p, null, bag);
+        Assert.Contains(bag.Items, d => d.Code == "FS1801" && d.Field == "app.version");
+        Assert.Equal("$(Nope)", e.App.Version);
+    }
+
+    [Theory]
+    [InlineData("Version=1.2.3", "Version", "1.2.3")]
+    [InlineData("A_b.c=x=y", "A_b.c", "x=y")]
+    public void ParsesDefines(string text, string name, string value)
+    {
+        Assert.True(ProjectVariables.TryParseDefine(text, out var n, out var v));
+        Assert.Equal(name, n);
+        Assert.Equal(value, v);
+    }
+
+    [Theory]
+    [InlineData("=1")]
+    [InlineData("1x=1")]
+    [InlineData("noequals")]
+    public void RejectsBadDefines(string text) => Assert.False(ProjectVariables.TryParseDefine(text, out _, out _));
 }
 
 public class CollectorTests

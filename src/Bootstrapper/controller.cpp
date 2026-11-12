@@ -51,8 +51,11 @@ install::InstallOptions Controller::DefaultOptions() const {
     o.startMenuShortcut = install::OfferDefault(pkg_.startMenuShortcut);
     if (args_.desktopShortcut && install::OfferVisible(pkg_.desktopShortcut)) o.desktopShortcut = *args_.desktopShortcut;
     if (args_.startMenuShortcut && install::OfferVisible(pkg_.startMenuShortcut)) o.startMenuShortcut = *args_.startMenuShortcut;
+    const bool unattended = args_.quiet || args_.passive;
     for (const auto& opt : pkg_.ext.options) {
         o.choices[opt.id] = opt.defaultValue;
+        // e.g. "Enable now" that a scripted first install must not do (Inno Setup "skipifsilent").
+        if (unattended && !existing_.product && opt.quietDefault && !opt.required) o.choices[opt.id] = *opt.quietDefault;
         if (auto it = args_.choices.find(opt.id); it != args_.choices.end()) o.choices[opt.id] = it->second;
     }
     // An update starts from the user's earlier choices: shortcuts and options from our install record, or the tasks an
@@ -107,6 +110,18 @@ install::InstallOptions Controller::DefaultOptions() const {
         }
         applyTasks(tasks, true);
     }
+    // What is on the PC wins over remembered choices: an app that turns its own autostart on and off, or a feature the
+    // user switched off inside the app, is updated in the state it is in now.
+    if (existing_.product) {
+        for (const auto& opt : pkg_.ext.options) {
+            if (opt.required || !opt.HasDetection()) continue;
+            const std::wstring runValue = !opt.detectRunValue.empty() ? opt.detectRunValue : opt.startupName;
+            const bool found = (!runValue.empty() && install::RunValueExists(runValue)) ||
+                               (!opt.detectScheduledTask.empty() && install::ScheduledTaskExists(opt.detectScheduledTask));
+            log::Info(L"Option %S detected as %s", opt.id.c_str(), found ? L"on" : L"off");
+            o.choices[opt.id] = found;
+        }
+    }
     if (args_.tasks) applyTasks(*args_.tasks, !args_.tasksMerge);
     // Explicit switches win over everything above.
     if (args_.desktopShortcut && install::OfferVisible(pkg_.desktopShortcut)) o.desktopShortcut = *args_.desktopShortcut;
@@ -114,7 +129,7 @@ install::InstallOptions Controller::DefaultOptions() const {
     for (const auto& [id, on] : args_.choices) {
         if (o.choices.count(id)) o.choices[id] = on;
     }
-    o.removeUserData = mode_ == Mode::Uninstall && (args_.removeUserData || (!args_.quiet && pkg_.ext.userData.removeByDefault));
+    o.removeUserData = mode_ == Mode::Uninstall && (args_.removeUserData || (!unattended && pkg_.ext.userData.removeByDefault));
     // Variant: /variant, else the one already installed (an update keeps the user's earlier choice), else the default.
     o.variant = pkg_.DefaultVariant();
     if (existing_.product && pkg_.FindVariant(existing_.product->variant)) o.variant = existing_.product->variant;
@@ -150,6 +165,8 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
     h.set("proto", ipc::kProtocolVersion);
     h.set("mode", mode_ == Mode::Uninstall ? "uninstall" : "install");
     h.set("elevated", security::IsElevated());
+    // Progress only: the front end starts right away with these defaults and closes itself after a success.
+    h.set("passive", args_.passive && !args_.quiet);
     h.set("strings", strings_.Table());
     h.set("language", strings_.Language());
 
@@ -273,7 +290,7 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
     if (mode_ == Mode::Uninstall) {
         std::wstring where;
         for (const auto& tpl : pkg_.ext.userData.paths) {
-            const std::wstring p = install::ExpandDataTemplate(tpl);
+            const std::wstring p = install::ExpandDataTemplate(tpl, existing_.product ? existing_.product->installDir : std::wstring());
             if (!p.empty() && fs::Exists(p)) where += (where.empty() ? L"" : L"\n") + p;
         }
         userData.set("visible", !where.empty());

@@ -23,10 +23,13 @@ public static class Program
               --sign | --no-sign        Override the project's signing setting
               --report <file.json>      Write a machine-readable build report
               --runtime <dir>           Use another installer runtime folder
+              -D, --define <name>=<value>
+                                        Value for $(name) in the project (repeatable; overrides "variables"),
+                                        e.g. -D Version=1.2.1 with "version": "$(Version)"
               -v, --verbose             Detailed log
               --json                    Print the build report as JSON instead of text
               --non-interactive         Never prompt (the default; accepted for CI scripts)
-          fluentsetup validate <project.json> [--json]
+          fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
           fluentsetup inspect <Setup.exe> [--verify] [--json]
           fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
           fluentsetup locale add <language> <project.json> [--force]
@@ -116,6 +119,7 @@ public static class Program
             RuntimeRoot = a.Value("runtime"),
             Sign = a.Flag("sign") ? true : a.Flag("no-sign") ? false : null,
             Log = verbose && !json ? m => Console.WriteLine($"  {m}") : null,
+            Defines = a.Defines(),
         };
         a.Flag("non-interactive");
         var reportPath = a.Value("report");
@@ -228,10 +232,13 @@ public static class Program
     {
         var projectPath = Path.GetFullPath(a.Positional(0, "project file"));
         var json = a.Flag("json");
+        var defines = a.Defines();
         a.EnsureAllUsed();
-        var project = LoadProject(projectPath);
         var dir = Path.GetDirectoryName(projectPath)!;
+        var variableDiagnostics = new DiagnosticBag();
+        var project = ProjectVariables.Expand(LoadProject(projectPath), defines, variableDiagnostics);
         var bag = ProjectValidator.Validate(project, dir);
+        bag.AddRange(variableDiagnostics.Items);
         var files = FileCollector.Collect(project, dir, project.Files.Variants);
         bag.AddRange(files.Diagnostics.Items);
         if (json)
@@ -341,6 +348,7 @@ internal sealed class ParsedArgs
     private readonly List<string> _positional = [];
     private readonly Dictionary<string, string?> _options = new(StringComparer.Ordinal);
     private readonly HashSet<string> _used = [];
+    private readonly List<string> _defines = [];
     private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive"];
 
     public static ParsedArgs Parse(string[] args)
@@ -354,6 +362,14 @@ internal sealed class ParsedArgs
                 var name = a.TrimStart('-');
                 string? value = null;
                 var eq = name.IndexOf('=');
+                if (name is "D" or "define")
+                {
+                    // Repeatable: -D Name=Value, --define Name=Value, --define=Name=Value.
+                    if (eq >= 0) p._defines.Add(name[(eq + 1)..]);
+                    else if (i + 1 < args.Length) p._defines.Add(args[++i]);
+                    else throw new UsageException($"Missing value for {a}.");
+                    continue;
+                }
                 if (eq >= 0) { value = name[(eq + 1)..]; name = name[..eq]; }
                 else if (!Flags.Contains(name))
                 {
@@ -369,6 +385,19 @@ internal sealed class ParsedArgs
             }
         }
         return p;
+    }
+
+    /// <summary>-D values as a table (later ones win); null if none were given.</summary>
+    public Dictionary<string, string>? Defines()
+    {
+        if (_defines.Count == 0) return null;
+        var table = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var d in _defines)
+        {
+            if (!ProjectVariables.TryParseDefine(d, out var name, out var value)) throw new UsageException($"-D needs name=value with a valid name, got '{d}'.");
+            table[name] = value;
+        }
+        return table;
     }
 
     public string Positional(int index, string what) =>

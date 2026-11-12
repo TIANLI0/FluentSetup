@@ -597,6 +597,7 @@ void Engine::RunElevatedCleanup(Outcome& out) const {
         if (!RemoveServiceAccess(a)) out.warnings.push_back(L"Access to service " + a.service + L" could not be reset");
     }
     for (const auto& d : c.removeData) RemoveDataPath(d);
+    for (const auto& k : c.removeRegistryKeys) DeleteRegistryKey(k);
 }
 void Engine::RunCloseCommand(const std::wstring& dir) const {
     if (pkg_.ext.closeCommand.empty() || dir.empty()) return;
@@ -838,6 +839,22 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
                 if (const DWORD e = fs::Move(target, saved)) ThrowMove(e, L"Cannot remove obsolete file " + target);
             }
         }
+        // install.cleanup.removeFiles: leftovers no install record knows about, e.g. the uninstaller of the Inno Setup
+        // or NSIS installation this one adopted ("unins000.exe"). Journaled like any other change, so a rollback puts
+        // them back.
+        for (const auto& pattern : pkg_.ext.installCleanup.removeFiles) {
+            for (const auto& target : MatchFiles(dir, pattern)) {
+                const std::wstring rel = target.substr(dir.size() + 1);
+                if (newSet.count(ToLower(rel)) || EqualsIgnoreCase(rel, kUninstallerName) || EqualsIgnoreCase(rel, kRecordName)) continue;
+                const std::wstring saved = path::Join(backup, L"~removed\\" + rel);
+                fs::CreateDirectories(path::Parent(saved));
+                journal->Backup(target, saved);
+                const DWORD attrs = fs::Attributes(target);
+                if (attrs & FILE_ATTRIBUTE_READONLY) ::SetFileAttributesW(path::Long(target).c_str(), attrs & ~FILE_ATTRIBUTE_READONLY);
+                if (const DWORD e = fs::Move(target, saved)) ThrowMove(e, L"Cannot remove " + target);
+                log::Info(L"Removed leftover %s", rel.c_str());
+            }
+        }
         ThrowIfCancelled(cancel);
 
         // ---- Registering ------------------------------------------------------------------------------------
@@ -867,7 +884,10 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         const bool wantStart = !mainExe.empty() && wantShortcut(pkg_.startMenuShortcut, options.startMenuShortcut);
         const bool wantDesktop = !mainExe.empty() && wantShortcut(pkg_.desktopShortcut, options.desktopShortcut);
         const std::wstring linkName = ShortcutName(pkg_);
-        const std::wstring startLink = folders[0].empty() ? std::wstring() : path::Join(folders[0], linkName);
+        // install.startMenuFolder: "Programs\<Folder>\<App>.lnk", like installers that create a program group.
+        const std::wstring startFolder = folders[0].empty() || pkg_.ext.startMenuFolder.empty() ? folders[0]
+                                                                                                 : path::Join(folders[0], pkg_.ext.startMenuFolder);
+        const std::wstring startLink = startFolder.empty() ? std::wstring() : path::Join(startFolder, linkName);
         const std::wstring desktopLink = folders[1].empty() ? std::wstring() : path::Join(folders[1], linkName);
         std::vector<std::wstring> desired;
         if (wantStart && !startLink.empty()) desired.push_back(startLink);
@@ -882,6 +902,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
             } else {
                 journal->Shortcut(link, L"");
             }
+            if (!fs::IsDirectory(path::Parent(link))) fs::CreateDirectories(path::Parent(link));  // a Start menu folder
             CreateShortcut(link, mainExe, dir, pkg_.description);
             shortcuts.push_back(link);
         }
@@ -1000,6 +1021,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
             std::vector<std::wstring> oldFiles;
             for (const auto& f : oldRecord->files) oldFiles.push_back(f.path);
             RemoveEmptyDirectories(dir, ImpliedDirectories(oldFiles, oldRecord->directories));
+            for (const auto& old : oldRecord->shortcuts) RemoveEmptyShortcutFolder(old, scope);  // startMenuFolder changed
         }
         journal.reset();
         if (!fs::DeleteTree(workDir)) log::Warn(L"Could not fully remove %s", workDir.c_str());
@@ -1152,13 +1174,15 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
             if (!opt.startupName.empty()) DeleteRunValue(opt.startupName);
         }
         for (const auto& s : pkg_.ext.cleanup.removeShortcuts) DeleteShortcutsNamed(s);
+        for (const auto& link : record.shortcuts) RemoveEmptyShortcutFolder(link, scope);  // install.startMenuFolder
+        for (const auto& k : pkg_.ext.cleanup.removeRegistryKeys) DeleteRegistryKey(k);
         for (const auto& rel : pkg_.ext.addToPath) RemoveFromPath(rel.empty() ? dir : path::Join(dir, rel), scope == Scope::Machine);
         // Elevated leftovers first: their markers may live in the user data removed next.
         if (security::IsElevated() && ElevatedCleanupApplies()) RunElevatedCleanup(out);
         if (removeUserData) {
-            for (const auto& tpl : pkg_.ext.userData.paths) RemoveDataPath(tpl);
+            for (const auto& tpl : pkg_.ext.userData.paths) RemoveDataPath(tpl, dir);
         }
-        for (const auto& tpl : pkg_.ext.cleanup.removeData) RemoveDataPath(tpl);  // folders or single files
+        for (const auto& tpl : pkg_.ext.cleanup.removeData) RemoveDataPath(tpl, dir);  // folders or single files
         std::vector<std::wstring> relFiles;
         for (const auto& f : record.files) relFiles.push_back(f.path);
         RemoveEmptyDirectories(dir, ImpliedDirectories(relFiles, record.directories));

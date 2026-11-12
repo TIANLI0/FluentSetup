@@ -228,17 +228,15 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         const install::InstallOptions options = controller.DefaultOptions();
         const bool machine = mode == boot::Mode::Install ? options.scope == install::Scope::Machine
                                                          : controller.existing().product->scope == install::Scope::Machine;
-        if (machine && !security::IsElevated()) {
-            // Silent mode never shows UI, and the UAC prompt is UI: run silent per-machine setups from an elevated context.
-            log::Error(L"Silent per-machine operation requires an elevated process");
-            exitCode = static_cast<int>(ErrorCode::ElevationRequired);
-        } else {
-            controller.Start(options, nullptr);
-            controller.WaitDone(INFINITE);
-            exitCode = controller.ExitCode();
-            // An app's own updater ran us silently and exited; start it again (Inno-style /RELAUNCH=1).
-            if (exitCode == 0 && args.relaunch && mode == boot::Mode::Install) controller.Relaunch();
-        }
+        // A per-machine operation started without administrator rights (typically an app's own updater updating a
+        // per-machine install) asks for them with the UAC prompt, as Inno Setup and NSIS do. Deployment tools run
+        // elevated and never see it; a declined prompt ends with ElevationRequired.
+        if (machine && !security::IsElevated()) log::Info(L"Quiet per-machine operation: requesting administrator rights");
+        controller.Start(options, nullptr);
+        controller.WaitDone(INFINITE);
+        exitCode = controller.ExitCode();
+        // An app's own updater ran us silently and exited; start it again (Inno /RELAUNCH=1, NSIS-style /UPDATE).
+        if (exitCode == 0 && args.relaunch && mode == boot::Mode::Install) controller.Relaunch();
     } else {
         bool finished = false, resume = false;
         if (args.ui != boot::UiChoice::Win32) {
@@ -256,6 +254,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         if (!finished) win32ui::Run(controller, resume);
         if (controller.Running()) controller.WaitDone(INFINITE);
         exitCode = controller.ExitCode();
+        // Passive mode (Inno /SILENT) from an app's updater: the window closed itself; start the app again.
+        if (args.passive && exitCode == 0 && args.relaunch && mode == boot::Mode::Install) controller.Relaunch();
     }
 
     if (args.phase2) {

@@ -21,6 +21,8 @@ public sealed class BuildOptions
     /// <summary>null = as configured in the project.</summary>
     public bool? Sign { get; set; }
     public string? RuntimeRoot { get; set; }
+    /// <summary>$(Name) values that override the project's "variables" (fluentsetup build -D Name=Value).</summary>
+    public Dictionary<string, string>? Defines { get; set; }
     public bool VerifyOutput { get; set; } = true;
     public Action<string>? Log { get; set; }
 }
@@ -130,7 +132,13 @@ public sealed class PackageBuilder
 
         // ---- validate ------------------------------------------------------------------------------------------
         progress?.Report(new(BuildStage.Validating, 0, "Validating project"));
+        var variableDiagnostics = new DiagnosticBag();
+        project = ProjectVariables.Expand(project, options.Defines, variableDiagnostics);
+        report.AppId = project.App.Id;
+        report.AppName = project.App.Name;
+        report.Version = project.App.Version;
         var diagnostics = ProjectValidator.Validate(project, projectDir);
+        diagnostics.AddRange(variableDiagnostics.Items);
         report.Diagnostics.AddRange(diagnostics.Items);
         if (!assets.HasStub(arch)) diagnostics.Error("FS2001", "output.architecture", $"The installer runtime for {arch} is missing: {assets.StubPath(arch)}");
         var includeUi = project.Output.IncludeWinUI && assets.HasUi(arch);
@@ -489,7 +497,9 @@ public sealed class PackageBuilder
                 WriteStrings(w, "removeRunValues", p.Install.Cleanup.RemoveRunValues);
                 WriteStrings(w, "removeShortcuts", p.Install.Cleanup.RemoveShortcuts);
                 WriteStrings(w, "removeUninstallKeys", p.Install.Cleanup.RemoveUninstallKeys);
+                WriteStrings(w, "removeFiles", p.Install.Cleanup.RemoveFiles.Select(x => x.Replace('/', '\\')));
                 w.WriteEndObject();
+                if (!string.IsNullOrEmpty(p.Install.StartMenuFolder)) w.WriteString("startMenuFolder", p.Install.StartMenuFolder);
                 w.WriteEndObject();
                 WriteExtensions(w, p, texts, variants);
                 w.WriteStartArray("variants");
@@ -656,6 +666,14 @@ public sealed class PackageBuilder
                 WriteLocalized(w, "label", texts.OptionLabels.GetValueOrDefault(o.Id) ?? o.Label);
                 w.WriteBoolean("default", o.Default || o.Required);
                 if (o.Required) w.WriteBoolean("required", true);
+                if (o.QuietDefault is { } qd && !o.Required) w.WriteBoolean("quietDefault", qd);
+                if (o.Detect is { } det && (det.RunValue.Length > 0 || det.ScheduledTask.Length > 0))
+                {
+                    w.WriteStartObject("detect");
+                    if (det.RunValue.Length > 0) w.WriteString("runValue", det.RunValue);
+                    if (det.ScheduledTask.Length > 0) w.WriteString("scheduledTask", det.ScheduledTask);
+                    w.WriteEndObject();
+                }
                 if (o.Startup is { Name.Length: > 0 } st)
                 {
                     w.WriteStartObject("startup");
@@ -711,6 +729,7 @@ public sealed class PackageBuilder
                 foreach (var s in list) w.WriteStringValue(s);
                 w.WriteEndArray();
             }
+            WriteStrings(w, "removeRegistryKeys", p.Uninstall.RemoveRegistryKeys);
             w.WriteStartObject("userData");
             WriteStrings(w, "paths", p.Uninstall.UserData.Paths);
             w.WriteBoolean("default", p.Uninstall.UserData.Default);
@@ -721,6 +740,7 @@ public sealed class PackageBuilder
             WriteStrings(w, "traceSessions", ec.TraceSessions);
             WriteStrings(w, "scheduledTasks", ec.ScheduledTasks);
             WriteStrings(w, "removeData", ec.RemoveData);
+            WriteStrings(w, "removeRegistryKeys", ec.RemoveRegistryKeys);
             w.WriteStartArray("serviceAccess");
             foreach (var s in ec.ServiceAccess)
             {

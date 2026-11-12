@@ -70,7 +70,44 @@ public static partial class ExtensionValidator
         var root = DataRoots.FirstOrDefault(r => t.StartsWith(r, StringComparison.Ordinal));
         return root is not null && PathRules.TryNormalizeRelative(t[root.Length..], out _, out _);
     }
+    /// <summary>A data template, or {InstallDir}\X for something the app writes into its own folder (not the installer's .fsetup).</summary>
+    private static bool IsDataOrInstallDirTemplate(string t)
+    {
+        const string installDir = @"{InstallDir}\";
+        if (!t.StartsWith(installDir, StringComparison.Ordinal)) return IsDataTemplate(t);
+        return PathRules.TryNormalizeRelative(t[installDir.Length..], out var rel, out _) &&
+               !rel.Split('\\')[0].Equals(".fsetup", StringComparison.OrdinalIgnoreCase);
+    }
     private static bool IsLnkName(string n) => PathRules.IsValidComponent(n, out _) && n.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase);
+    /// <summary>"App.lnk", or "Folder\App.lnk" for a Start menu folder.</summary>
+    private static bool IsShortcutName(string n)
+    {
+        var parts = n.Split('\\');
+        return parts.Length switch { 1 => IsLnkName(n), 2 => PathRules.IsValidComponent(parts[0], out _) && IsLnkName(parts[1]), _ => false };
+    }
+    private static readonly string[] SharedRegistryTrees = ["Microsoft", "Classes", "Policies", "Wow6432Node", "RegisteredApplications", "Clients"];
+    /// <summary>HKCU\Software\Vendor[\...] or HKLM\Software\Vendor[\...], never a tree other software shares (same rule as the installer).</summary>
+    public static bool IsRemovableRegistryKey(string key, string? hive = null)
+    {
+        if (key.Length > 255 || !(key.StartsWith(@"HKCU\", StringComparison.Ordinal) || key.StartsWith(@"HKLM\", StringComparison.Ordinal))) return false;
+        if (hive is not null && !key.StartsWith(hive + @"\", StringComparison.Ordinal)) return false;
+        var parts = key[5..].Split('\\');
+        return parts.Length >= 2 && parts[0].Equals("Software", StringComparison.OrdinalIgnoreCase) &&
+               parts.All(x => x.Length is > 0 and <= 128 && x.All(c => c >= 0x20)) &&
+               !SharedRegistryTrees.Contains(parts[1], StringComparer.OrdinalIgnoreCase);
+    }
+    /// <summary>A relative path whose file name may use * and ? (e.g. "unins*.exe"), with at least one literal character.</summary>
+    public static bool IsFilePattern(string pattern)
+    {
+        var norm = pattern.Replace('/', '\\');
+        if (norm.Length is 0 or > 260) return false;
+        var slash = norm.LastIndexOf('\\');
+        var folder = slash < 0 ? "" : norm[..slash];
+        var name = slash < 0 ? norm : norm[(slash + 1)..];
+        if (folder.Length > 0 && (folder.IndexOfAny(['*', '?']) >= 0 || !PathRules.TryNormalizeRelative(folder, out var rel, out _) ||
+                                  rel.Split('\\')[0].Equals(".fsetup", StringComparison.OrdinalIgnoreCase))) return false;
+        return PathRules.IsValidComponent(name.Replace('*', 'x').Replace('?', 'x'), out _) && name.Trim('*', '?', '.').Length > 0;
+    }
     private static bool IsTaskOrValueName(string n) => n.Length is > 0 and <= 128 && n.All(c => c >= 0x20 && !"\\/:*?\"<>|".Contains(c));
 
     public static void Validate(SetupProject p, DiagnosticBag d)
@@ -126,15 +163,20 @@ public static partial class ExtensionValidator
         foreach (var (list, name, check) in new (List<string>, string, Func<string, bool>)[] {
                      (c0.RemoveScheduledTasks, "install.cleanup.removeScheduledTasks", IsTaskOrValueName),
                      (c0.RemoveRunValues, "install.cleanup.removeRunValues", IsTaskOrValueName),
-                     (c0.RemoveShortcuts, "install.cleanup.removeShortcuts", IsLnkName),
+                     (c0.RemoveShortcuts, "install.cleanup.removeShortcuts", IsShortcutName),
                      (c0.RemoveUninstallKeys, "install.cleanup.removeUninstallKeys", n => IsTaskOrValueName(n) && !n.Equals(p.App.Id, StringComparison.OrdinalIgnoreCase)),
-                     (p.Uninstall.RemoveShortcuts, "uninstall.removeShortcuts", IsLnkName) })
+                     (c0.RemoveFiles, "install.cleanup.removeFiles", IsFilePattern),
+                     (p.Uninstall.RemoveShortcuts, "uninstall.removeShortcuts", IsShortcutName),
+                     (p.Uninstall.RemoveRegistryKeys, "uninstall.removeRegistryKeys", k => IsRemovableRegistryKey(k, "HKCU")),
+                     (p.Uninstall.Elevated.RemoveRegistryKeys, "uninstall.elevated.removeRegistryKeys", k => IsRemovableRegistryKey(k)) })
         {
             if (list.Count > 32) d.Error("FS1652", name, "At most 32 entries.");
             foreach (var (n, i) in list.Select((n, i) => (n, i)))
                 if (!check(n)) d.Error("FS1653", $"{name}[{i}]", $"'{n}' is not a valid name here.");
         }
 
+        if (!string.IsNullOrEmpty(p.Install.StartMenuFolder) && (!PathRules.IsValidComponent(p.Install.StartMenuFolder, out _) || p.Install.StartMenuFolder.Length > 64))
+            d.Error("FS1667", "install.startMenuFolder", "A single folder name (max 64 characters), e.g. the publisher or app name.");
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (o, i) in p.Options.Select((o, i) => (o, i)))
         {
@@ -145,6 +187,10 @@ public static partial class ExtensionValidator
             if (o.Startup is not null && string.IsNullOrEmpty(p.App.MainExecutable))
                 d.Error("FS1665", $"options[{i}].startup", "Needs app.mainExecutable (the program that is started).");
             if (o.Label.Count == 0 || o.Label.Values.Any(string.IsNullOrWhiteSpace)) d.Error("FS1612", $"options[{i}].label", "Give the option a label (per language, or in the localization files plus one here).");
+            if (o.Detect is { } det && ((det.RunValue.Length > 0 && !IsTaskOrValueName(det.RunValue)) || (det.ScheduledTask.Length > 0 && !IsTaskPath(det.ScheduledTask))))
+                d.Error("FS1668", $"options[{i}].detect", @"runValue is a Run value name, scheduledTask a task name (folders: ""Folder\Task"").");
+            if (o.Required && (o.Detect is not null || o.QuietDefault is not null))
+                d.Warning("FS1669", $"options[{i}]", "A required option is always selected: detect and quietDefault are ignored.");
         }
         if (p.Options.Count > 16) d.Error("FS1613", "options", "At most 16 options.");
 
@@ -179,10 +225,9 @@ public static partial class ExtensionValidator
 
         foreach (var (t, i) in p.Uninstall.RemoveData.Select((t, i) => (t, i)))
         {
-            var root = DataRoots.FirstOrDefault(r => t.StartsWith(r, StringComparison.Ordinal));
-            if (root is null || !PathRules.TryNormalizeRelative(t[root.Length..], out _, out _))
+            if (!IsDataOrInstallDirTemplate(t))
             {
-                d.Error("FS1630", $"uninstall.removeData[{i}]", @"Must be {CommonAppData}\Folder, {LocalAppData}\Folder or {AppData}\Folder.");
+                d.Error("FS1630", $"uninstall.removeData[{i}]", @"Must be {CommonAppData}\Folder, {LocalAppData}\Folder, {AppData}\Folder or {InstallDir}\Folder.");
             }
         }
         foreach (var (t, i) in p.Uninstall.RemoveScheduledTasks.Select((t, i) => (t, i)))
@@ -195,7 +240,7 @@ public static partial class ExtensionValidator
         }
         var ec = p.Uninstall.Elevated;
         foreach (var (list, name, check, rule) in new (List<string>, string, Func<string, bool>, string)[] {
-                     (p.Uninstall.UserData.Paths, "uninstall.userData.paths", IsDataTemplate, @"{LocalAppData}\X, {AppData}\X or {CommonAppData}\X"),
+                     (p.Uninstall.UserData.Paths, "uninstall.userData.paths", IsDataOrInstallDirTemplate, @"{LocalAppData}\X, {AppData}\X, {CommonAppData}\X or {InstallDir}\X"),
                      (ec.IfExists, "uninstall.elevated.ifExists", IsDataTemplate, @"{LocalAppData}\X, {AppData}\X or {CommonAppData}\X"),
                      (ec.RemoveData, "uninstall.elevated.removeData", IsDataTemplate, @"{LocalAppData}\X, {AppData}\X or {CommonAppData}\X"),
                      (ec.TraceSessions, "uninstall.elevated.traceSessions", IsTaskOrValueName, "a trace session name"),

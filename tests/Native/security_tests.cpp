@@ -127,7 +127,9 @@ TEST(install_record_rejects_hostile_entries) {
 TEST(shortcut_paths_are_confined_to_scope_folders) {
     const std::wstring programs = path::KnownFolder(FOLDERID_Programs);
     CHECK(install::IsAllowedShortcutPath(path::Join(programs, L"App.lnk"), install::Scope::User));
-    CHECK(!install::IsAllowedShortcutPath(path::Join(programs, L"Sub\\App.lnk"), install::Scope::User));
+    CHECK(install::IsAllowedShortcutPath(path::Join(programs, L"Sub\\App.lnk"), install::Scope::User));  // startMenuFolder
+    CHECK(!install::IsAllowedShortcutPath(path::Join(programs, L"Sub\\Deeper\\App.lnk"), install::Scope::User));
+    CHECK(!install::IsAllowedShortcutPath(path::Join(path::KnownFolder(FOLDERID_Desktop), L"Sub\\App.lnk"), install::Scope::User));
     CHECK(!install::IsAllowedShortcutPath(path::Join(programs, L"App.exe"), install::Scope::User));
     CHECK(!install::IsAllowedShortcutPath(path::Join(programs, L"App.lnk"), install::Scope::Machine));
 }

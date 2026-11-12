@@ -124,6 +124,8 @@ MainWindow::MainWindow() {
                         });
                     }
                 });
+            // Passive mode (/passive, Inno /SILENT from an app's updater): no questions, straight to the progress page.
+            if (Hello()["passive"].asBool() && !channel.preview()) self->StartInstall();
         });
     });
 }
@@ -673,6 +675,11 @@ void MainWindow::OnDone(const Value& m) {
     canLaunch_ = !uninstall && result == "success" && m["canLaunch"].asBool();
     retryable_ = m["retryable"].asBool(true);
 
+    // Passive mode closes itself after a success (the bootstrapper relaunches the app if the updater asked for it).
+    if (result == "success" && Hello()["passive"].asBool()) {
+        Finish(false);
+        return;
+    }
     // "Launch when ready": start the app and close, like the App Installer.
     if (canLaunch_ && LaunchOffered() && LaunchCheck().IsChecked().Value() && !fsui::UiChannel::Get().preview()) {
         Finish(true);

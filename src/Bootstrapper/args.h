@@ -2,7 +2,8 @@
 // errors (exit code InvalidArguments), never silently ignored.
 //
 // Public switches (both "/x" and "--x" spellings, case-insensitive; values follow as the next argument or after '='):
-//   /quiet | /silent          no UI at all
+//   /quiet | /verysilent | /s no UI at all
+//   /passive | /silent        progress window only (no questions); Inno Setup's /SILENT
 //   /uninstall                remove the installed app
 //   /log <file>               write the log to this file
 //   /dir <path>               install location
@@ -29,6 +30,7 @@ enum class UiChoice { Auto, WinUI, Win32 };
 
 struct Args {
     bool quiet = false;
+    bool passive = false;  // /passive, Inno /SILENT: show progress, ask nothing, close when done (quiet wins)
     bool uninstall = false;
     bool help = false;
     std::wstring logPath;
@@ -41,7 +43,7 @@ struct Args {
     std::map<std::string, bool> choices;  // /option id=yes|no (package-defined options)
     std::string variant;                  // /variant id (package variant, e.g. shared or selfContained)
     bool removeUserData = false;          // /remove-user-data (uninstall)
-    bool relaunch = false;                // /relaunch, Inno /RELAUNCH=1: start the app after a quiet install (in-app updaters)
+    bool relaunch = false;                // /relaunch, Inno /RELAUNCH=1, NSIS-style /UPDATE: start the app after a quiet or passive install
     std::optional<std::vector<std::wstring>> tasks;  // Inno /TASKS (exact) or /MERGETASKS (added): option ids, desktopicon
     bool tasksMerge = false;
     std::wstring uiSimulate;
