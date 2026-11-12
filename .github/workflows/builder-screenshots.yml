@@ -37,8 +37,8 @@ jobs:
         run: dotnet build src/Builder/FluentSetup.Builder.csproj -c Release -p:Platform=x64 -nologo -v q
 
       - name: Screenshots
-        shell: pwsh
-        run: ./tests/UI/builder-screenshots.ps1 -Out out/builder-shots -Themes light,dark
+        shell: powershell
+        run: .\tests\UI\builder-screenshots.ps1 -Out out\builder-shots -Themes light,dark
 
       - uses: actions/upload-artifact@v4
         if: always()
