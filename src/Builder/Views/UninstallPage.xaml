@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.UninstallPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentSetup.Builder.Views"
+    xmlns:vm="using:FluentSetup.Builder.ViewModels"
+    Background="Transparent">
+    <ScrollViewer>
+        <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+            <TextBlock x:Uid="UninstallPageTitle" Style="{StaticResource PageTitleStyle}" AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock x:Uid="UninstallPageDescription" Style="{StaticResource PageDescriptionStyle}" />
+
+            <TextBlock x:Uid="UninstallSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE74D;" Style="{StaticResource RowIconStyle}" VerticalAlignment="Top" Margin="4,2,20,0" />
+                    <StackPanel Grid.Column="1" Spacing="8">
+                        <TextBlock x:Uid="UninstallRemovesTitle" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock x:Uid="UninstallRemoves" Style="{StaticResource RowDescriptionStyle}" />
+                        <TextBlock x:Uid="UninstallKeepsTitle" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,4,0,0" />
+                        <TextBlock x:Uid="UninstallKeeps" Style="{StaticResource RowDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- What the app created for itself -->
+            <TextBlock x:Uid="UninstallCleanupSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <StackPanel Spacing="16">
+                    <TextBlock x:Uid="UninstallCleanupDescription" Style="{StaticResource RowDescriptionStyle}" />
+                    <Grid ColumnSpacing="24" RowSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBox x:Uid="UninstallDataBox" Text="{x:Bind VM.UninstallDataText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="UninstallRegistryBox" Grid.Column="1" Text="{x:Bind VM.UninstallRegistryKeysText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="UninstallTasksBox" Grid.Row="1" Text="{x:Bind VM.UninstallScheduledTasksText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="UninstallRunValuesBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind VM.UninstallRunValuesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="UninstallShortcutsBox" Grid.Row="2" Text="{x:Bind VM.UninstallShortcutsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBlock x:Uid="UninstallPathsHelp" Grid.Row="2" Grid.Column="1" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Top" Margin="0,28,0,0" IsTextSelectionEnabled="True" />
+                    </Grid>
+                    <TextBlock Text="{x:Bind VM.Errors.UninstallCleanup, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UninstallCleanup), Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+
+            <!-- User data the user decides about -->
+            <TextBlock x:Uid="UninstallUserDataSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                    <StackPanel Spacing="16">
+                        <TextBlock x:Uid="UninstallUserDataDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        <TextBox x:Uid="UninstallUserDataBox" Text="{x:Bind VM.UserDataPathsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.UninstallUserData, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UninstallUserData), Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE73A;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="UninstallUserDataDefaultTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="UninstallUserDataDefaultDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.UserDataDefault, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="UninstallUserDataDefaultToggle" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <!-- Changes made with administrator rights -->
+            <TextBlock x:Uid="UninstallElevatedSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <StackPanel Spacing="16">
+                    <TextBlock x:Uid="UninstallElevatedDescription" Style="{StaticResource RowDescriptionStyle}" />
+                    <Grid ColumnSpacing="24" RowSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBox x:Uid="ElevatedIfExistsBox" Text="{x:Bind VM.ElevatedIfExistsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="ElevatedDataBox" Grid.Column="1" Text="{x:Bind VM.ElevatedDataText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="ElevatedTasksBox" Grid.Row="1" Text="{x:Bind VM.ElevatedScheduledTasksText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="ElevatedTraceBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind VM.ElevatedTraceSessionsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="ElevatedRegistryBox" Grid.Row="2" Text="{x:Bind VM.ElevatedRegistryKeysText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                    </Grid>
+                    <TextBlock Text="{x:Bind VM.Errors.UninstallElevated, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UninstallElevated), Mode=OneWay}" />
+
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                            <TextBlock x:Uid="ElevatedServiceTitle" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock x:Uid="ElevatedServiceDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Command="{x:Bind VM.AddServiceAccessCommand}" VerticalAlignment="Bottom">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE710;" FontSize="14" />
+                                <TextBlock x:Uid="ElevatedServiceAdd" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                    <ItemsControl ItemsSource="{x:Bind VM.ServiceAccessRows}" IsTabStop="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Spacing="8" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ServiceAccessRow">
+                                <StackPanel>
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="2*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <TextBox x:Uid="ServiceNameBox" Text="{x:Bind Service, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                        <TextBox x:Uid="ServiceRightsBox" Grid.Column="1" Text="{x:Bind RightsText, Mode=TwoWay}" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                        <Button x:Uid="RowRemove" Grid.Column="2" Command="{x:Bind RemoveCommand}">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </Grid>
+                                    <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

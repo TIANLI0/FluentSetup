@@ -88,6 +88,47 @@
                 </StackPanel>
             </Border>
 
+            <TextBlock x:Uid="AppearanceLanguageSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE8A5;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppearanceLicenseModeTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="AppearanceLicenseModeDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.LicenseModeIndex, Mode=TwoWay}" x:Uid="AppearanceLicenseModeCombo">
+                            <ComboBoxItem x:Uid="LicenseModeFirstInstall" /><ComboBoxItem x:Uid="LicenseModeAlways" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xF2B7;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppearanceLocalizationTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="AppearanceLocalizationDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            <TextBox Text="{x:Bind VM.LocalizationFolder, Mode=TwoWay}" Margin="0,8,0,0" IsSpellCheckEnabled="False" x:Uid="AppearanceLocalizationBox" />
+                            <TextBlock Text="{x:Bind VM.Errors.UiLocalization, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UiLocalization), Mode=OneWay}" />
+                        </StackPanel>
+                        <Button Grid.Column="2" x:Uid="FilesBrowse" Command="{x:Bind VM.BrowseLocalizationCommand}" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                    <StackPanel Spacing="16">
+                        <TextBox x:Uid="AppearanceLicensesBox" Text="{x:Bind VM.LicensesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.UiLicenses, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UiLicenses), Mode=OneWay}" />
+                        <StackPanel Spacing="4">
+                            <TextBox x:Uid="AppearanceStringsBox" Text="{x:Bind VM.StringsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                            <TextBlock x:Uid="AppearanceStringsHelp" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />
+                        </StackPanel>
+                        <TextBlock Text="{x:Bind VM.Errors.UiStrings, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UiStrings), Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
             <InfoBar x:Uid="AppearanceFallbackInfo" IsOpen="True" IsClosable="False" Severity="Informational" Margin="0,28,0,0" />
         </StackPanel>
     </ScrollViewer>

@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.PrerequisitesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentSetup.Builder.Views"
+    xmlns:vm="using:FluentSetup.Builder.ViewModels"
+    Background="Transparent">
+    <ScrollViewer>
+        <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+            <TextBlock x:Uid="PrereqPageTitle" Style="{StaticResource PageTitleStyle}" AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock x:Uid="PrereqPageDescription" Style="{StaticResource PageDescriptionStyle}" />
+
+            <TextBlock x:Uid="PrereqWindowsSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <!-- WebView2 -->
+                <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <Grid ColumnSpacing="16" Padding="0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE774;" Style="{StaticResource RowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Uid="PrereqWebView2Title" Style="{StaticResource RowTitleStyle}" />
+                                <TextBlock x:Uid="PrereqWebView2Description" Style="{StaticResource RowDescriptionStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.WebView2Required, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="PrereqWebView2Toggle" />
+                        </Grid>
+                    </Expander.Header>
+                    <StackPanel Spacing="16" Padding="40,4,0,4">
+                        <TextBox x:Uid="PrereqWebView2MinVersionBox" Text="{x:Bind VM.WebView2MinVersion, Mode=TwoWay}" IsSpellCheckEnabled="False" MaxWidth="360" HorizontalAlignment="Left" MinWidth="240" />
+                        <local:PrerequisiteSourceView Source="{x:Bind VM.WebView2Source}" />
+                        <TextBlock Text="{x:Bind VM.Errors.WebView2, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.WebView2), Mode=OneWay}" />
+                    </StackPanel>
+                </Expander>
+
+                <!-- Windows App Runtime -->
+                <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <Grid ColumnSpacing="16" Padding="0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE71D;" Style="{StaticResource RowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Uid="PrereqWarTitle" Style="{StaticResource RowTitleStyle}" />
+                                <TextBlock x:Uid="PrereqWarDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.WindowsAppRuntimeRequired, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="PrereqWarToggle" />
+                        </Grid>
+                    </Expander.Header>
+                    <StackPanel Spacing="16" Padding="40,4,0,4">
+                        <TextBox x:Uid="PrereqWarVersionBox" Text="{x:Bind VM.WindowsAppRuntimeVersion, Mode=TwoWay}" IsSpellCheckEnabled="False" MaxWidth="360" HorizontalAlignment="Left" MinWidth="240" />
+                        <local:PrerequisiteSourceView Source="{x:Bind VM.WindowsAppRuntimeSource}" />
+                        <TextBlock Text="{x:Bind VM.Errors.WindowsAppRuntime, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.WindowsAppRuntime), Mode=OneWay}" />
+                    </StackPanel>
+                </Expander>
+
+                <!-- .NET Framework -->
+                <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <Grid ColumnSpacing="16" Padding="0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE943;" Style="{StaticResource RowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Uid="PrereqNetFxTitle" Style="{StaticResource RowTitleStyle}" />
+                                <TextBlock x:Uid="PrereqNetFxDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" MinWidth="0" Width="160" ItemsSource="{x:Bind VM.NetFrameworkChoices}"
+                                      SelectedIndex="{x:Bind VM.NetFrameworkIndex, Mode=TwoWay}" x:Uid="PrereqNetFxCombo" />
+                        </Grid>
+                    </Expander.Header>
+                    <StackPanel Spacing="16" Padding="40,4,0,4">
+                        <ToggleSwitch x:Uid="PrereqNetFxSetupToggle" IsOn="{x:Bind VM.HasNetFrameworkSetup, Mode=TwoWay}" />
+                        <local:PrerequisiteSourceView Source="{x:Bind VM.NetFrameworkSource}" Visibility="{x:Bind VM.HasNetFrameworkSetup, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind VM.Errors.NetFramework, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.NetFramework), Mode=OneWay}" />
+                    </StackPanel>
+                </Expander>
+            </StackPanel>
+
+            <!-- .NET shared runtimes -->
+            <Grid Margin="0,28,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="PrereqDotNetSection" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock x:Uid="PrereqDotNetDescription" Style="{StaticResource RowDescriptionStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddDotNetCommand}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="PrereqAddDotNet" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoDotNet, Mode=OneWay}">
+                <TextBlock x:Uid="PrereqDotNetEmpty" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+            </Border>
+            <ItemsControl ItemsSource="{x:Bind VM.DotNetRows}" IsTabStop="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="4" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DotNetRow">
+                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <Expander.Header>
+                                <Grid ColumnSpacing="16" Padding="0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xE943;" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind SourceSummary, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                        <Button x:Uid="RowRemove" Command="{x:Bind RemoveCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Expander.Header>
+                            <StackPanel Spacing="16" Padding="40,4,0,4">
+                                <Grid ColumnSpacing="24">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <ComboBox x:Uid="DotNetRuntimeCombo" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind RuntimeIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content=".NET Desktop Runtime" />
+                                        <ComboBoxItem Content=".NET Runtime" />
+                                        <ComboBoxItem Content="ASP.NET Core Runtime" />
+                                    </ComboBox>
+                                    <TextBox x:Uid="DotNetVersionBox" Grid.Column="1" Text="{x:Bind Version, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <ComboBox x:Uid="DotNetRollForwardCombo" Grid.Column="2" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind RollForwardIndex, Mode=TwoWay}">
+                                        <ComboBoxItem x:Uid="RollForwardPatch" />
+                                        <ComboBoxItem x:Uid="RollForwardMinor" />
+                                        <ComboBoxItem x:Uid="RollForwardMajor" />
+                                    </ComboBox>
+                                </Grid>
+                                <local:PrerequisiteSourceView Source="{x:Bind}" />
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

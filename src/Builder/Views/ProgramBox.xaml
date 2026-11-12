@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="FluentSetup.Builder.Views.ProgramBox"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    IsTabStop="False">
+    <!-- A text box for a program among the app's files, with the .exe files as suggestions (an editable ComboBox does
+         not show text set before it is loaded). -->
+    <AutoSuggestBox x:Name="Box" TextChanged="OnTextChanged" QuerySubmitted="OnQuerySubmitted" UpdateTextOnSelect="True">
+        <AutoSuggestBox.QueryIcon>
+            <FontIcon Glyph="&#xE70D;" FontSize="12" />
+        </AutoSuggestBox.QueryIcon>
+    </AutoSuggestBox>
+</UserControl>

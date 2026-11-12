@@ -40,6 +40,11 @@ public sealed partial class FieldErrors : ObservableObject
     private Dictionary<string, string> _errors = [];
     public string Get(string field) => _errors.TryGetValue(field, out var m) ? m : "";
 
+    /// <summary>Errors of these fields and everything below them ("a.b" covers "a.b", "a.b.c", "a.b[0]" and "a.b/x").</summary>
+    public string Under(params string[] prefixes) => string.Join(Environment.NewLine, _errors
+        .Where(kv => prefixes.Any(p => kv.Key == p || (kv.Key.StartsWith(p, StringComparison.Ordinal) && kv.Key[p.Length] is '.' or '[' or '/')))
+        .Select(kv => kv.Value));
+
     public void Set(IEnumerable<Diagnostic> diagnostics)
     {
         _errors = diagnostics.Where(d => d.Severity == Severity.Error)
@@ -63,6 +68,30 @@ public sealed partial class FieldErrors : ObservableObject
     public string OutputFileName => Get("output.fileName");
     public string OutputDirectory => Get("output.directory");
     public string Signing => string.Join(Environment.NewLine, new[] { Get("signing"), Get("signing.certificateFile"), Get("signing.timestampUrl") }.Where(s => s.Length > 0));
+
+    // Install, upgrade and uninstall
+    public string InstallStartMenuFolder => Get("install.startMenuFolder");
+    public string InstallIntegration => Under("install.addToPath", "install.ngen");
+    public string InstallLegacy => Under("install.adoptExistingInstall", "install.legacyUninstallKeys");
+    public string InstallRunning => Under("install.closeProcesses", "install.closeCommand", "install.relaunchArguments");
+    public string InstallCleanup => Under("install.cleanup");
+    public string UninstallCleanup => Under("uninstall.removeData", "uninstall.removeScheduledTasks", "uninstall.removeRunValues", "uninstall.removeShortcuts", "uninstall.removeRegistryKeys");
+    public string UninstallUserData => Under("uninstall.userData");
+    public string UninstallElevated => Under("uninstall.elevated.ifExists", "uninstall.elevated.traceSessions", "uninstall.elevated.scheduledTasks", "uninstall.elevated.removeData", "uninstall.elevated.removeRegistryKeys");
+
+    // Prerequisites
+    public string NetFramework => Under("requirements.netFramework", "requirements.netFrameworkSetup");
+    public string WebView2 => Under("requirements.webView2");
+    public string WindowsAppRuntime => Under("requirements.windowsAppRuntime");
+
+    // Options, actions, variants, appearance, variables
+    public string Options => Get("options");
+    public string Actions => Get("actions");
+    public string FilesVariants => Get("files.variants");
+    public string OutputVariants => Get("output.variants");
+    public string UiLicenses => Under("ui.licenseMode", "ui.licenses");
+    public string UiLocalization => Under("ui.localization");
+    public string UiStrings => Under("ui.strings");
 }
 
 /// <summary>The whole Builder state: one open project, its validation, files, builds and history.</summary>
@@ -95,6 +124,7 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var r in Settings.RecentProjects) RecentProjects.Add(r);
         ExtraSources.CollectionChanged += (_, _) => Touch();
         PropertyChanged += OnAnyPropertyChanged;
+        InitAdvanced();
     }
 
     // ---- project identity ------------------------------------------------------------------------------------
@@ -209,7 +239,14 @@ public sealed partial class MainViewModel : ObservableObject
         DesktopShortcutIndex != 0 ? Loc.Get("Overview_Desktop") : null,
     }.Where(s => s is not null)) is { Length: > 0 } s ? s : Loc.Get("Overview_NoShortcuts");
     public string AppearanceSummary => $"{Loc.Get("Theme_" + ThemeIndex)} · {Loc.Get("Backdrop_" + BackdropIndex)}{(string.IsNullOrEmpty(License) ? "" : " · " + Loc.Get("Overview_License"))}";
-    public string OutputSummary => $"{ProjectValidator.ExpandFileName(OutputFileName, BuildModel())} · {(ArchitectureIndex == 1 ? "ARM64" : "x64")}";
+    public string OutputSummary
+    {
+        get
+        {
+            var model = ExpandedModel();
+            return $"{ProjectValidator.ExpandFileName(model.Output.FileName, model)} · {(ArchitectureIndex == 1 ? "ARM64" : "x64")}";
+        }
+    }
     public string RuntimeStatus
     {
         get
@@ -302,7 +339,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (name is nameof(ScopeIndex) or nameof(UserDir) or nameof(MachineDir)) OnPropertyChanged(nameof(InstallSummary));
         if (name is nameof(StartMenuShortcutIndex) or nameof(DesktopShortcutIndex)) OnPropertyChanged(nameof(ShortcutSummary));
         if (name is nameof(ThemeIndex) or nameof(BackdropIndex) or nameof(License)) OnPropertyChanged(nameof(AppearanceSummary));
-        if (name is nameof(OutputFileName) or nameof(ArchitectureIndex) or nameof(AppName) or nameof(Version)) OnPropertyChanged(nameof(OutputSummary));
+        if (name is nameof(OutputFileName) or nameof(ArchitectureIndex) or nameof(AppName) or nameof(Version) or nameof(AppId)) OnPropertyChanged(nameof(OutputSummary));
         if (name == nameof(Source) && !_loading) _ = RefreshFilesAsync();
 
         if (_loading || NonProjectProperties.Contains(name) || name.Length == 0) return;
@@ -320,6 +357,7 @@ public sealed partial class MainViewModel : ObservableObject
     // ---- model mapping ---------------------------------------------------------------------------------------
 
     private static readonly string[] Scopes = ["user", "machine", "userOrMachine"];
+    private static readonly string[] DefaultScopes = ["user", "machine"];
     private static readonly string[] Offers = ["off", "on", "optionalOff", "optionalOn"];
     private static readonly string[] Themes = ["system", "light", "dark"];
     private static readonly string[] Backdrops = ["mica", "micaAlt", "none"];
@@ -333,9 +371,7 @@ public sealed partial class MainViewModel : ObservableObject
         return i < 0 ? fallback : i;
     }
 
-    private static string Lines(IEnumerable<string> items) => string.Join(Environment.NewLine, items);
-    private static List<string> SplitLines(string text) =>
-        text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    private static string Lines(IEnumerable<string>? items) => TextForms.Lines(items);
 
     private void LoadFrom(SetupProject p)
     {
@@ -365,6 +401,7 @@ public sealed partial class MainViewModel : ObservableObject
             CompressionIndex = IndexOf(Compressions, p.Output.Compression, 1); IncludeWinUI = p.Output.IncludeWinUI;
             SigningEnabled = p.Signing.Enabled; CertificateThumbprint = p.Signing.CertificateThumbprint; CertificateFile = p.Signing.CertificateFile;
             PasswordEnvironmentVariable = p.Signing.PasswordEnvironmentVariable; TimestampUrl = p.Signing.TimestampUrl; SignToolPath = p.Signing.SignToolPath;
+            LoadAdvanced(p);
         }
         finally
         {
@@ -384,24 +421,32 @@ public sealed partial class MainViewModel : ObservableObject
         var p = ProjectSerializer.Clone(_model);
         p.App.Id = AppId.Trim(); p.App.Name = AppName.Trim(); p.App.Publisher = Publisher.Trim(); p.App.Version = Version.Trim();
         p.App.Description = Description; p.App.Website = Website.Trim(); p.App.Icon = Icon.Trim(); p.App.MainExecutable = MainExecutable.Trim();
-        p.Files.Source = Source.Trim(); p.Files.Include = SplitLines(IncludeText); p.Files.Exclude = SplitLines(ExcludeText);
-        p.Files.Preserve = SplitLines(PreserveText); p.Files.EmptyDirectories = SplitLines(EmptyDirectoriesText);
+        p.Files.Source = Source.Trim(); p.Files.Include = TextForms.FromLines(IncludeText, p.Files.Include); p.Files.Exclude = TextForms.FromLines(ExcludeText, p.Files.Exclude);
+        p.Files.Preserve = TextForms.FromLines(PreserveText, p.Files.Preserve); p.Files.EmptyDirectories = TextForms.FromLines(EmptyDirectoriesText, p.Files.EmptyDirectories);
         p.Files.Extra = ExtraSources.Where(e => !string.IsNullOrWhiteSpace(e.Source)).Select(e => new ExtraSource { Source = e.Source.Trim(), Target = e.Target.Trim() }).ToList();
-        p.Install.Scope = Scopes[Math.Clamp(ScopeIndex, 0, 2)]; p.Install.DefaultScope = DefaultScopeIndex == 1 ? "machine" : "user";
-        if (p.Install.Scope != "userOrMachine") p.Install.DefaultScope = p.Install.Scope;
+        // Choices keep the stored value while their selection is unchanged (also values the lists do not know).
+        var scope = PickFrom(Scopes, ScopeIndex, p.Install.Scope, 0);
+        var defaultScope = PickFrom(DefaultScopes, DefaultScopeIndex, p.Install.DefaultScope, 0);
+        if (scope != "userOrMachine" && scope != p.Install.Scope) defaultScope = scope;
+        p.Install.Scope = scope; p.Install.DefaultScope = defaultScope;
         p.Install.UserDir = UserDir.Trim(); p.Install.MachineDir = MachineDir.Trim(); p.Install.AllowCustomDir = AllowCustomDir;
-        p.Install.DesktopShortcut = Offers[Math.Clamp(DesktopShortcutIndex, 0, 3)]; p.Install.StartMenuShortcut = Offers[Math.Clamp(StartMenuShortcutIndex, 0, 3)];
-        p.Install.LaunchAfterInstall = Offers[Math.Clamp(LaunchAfterIndex, 0, 3)]; p.Install.AllowDowngrade = AllowDowngrade;
+        p.Install.DesktopShortcut = PickFrom(Offers, DesktopShortcutIndex, p.Install.DesktopShortcut, 2);
+        p.Install.StartMenuShortcut = PickFrom(Offers, StartMenuShortcutIndex, p.Install.StartMenuShortcut, 1);
+        p.Install.LaunchAfterInstall = PickFrom(Offers, LaunchAfterIndex, p.Install.LaunchAfterInstall, 3); p.Install.AllowDowngrade = AllowDowngrade;
         p.Install.MinWindowsBuild = double.IsNaN(MinWindowsBuild) ? 0 : (int)MinWindowsBuild;
-        p.Ui.Title = UiTitle; p.Ui.WelcomeText = WelcomeText; p.Ui.FinishText = FinishText; p.Ui.Theme = Themes[Math.Clamp(ThemeIndex, 0, 2)];
-        p.Ui.Backdrop = Backdrops[Math.Clamp(BackdropIndex, 0, 2)]; p.Ui.UseSystemAccent = UseSystemAccent; p.Ui.AccentColor = AccentColor.Trim();
-        p.Ui.License = License.Trim(); p.Ui.DefaultLanguage = Languages[Math.Clamp(LanguageIndex, 0, Languages.Length - 1)];
-        p.Output.Directory = OutputDirectory.Trim(); p.Output.FileName = OutputFileName.Trim(); p.Output.Architecture = Architectures[Math.Clamp(ArchitectureIndex, 0, 1)];
-        p.Output.Compression = Compressions[Math.Clamp(CompressionIndex, 0, 2)]; p.Output.IncludeWinUI = IncludeWinUI;
+        p.Ui.Title = UiTitle; p.Ui.WelcomeText = WelcomeText; p.Ui.FinishText = FinishText; p.Ui.Theme = PickFrom(Themes, ThemeIndex, p.Ui.Theme, 0);
+        p.Ui.Backdrop = PickFrom(Backdrops, BackdropIndex, p.Ui.Backdrop, 0); p.Ui.UseSystemAccent = UseSystemAccent; p.Ui.AccentColor = AccentColor.Trim();
+        p.Ui.License = License.Trim(); p.Ui.DefaultLanguage = PickFrom(Languages, LanguageIndex, p.Ui.DefaultLanguage, 0);
+        p.Output.Directory = OutputDirectory.Trim(); p.Output.FileName = OutputFileName.Trim(); p.Output.Architecture = PickFrom(Architectures, ArchitectureIndex, p.Output.Architecture, 0);
+        p.Output.Compression = PickFrom(Compressions, CompressionIndex, p.Output.Compression, 1); p.Output.IncludeWinUI = IncludeWinUI;
         p.Signing.Enabled = SigningEnabled; p.Signing.CertificateThumbprint = CertificateThumbprint.Trim(); p.Signing.CertificateFile = CertificateFile.Trim();
         p.Signing.PasswordEnvironmentVariable = PasswordEnvironmentVariable.Trim(); p.Signing.TimestampUrl = TimestampUrl.Trim(); p.Signing.SignToolPath = SignToolPath.Trim();
+        ApplyAdvanced(p);
         return p;
     }
+
+    /// <summary>The project with $(Name) placeholders replaced: what a build uses (validation, files, preview).</summary>
+    public SetupProject ExpandedModel(DiagnosticBag? diagnostics = null) => ProjectVariables.Expand(BuildModel(), null, diagnostics);
 
     // ---- validation ------------------------------------------------------------------------------------------
 
@@ -410,9 +455,13 @@ public sealed partial class MainViewModel : ObservableObject
     public void Validate()
     {
         if (!HasProject) return;
-        var bag = ProjectValidator.Validate(BuildModel(), ProjectDirectory);
-        var all = bag.Items.Concat(_collectorDiagnostics).ToList();
+        // Validate what a build validates: the project with its $(Name) placeholders replaced.
+        var variableBag = new DiagnosticBag();
+        var bag = ProjectValidator.Validate(ExpandedModel(variableBag), ProjectDirectory);
+        var all = bag.Items.Concat(variableBag.Items).Concat(_collectorDiagnostics).ToList();
         Errors.Set(all);
+        UpdateRowErrors();
+        OnPropertyChanged(nameof(OutputSummary));
         Problems.Clear();
         foreach (var d in all.Where(d => d.Severity != Severity.Info).OrderByDescending(d => d.Severity)) Problems.Add(ToRow(d));
         ErrorCount = all.Count(d => d.Severity == Severity.Error);
@@ -426,12 +475,24 @@ public sealed partial class MainViewModel : ObservableObject
         d.Severity.ToString(), d.Severity == Severity.Error ? "" : d.Severity == Severity.Warning ? "" : "",
         d.Code, d.Field, d.Message, PageForField(d.Field));
 
+    private static readonly string[] UpgradeFields =
+        ["install.allowDowngrade", "install.adoptExistingInstall", "install.legacyUninstallKeys", "install.closeProcesses", "install.closeCommand", "install.relaunchArguments", "install.cleanup"];
+
+    /// <summary>True for <paramref name="prefix"/> itself and anything below it (".x", "[0]", "/file").</summary>
+    private static bool IsFieldUnder(string field, string prefix) =>
+        field == prefix || (field.StartsWith(prefix, StringComparison.Ordinal) && field[prefix.Length] is '.' or '[' or '/');
+
     public static string PageForField(string field) => field switch
     {
         _ when field.StartsWith("app.", StringComparison.Ordinal) => "app",
+        _ when IsFieldUnder(field, "output.variants") => "files",
         _ when field.StartsWith("files", StringComparison.Ordinal) => "files",
-        "install.allowDowngrade" => "upgrade",
+        _ when UpgradeFields.Any(f => IsFieldUnder(field, f)) => "upgrade",
         _ when field.StartsWith("install.", StringComparison.Ordinal) => "install",
+        _ when IsFieldUnder(field, "requirements") => "prerequisites",
+        _ when IsFieldUnder(field, "options") || IsFieldUnder(field, "actions") => "options",
+        _ when IsFieldUnder(field, "uninstall") => "uninstall",
+        _ when IsFieldUnder(field, "variables") => "build",
         "ui.license" or "ui.defaultLanguage" => "app",
         _ when field.StartsWith("ui.", StringComparison.Ordinal) => "appearance",
         "output.fileName" => "app",
@@ -448,7 +509,7 @@ public sealed partial class MainViewModel : ObservableObject
         _collectCts?.Cancel();
         var cts = _collectCts = new CancellationTokenSource();
         IsCollecting = true;
-        var model = BuildModel();
+        var model = ExpandedModel();
         var dir = ProjectDirectory;
         try
         {
@@ -461,10 +522,14 @@ public sealed partial class MainViewModel : ObservableObject
             FilesSummary = result.Files.Count == 0 ? Loc.Get("Files_None") : Loc.Format("Files_Summary", result.Files.Count, PackageBuilder.Format(result.TotalSize))
                            + (result.Files.Count > Files.Count ? " " + Loc.Format("Files_Truncated", Files.Count) : "");
             var current = MainExecutable;
-            ExecutableChoices.Clear();
-            foreach (var exe in result.Files.Where(f => f.RelativePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)).Select(f => f.RelativePath)) ExecutableChoices.Add(exe);
+            var choices = result.Files.Where(f => f.RelativePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)).Select(f => f.RelativePath).ToList();
             // Keep a configured program visible even if it is not (yet) among the files; validation flags it.
-            if (!string.IsNullOrWhiteSpace(current) && !ExecutableChoices.Any(e => string.Equals(e, current.Replace('/', '\\'), StringComparison.OrdinalIgnoreCase))) ExecutableChoices.Insert(0, current);
+            if (!string.IsNullOrWhiteSpace(current) && !choices.Any(e => string.Equals(e, current.Replace('/', '\\'), StringComparison.OrdinalIgnoreCase))) choices.Insert(0, current);
+            if (!choices.SequenceEqual(ExecutableChoices, StringComparer.Ordinal))
+            {
+                ExecutableChoices.Clear();
+                foreach (var exe in choices) ExecutableChoices.Add(exe);
+            }
             if (!string.Equals(MainExecutable, current, StringComparison.Ordinal)) MainExecutable = current;
             OnPropertyChanged(nameof(MainExecutableItem));
             _collectorDiagnostics = result.Diagnostics.Items.ToList();
@@ -754,7 +819,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (!HasProject) return;
         try
         {
-            PreviewLauncher.Launch(BuildModel(), ProjectDirectory, PayloadBytes, scenario ?? "install");
+            PreviewLauncher.Launch(ExpandedModel(), ProjectDirectory, PayloadBytes, scenario ?? "install");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.ComponentModel.Win32Exception)
         {
@@ -767,7 +832,8 @@ public sealed partial class MainViewModel : ObservableObject
     private void LoadHistory()
     {
         History.Clear();
-        foreach (var r in BuildHistoryStore.Load(AppId).Take(100)) History.Add(new HistoryRow { Report = r });
+        // Builds record the expanded id (app.id may use a $(Name) placeholder).
+        foreach (var r in BuildHistoryStore.Load(ExpandedModel().App.Id).Take(100)) History.Add(new HistoryRow { Report = r });
         OnPropertyChanged(nameof(HasHistory));
         OnPropertyChanged(nameof(HasNoHistory));
     }

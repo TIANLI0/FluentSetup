@@ -144,6 +144,46 @@
                 </Expander>
             </StackPanel>
 
+            <!-- $(Name) values; fluentsetup build -D Name=value overrides them -->
+            <Grid Margin="0,28,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="BuildVariablesSection" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock x:Uid="BuildVariablesDescription" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddVariableCommand}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="BuildVariablesAdd" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoVariables, Mode=OneWay}">
+                <TextBlock x:Uid="BuildVariablesEmpty" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+            </Border>
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,16" Visibility="{x:Bind local:Converters.VisibleIfNot(VM.HasNoVariables), Mode=OneWay}">
+                <ItemsControl ItemsSource="{x:Bind VM.VariableRows}" IsTabStop="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Spacing="8" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:VariableRow">
+                            <StackPanel>
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="2*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <TextBox x:Uid="VariableNameBox" Text="{x:Bind Name, Mode=TwoWay}" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    <TextBox x:Uid="VariableValueBox" Grid.Column="1" Text="{x:Bind Value, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <Button x:Uid="RowRemove" Grid.Column="2" Command="{x:Bind RemoveCommand}">
+                                        <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                    </Button>
+                                </Grid>
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
             <TextBlock x:Uid="BuildLogSection" Style="{StaticResource SectionHeaderStyle}" />
             <Border Style="{StaticResource RowCardStyle}" Padding="0" MinHeight="0">
                 <Grid>

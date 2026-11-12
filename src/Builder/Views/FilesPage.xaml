@@ -64,6 +64,82 @@
                 </Grid>
             </Expander>
 
+            <!-- Variants: alternative builds of the app, each with its own source folder -->
+            <Grid Margin="0,28,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="VariantsSection" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock x:Uid="VariantsDescription" Style="{StaticResource RowDescriptionStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddVariantCommand}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="VariantsAdd" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <ItemsControl ItemsSource="{x:Bind VM.VariantRows}" IsTabStop="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="4" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:VariantRow">
+                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <Expander.Header>
+                                <Grid ColumnSpacing="16" Padding="0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xE8F1;" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                        <Button x:Uid="RowMoveUp" Command="{x:Bind MoveUpCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Uid="RowMoveDown" Command="{x:Bind MoveDownCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE70D;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Uid="RowRemove" Command="{x:Bind RemoveCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Expander.Header>
+                            <StackPanel Spacing="16" Padding="40,4,0,4">
+                                <Grid ColumnSpacing="24" RowSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <TextBox x:Uid="VariantIdBox" Text="{x:Bind Id, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <CheckBox x:Uid="VariantDefaultCheck" Grid.Column="1" IsChecked="{x:Bind Default, Mode=TwoWay}" VerticalAlignment="Bottom" />
+                                    <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <TextBox x:Uid="VariantSourceBox" Text="{x:Bind Source, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                        <Button x:Uid="FilesBrowse" Grid.Column="1" Command="{x:Bind BrowseCommand}" VerticalAlignment="Bottom" />
+                                    </Grid>
+                                    <TextBox x:Uid="VariantLabelBox" Grid.Row="2" Text="{x:Bind LabelText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    <TextBox x:Uid="VariantDescriptionBox" Grid.Row="2" Grid.Column="1" Text="{x:Bind DescriptionText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                </Grid>
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Border Style="{StaticResource RowCardStyle}" Margin="0,4,0,0" Visibility="{x:Bind VM.HasVariants, Mode=OneWay}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE7B8;" Style="{StaticResource RowIconStyle}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Uid="VariantsOutputTitle" Style="{StaticResource RowTitleStyle}" />
+                        <TextBlock x:Uid="VariantsOutputDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        <TextBlock Text="{x:Bind VM.Errors.OutputVariants, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.OutputVariants), Mode=OneWay}" />
+                    </StackPanel>
+                    <TextBox Grid.Column="2" Text="{x:Bind VM.OutputVariantsText, Mode=TwoWay}" Width="240" VerticalAlignment="Center" IsSpellCheckEnabled="False" x:Uid="VariantsOutputBox" />
+                </Grid>
+            </Border>
+            <TextBlock Text="{x:Bind VM.Errors.FilesVariants, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.FilesVariants), Mode=OneWay}" />
+
             <Grid Margin="0,28,0,8">
                 <TextBlock x:Uid="FilesListSection" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
                 <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">

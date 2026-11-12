@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.OptionsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentSetup.Builder.Views"
+    xmlns:vm="using:FluentSetup.Builder.ViewModels"
+    Background="Transparent">
+    <ScrollViewer>
+        <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+            <TextBlock x:Uid="OptionsPageTitle" Style="{StaticResource PageTitleStyle}" AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock x:Uid="OptionsPageDescription" Style="{StaticResource PageDescriptionStyle}" />
+
+            <!-- Options -->
+            <Grid Margin="0,28,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="OptionsSection" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock x:Uid="OptionsSectionDescription" Style="{StaticResource RowDescriptionStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddOptionCommand}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="OptionsAdd" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoOptions, Mode=OneWay}">
+                <TextBlock x:Uid="OptionsEmpty" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+            </Border>
+            <ItemsControl ItemsSource="{x:Bind VM.OptionRows}" IsTabStop="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="4" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:OptionRow">
+                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <Expander.Header>
+                                <Grid ColumnSpacing="16" Padding="0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xE762;" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                        <Button x:Uid="RowMoveUp" Command="{x:Bind MoveUpCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Uid="RowMoveDown" Command="{x:Bind MoveDownCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE70D;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Uid="RowRemove" Command="{x:Bind RemoveCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Expander.Header>
+                            <StackPanel Spacing="16" Padding="40,4,0,4">
+                                <Grid ColumnSpacing="24" RowSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <TextBox x:Uid="OptionIdBox" Text="{x:Bind Id, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <ComboBox x:Uid="OptionQuietCombo" Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind QuietDefaultIndex, Mode=TwoWay}">
+                                        <ComboBoxItem x:Uid="OptionQuietAsDefault" />
+                                        <ComboBoxItem x:Uid="OptionQuietOn" />
+                                        <ComboBoxItem x:Uid="OptionQuietOff" />
+                                    </ComboBox>
+                                    <TextBox x:Uid="OptionLabelBox" Grid.Row="1" Grid.ColumnSpan="2" Text="{x:Bind LabelText, Mode=TwoWay}" AcceptsReturn="True"
+                                             MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    <CheckBox x:Uid="OptionDefaultCheck" Grid.Row="2" IsChecked="{x:Bind Default, Mode=TwoWay}" />
+                                    <CheckBox x:Uid="OptionRequiredCheck" Grid.Row="2" Grid.Column="1" IsChecked="{x:Bind Required, Mode=TwoWay}" />
+                                </Grid>
+
+                                <StackPanel Spacing="8">
+                                    <CheckBox x:Uid="OptionStartupCheck" IsChecked="{x:Bind HasStartup, Mode=TwoWay}" />
+                                    <Grid ColumnSpacing="24" Visibility="{x:Bind HasStartup, Mode=OneWay}" Margin="28,0,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <TextBox x:Uid="OptionStartupNameBox" Text="{x:Bind StartupName, Mode=TwoWay}" IsSpellCheckEnabled="False" VerticalAlignment="Top" />
+                                        <TextBox x:Uid="OptionStartupArgsBox" Grid.Column="1" Text="{x:Bind StartupArgumentsText, Mode=TwoWay}" AcceptsReturn="True"
+                                                 MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Spacing="8">
+                                    <CheckBox x:Uid="OptionDetectCheck" IsChecked="{x:Bind HasDetect, Mode=TwoWay}" />
+                                    <Grid ColumnSpacing="24" Visibility="{x:Bind HasDetect, Mode=OneWay}" Margin="28,0,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <TextBox x:Uid="OptionDetectRunValueBox" Text="{x:Bind DetectRunValue, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                        <TextBox x:Uid="OptionDetectTaskBox" Grid.Column="1" Text="{x:Bind DetectScheduledTask, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{x:Bind VM.Errors.Options, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.Options), Mode=OneWay}" />
+
+            <!-- Actions -->
+            <Grid Margin="0,28,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="ActionsSection" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock x:Uid="ActionsSectionDescription" Style="{StaticResource RowDescriptionStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddActionCommand}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="ActionsAdd" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoActions, Mode=OneWay}">
+                <TextBlock x:Uid="ActionsEmpty" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+            </Border>
+            <ItemsControl ItemsSource="{x:Bind VM.ActionRows}" IsTabStop="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="4" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ActionRow">
+                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <Expander.Header>
+                                <Grid ColumnSpacing="16" Padding="0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xE768;" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                        <Button x:Uid="RowMoveUp" Command="{x:Bind MoveUpCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Uid="RowMoveDown" Command="{x:Bind MoveDownCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE70D;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Uid="RowRemove" Command="{x:Bind RemoveCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Expander.Header>
+                            <StackPanel Spacing="16" Padding="40,4,0,4">
+                                <Grid ColumnSpacing="24" RowSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <local:ProgramBox x:Uid="ActionRunCombo" Grid.ColumnSpan="2" Choices="{x:Bind ExecutableChoices}" Text="{x:Bind Run, Mode=TwoWay}" />
+                                    <TextBox x:Uid="ActionArgumentsBox" Grid.Row="1" Text="{x:Bind ArgumentsText, Mode=TwoWay}" AcceptsReturn="True"
+                                             MinHeight="80" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    <TextBox x:Uid="ActionNameBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind NameText, Mode=TwoWay}" AcceptsReturn="True"
+                                             MinHeight="80" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    <ComboBox x:Uid="ActionWhenCombo" Grid.Row="2" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind WhenIndex, Mode=TwoWay}">
+                                        <ComboBoxItem x:Uid="ActionWhenAfterInstall" />
+                                        <ComboBoxItem x:Uid="ActionWhenBeforeUninstall" />
+                                    </ComboBox>
+                                    <ComboBox x:Uid="ActionIfOptionCombo" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Stretch"
+                                              ItemsSource="{x:Bind IfOptionChoices}" SelectedItem="{x:Bind IfOptionItem, Mode=TwoWay}" />
+                                    <ComboBox x:Uid="ActionOnFailureCombo" Grid.Row="3" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind OnFailureIndex, Mode=TwoWay}">
+                                        <ComboBoxItem x:Uid="ActionOnFailureFail" />
+                                        <ComboBoxItem x:Uid="ActionOnFailureWarn" />
+                                        <ComboBoxItem x:Uid="ActionOnFailureIgnore" />
+                                    </ComboBox>
+                                    <Grid Grid.Row="3" Grid.Column="1" ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <NumberBox x:Uid="ActionTimeoutBox" Value="{x:Bind TimeoutSeconds, Mode=TwoWay}" Minimum="1" Maximum="3600" SpinButtonPlacementMode="Compact" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBox x:Uid="ActionExitCodesBox" Text="{x:Bind ExitCodesText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                                            <TextBlock Text="{x:Bind ExitCodesError, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(ExitCodesError), Mode=OneWay}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBox x:Uid="ActionIdBox" Grid.Row="4" Text="{x:Bind Id, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                </Grid>
+
+                                <StackPanel Spacing="8">
+                                    <CheckBox x:Uid="ActionSkipCheck" IsChecked="{x:Bind HasSkipIfInstalled, Mode=TwoWay}" />
+                                    <Grid ColumnSpacing="24" RowSpacing="16" Visibility="{x:Bind HasSkipIfInstalled, Mode=OneWay}" Margin="28,0,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                        <ComboBox x:Uid="ActionSkipHiveCombo" MinWidth="120" SelectedIndex="{x:Bind SkipHiveIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="HKLM" />
+                                            <ComboBoxItem Content="HKCU" />
+                                        </ComboBox>
+                                        <TextBox x:Uid="ActionSkipKeyBox" Grid.Column="1" Text="{x:Bind SkipKey, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                        <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnSpacing="24">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                            <TextBox x:Uid="ActionSkipValueBox" Text="{x:Bind SkipValue, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                            <TextBox x:Uid="ActionSkipVersionBox" Grid.Column="1" Text="{x:Bind SkipVersion, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                        </Grid>
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Spacing="8">
+                                    <CheckBox x:Uid="ActionFallbackArgsCheck" IsChecked="{x:Bind HasFallbackArguments, Mode=TwoWay}" />
+                                    <TextBox x:Uid="ActionFallbackArgsBox" Text="{x:Bind FallbackArgumentsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64"
+                                             FontFamily="Consolas" IsSpellCheckEnabled="False" Visibility="{x:Bind HasFallbackArguments, Mode=OneWay}" Margin="28,0,0,0" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="8">
+                                    <CheckBox x:Uid="ActionFallbackRunCheck" IsChecked="{x:Bind HasFallbackRunValue, Mode=TwoWay}" />
+                                    <Grid ColumnSpacing="24" Visibility="{x:Bind HasFallbackRunValue, Mode=OneWay}" Margin="28,0,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <TextBox x:Uid="ActionFallbackRunNameBox" Text="{x:Bind FallbackRunValueName, Mode=TwoWay}" IsSpellCheckEnabled="False" VerticalAlignment="Top" />
+                                        <TextBox x:Uid="ActionFallbackRunArgsBox" Grid.Column="1" Text="{x:Bind FallbackRunValueArgumentsText, Mode=TwoWay}" AcceptsReturn="True"
+                                                 MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{x:Bind VM.Errors.Actions, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.Actions), Mode=OneWay}" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>
