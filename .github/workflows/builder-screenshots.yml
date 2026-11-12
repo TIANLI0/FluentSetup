@@ -15,9 +15,9 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -40,7 +40,7 @@ jobs:
         shell: powershell
         run: .\tests\UI\builder-screenshots.ps1 -Out out\builder-shots -Themes light,dark
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: builder-screenshots
