@@ -279,12 +279,16 @@ void MainWindow::ApplyHello() {
         box.Content(box_value(choice["label"].asWide()));
         box.Tag(box_value(winrt::to_hstring(choice["id"].asString())));
         box.IsChecked(choice["value"].asBool());
+        // A required component is listed so the user knows it is installed, but cannot be turned off.
+        box.IsEnabled(!choice["required"].asBool());
         ChoicesPanel().Children().Append(box);
     }
     SetVisible(ChoicesPanel(), !opts["choices"].array().empty());
     const std::wstring running = h["runningApps"].asWide();
-    if (!running.empty() && !IsUninstall()) {
-        RunningInfo().Message(Fmt("welcome.running", {running}));
+    std::wstring notice = h["prerequisites"].asWide();
+    if (!running.empty()) notice = Fmt("welcome.running", {running}) + (notice.empty() ? L"" : L"\n" + notice);
+    if (!notice.empty() && !IsUninstall()) {
+        RunningInfo().Message(notice);
         RunningInfo().IsOpen(true);
     }
     LicenseText().Text(h["ui"]["licenseText"].asWide());

@@ -128,7 +128,9 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
             out.choices[WideToUtf8(id)] = on;
         } else if (name == L"lang") {
             if (!value(v)) return false;
-            if (!EqualsIgnoreCase(v, L"en-US") && !EqualsIgnoreCase(v, L"zh-CN")) return error = L"/lang must be en-US or zh-CN", false;
+            if (!EqualsIgnoreCase(v, L"en-US") && !EqualsIgnoreCase(v, L"zh-CN") && !EqualsIgnoreCase(v, L"ja-JP") && !EqualsIgnoreCase(v, L"ko-KR")) {
+                return error = L"/lang must be en-US, zh-CN, ja-JP or ko-KR", false;
+            }
             out.language = v;
         } else if (name == L"ui") {
             if (!value(v)) return false;

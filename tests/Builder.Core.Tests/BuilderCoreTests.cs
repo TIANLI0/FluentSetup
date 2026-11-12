@@ -135,6 +135,40 @@ public class ValidatorTests
     }
 
     [Fact]
+    public void ValidatesPrerequisitesAndCleanup()
+    {
+        using var dir = new TempDir();
+        var p = Valid(dir);
+        p.Requirements.WebView2 = new WebView2Settings { Required = true, MinVersion = "x", OnFailure = "abort", Download = new DownloadSettings { Url = "http://example.com/a.exe", Sha256 = "123" } };
+        p.Requirements.DotNet.Add(new DotNetRequirement { Runtime = "java", Version = "8", RollForward = "latest" });
+        p.Install.LegacyUninstallKeys.Add(p.App.Id);
+        p.Install.Cleanup.RemoveShortcuts.Add("Old.exe");
+        var codes = ProjectValidator.Validate(p, dir.Path).Items.Where(d => d.Severity == Severity.Error).Select(d => d.Code).ToHashSet();
+        foreach (var c in new[] { "FS1606", "FS1607", "FS1660", "FS1614", "FS1617", "FS1619", "FS1650", "FS1653" }) Assert.Contains(c, codes);
+    }
+
+    [Fact]
+    public void LocalizationFolderMergesPerLanguageTexts()
+    {
+        using var dir = new TempDir();
+        var p = Valid(dir);
+        p.Options.Add(new UserOptionSettings { Id = "auto", Label = new() { ["en-US"] = "Start with Windows" } });
+        p.Actions.Add(new ActionSettings { Id = "drv", Run = "App.exe", Name = new() { ["en-US"] = "Driver" } });
+        p.Ui.Localization = "locales";
+        dir.File("locales/license-ja.txt", "規約");
+        dir.File("locales/ja-JP.json", """{ "options": { "auto": "自動起動" }, "actions": { "drv": "ドライバー" }, "license": "license-ja.txt", "strings": { "button.next": "進む" } }""");
+        dir.File("locales/fr-FR.json", "{}");
+        var bag = new DiagnosticBag();
+        var t = Localization.Load(p, dir.Path, bag);
+        Assert.Equal("自動起動", t.OptionLabels["auto"]["ja-JP"]);
+        Assert.Equal("Start with Windows", t.OptionLabels["auto"]["en-US"]);
+        Assert.Equal("ドライバー", t.ActionNames[0]["ja-JP"]);
+        Assert.EndsWith("license-ja.txt", t.LicenseFiles["ja-JP"]);
+        Assert.Equal("進む", t.Strings["ja-JP"]["button.next"]);
+        Assert.Contains(bag.Items, d => d.Code == "FS1321");  // unsupported language file is reported, not used
+    }
+
+    [Fact]
     public void UserScopeCannotTargetProgramFiles()
     {
         using var dir = new TempDir();

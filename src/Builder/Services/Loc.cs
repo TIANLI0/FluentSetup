@@ -23,14 +23,15 @@ public static class Loc
 
     public static string Format(string key, params object[] args) => string.Format(System.Globalization.CultureInfo.CurrentCulture, Get(key), args);
 
-    /// <summary>"zh-CN" if Windows shows Chinese, else "en-US" (matches the installer's language choice).</summary>
+    /// <summary>The installer language for this PC (same rule as the installer: first supported Windows display language).</summary>
     public static string InstallerLanguage(string projectDefault)
     {
-        if (projectDefault is "en-US" or "zh-CN") return projectDefault;
+        var supported = FluentSetup.Builder.Core.Packaging.Localization.SupportedLanguages;
+        if (supported.Contains(projectDefault)) return projectDefault;
         foreach (var lang in Windows.System.UserProfile.GlobalizationPreferences.Languages)
         {
-            if (lang.StartsWith("zh", StringComparison.OrdinalIgnoreCase)) return "zh-CN";
-            if (lang.StartsWith("en", StringComparison.OrdinalIgnoreCase)) return "en-US";
+            var match = supported.FirstOrDefault(s => lang.StartsWith(s[..2], StringComparison.OrdinalIgnoreCase));
+            if (match is not null) return match;
         }
         return "en-US";
     }

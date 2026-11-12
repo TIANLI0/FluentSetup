@@ -364,10 +364,18 @@ void Window::ApplyHello() {
     for (size_t i = 0; i < choices.size(); ++i) {
         SetText(kChoiceBase + static_cast<int>(i), choices[i]["label"].asWide());
         Button_SetCheck(Ctl(kChoiceBase + static_cast<int>(i)), choices[i]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
+        ::EnableWindow(Ctl(kChoiceBase + static_cast<int>(i)), !choices[i]["required"].asBool());  // required: locked on
     }
-    if (!IsUninstall() && !hello_["runningApps"].asWide().empty()) {
-        const std::wstring running = F("welcome.running", {hello_["runningApps"].asWide()});
-        SetText(kInfo, info.empty() ? running : info + L"\r\n" + running);
+    if (!IsUninstall()) {
+        std::wstring notice = info;
+        const auto add = [&](const std::wstring& line) {
+            if (!line.empty()) notice += (notice.empty() ? L"" : L"\r\n") + line;
+        };
+        if (!hello_["runningApps"].asWide().empty()) add(F("welcome.running", {hello_["runningApps"].asWide()}));
+        std::wstring prereq = hello_["prerequisites"].asWide();
+        for (size_t p = 0; (p = prereq.find(L'\n', p)) != std::wstring::npos; p += 2) prereq.replace(p, 1, L"\r\n");
+        add(prereq);
+        SetText(kInfo, notice);
     }
     std::wstring license = hello_["ui"]["licenseText"].asWide(), crlf;
     for (size_t i = 0; i < license.size(); ++i) {

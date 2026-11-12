@@ -47,6 +47,8 @@ std::optional<InstalledProduct> FindInstalled(const std::wstring& appId);
 bool ForeignArpEntryExists(const std::wstring& appId, Scope scope);
 // InstallLocation and DisplayVersion of such a foreign entry (used when a package adopts an older installer's install).
 std::optional<InstalledProduct> QueryForeign(const std::wstring& appId, Scope scope);
+// Removes an ARP key written by another installer (legacy product names). Keys carrying our marker are never touched.
+bool DeleteForeignArpEntry(const std::wstring& keyName, Scope scope);
 
 json::Value RecordToJson(const InstallRecord& r);
 // Validates every field; relative paths must be safe, shortcuts must live in Start menu / desktop folders of the scope.

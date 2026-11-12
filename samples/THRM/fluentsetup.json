@@ -33,41 +33,64 @@
     "launchAfterInstall": "optionalOn",
     "allowDowngrade": false,
     "minWindowsBuild": 17763,
-    "closeProcesses": ["THRM.exe", "THRM Core.exe", "THRM TempBridge.exe", "TempBridge.exe"],
-    "adoptExistingInstall": true
+    "closeProcesses": [
+      "THRM.exe", "THRM Core.exe", "THRM TempBridge.exe", "TempBridge.exe", "SpaceStationService.exe",
+      "BS2PRO-Controller.exe", "BS2PRO.exe", "BS2PRO-Core.exe"
+    ],
+    "adoptExistingInstall": true,
+    "legacyUninstallKeys": [
+      "BS2PRO-Controller", "BS2PRO-controllerBS2PRO-controller", "BS2PRO-ControllerBS2PRO-Controller",
+      "TIANLI0BS2PRO-Controller", "TIANLI0BS2PRO"
+    ],
+    "ngen": ["bridge/THRM TempBridge.exe"],
+    "cleanup": {
+      "removeScheduledTasks": ["THRM", "BS2PRO-Controller", "BS2PRO-Core"],
+      "removeRunValues": ["BS2PRO-Controller", "BS2PRO-Core"],
+      "removeShortcuts": [
+        "BS2PRO-Controller.lnk", "BS2PRO.lnk", "BS2Pro Controller.lnk", "BS2PRO Core.lnk", "BS2PRO-Core.lnk"
+      ],
+      "removeUninstallKeys": []
+    }
   },
   "requirements": {
     "netFramework": "4.7.2",
+    "netFrameworkSetup": {
+      "helpUrl": "https://dotnet.microsoft.com/download/dotnet-framework/net472"
+    },
     "webView2": {
       "required": true,
+      "minVersion": "120.0.0.0",
       "installer": "redist/MicrosoftEdgeWebview2Setup.exe",
-      "arguments": ["/silent", "/install"]
+      "arguments": ["/silent", "/install"],
+      "onFailure": "fail",
+      "helpUrl": "https://developer.microsoft.com/microsoft-edge/webview2/"
     }
   },
   "options": [
-    {
-      "id": "autostart",
-      "label": { "en-US": "Start THRM automatically when I sign in", "zh-CN": "登录 Windows 时自动启动 THRM" },
-      "default": true
-    }
+    { "id": "pawnio", "label": { "en-US": "Install PawnIO (required)" }, "required": true },
+    { "id": "autostart", "label": { "en-US": "Start with Windows" }, "default": true }
   ],
   "actions": [
     {
+      "id": "pawnio",
       "when": "afterInstall",
       "run": "drivers/PawnIO/PawnIO_setup.exe",
       "arguments": ["-install", "-silent"],
       "timeoutSeconds": 60,
       "successExitCodes": [0, 183],
       "onFailure": "warn",
+      "ifOption": "pawnio",
       "skipIfInstalled": {
         "hive": "HKLM",
         "key": "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PawnIO",
         "value": "DisplayVersion",
         "version": "2.2.0.0"
       },
-      "name": { "en-US": "PawnIO driver installation", "zh-CN": "PawnIO 驱动安装" }
+      "fallbackArguments": ["-install"],
+      "name": { "en-US": "PawnIO driver installation" }
     },
     {
+      "id": "autostart",
       "when": "afterInstall",
       "run": "THRM Core.exe",
       "arguments": ["--install-autostart"],
@@ -75,23 +98,25 @@
       "successExitCodes": [0],
       "onFailure": "warn",
       "ifOption": "autostart",
-      "name": { "en-US": "Registering THRM to start at sign-in", "zh-CN": "注册登录时自动启动" }
+      "fallbackRunValue": { "name": "THRM", "arguments": ["--autostart"] },
+      "name": { "en-US": "Registering THRM to start with Windows" }
     }
   ],
   "uninstall": {
-    "removeData": ["{AppData}\\THRM.exe", "{CommonAppData}\\THRM.exe", "{CommonAppData}\\THRM"],
-    "removeScheduledTasks": ["THRM"],
-    "removeRunValues": ["THRM"]
+    "removeData": ["{AppData}\\THRM.exe", "{AppData}\\THRM", "{LocalAppData}\\THRM", "{CommonAppData}\\THRM.exe", "{CommonAppData}\\THRM"],
+    "removeScheduledTasks": ["THRM", "BS2PRO-Controller", "BS2PRO-Core"],
+    "removeRunValues": ["THRM", "BS2PRO-Controller", "BS2PRO-Core"],
+    "removeShortcuts": [
+      "THRM.lnk", "BS2PRO-Core.lnk", "BS2PRO-Controller.lnk", "BS2PRO.lnk", "BS2Pro Controller.lnk", "BS2PRO Core.lnk"
+    ]
   },
   "ui": {
     "theme": "system",
     "backdrop": "mica",
     "useSystemAccent": true,
     "license": "D:/develop/BS2PRO-Controller/build/windows/installer/resources/license_en-US.txt",
-    "licenses": {
-      "en-US": "D:/develop/BS2PRO-Controller/build/windows/installer/resources/license_en-US.txt",
-      "zh-CN": "D:/develop/BS2PRO-Controller/build/windows/installer/resources/license_zh-CN.txt"
-    },
+    "licenseMode": "always",
+    "localization": "locales",
     "defaultLanguage": "auto",
     "strings": {}
   },

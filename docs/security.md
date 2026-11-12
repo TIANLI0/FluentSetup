@@ -333,6 +333,20 @@ package explicitly adopts it (`engine.cpp:598-600`).
 4. Keep actions minimal and make them idempotent: their effects are not rolled back.
 5. Distribute over HTTPS and publish the SHA-256 printed in the build report.
 
+## Prerequisite downloads
+
+A package can let Setup.exe download a missing prerequisite (`requirements.*.download`). This is the only network
+access FluentSetup ever makes, and only when that prerequisite is missing on the PC.
+
+* https only: the builder and the installer engine both reject other schemes, TLS 1.2 or 1.3 is required, and
+  redirects from https to http are refused (`WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP`).
+* The package must state the file's SHA-256 (and may state its exact size). The download is streamed into a new file
+  (`CREATE_NEW`) in a private directory (`security::CreatePrivateDirectory`), hashed while it is written, capped at the
+  declared size (512 MiB if unknown), and run only if size and hash match. Otherwise setup stops before anything is
+  installed (exit code 17). The folder is deleted afterwards.
+* The download happens before the install is started, so a network failure never leaves a half-installed app.
+* The downloaded installer runs like an action: `CreateProcess` without a shell, in a job object, with a timeout. For
+  per-machine installs it runs elevated, so the SHA-256 in the (ideally signed) package is what authorises it.
 ## 5. Known gaps and weaknesses
 
 Found while reading the code for this document. G1, G6 and G10 have been fixed since, and G2 partly; the rows say so.

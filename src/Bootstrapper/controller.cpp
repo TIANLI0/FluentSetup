@@ -105,7 +105,9 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
     ui.set("title", u["title"].asString());
     ui.set("welcomeText", u["welcomeText"].asString());
     ui.set("finishText", u["finishText"].asString());
-    if (mode_ == Mode::Install && !existing_.product) {
+    // The license is shown before a first install, or before every install when the package says so (e.g. an agreement
+    // that changes between versions).
+    if (mode_ == Mode::Install && (!existing_.product || u["licenseMode"].asString() == "always")) {
         const json::Value& localized = u["licenses"][WideToUtf8(strings_.Language())];
         ui.set("licenseText", localized.isString() && !localized.asString().empty() ? localized.asString() : u["license"].asString());
     }
@@ -136,7 +138,8 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
             json::Value c;
             c.set("id", opt.id);
             c.set("label", opt.label.Get(strings_.Language(), Utf8ToWide(opt.id)));
-            c.set("value", defaults.choices.count(opt.id) ? defaults.choices.at(opt.id) : opt.defaultValue);
+            c.set("value", opt.required || (defaults.choices.count(opt.id) ? defaults.choices.at(opt.id) : opt.defaultValue));
+            c.set("required", opt.required);  // shown checked and locked
             choices.push(c);
         }
     }
@@ -167,6 +170,24 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
     std::wstring running;
     for (const auto& n : install::RunningProcesses(pkg_.ext.closeProcesses)) running += (running.empty() ? L"" : L", ") + n;
     h.set("runningApps", running);
+    // Prerequisites that are missing on this PC and what setup will do about them.
+    std::wstring notice;
+    if (mode_ == Mode::Install) {
+        for (const auto& req : pkg_.ext.requirements) {
+            if (install::RequirementSatisfied(req)) continue;
+            std::wstring line;
+            const std::wstring found = install::InstalledRequirementVersion(req);
+            if (!found.empty() && req.minVersion) {
+                // Present but older than the package needs.
+                line = strings_.Fmt(req.Installable() ? "prereq.upgrade" : "prereq.tooOld", {req.name, found, req.minVersionText});
+                if (!req.Installable() && !req.helpUrl.empty()) line += L" " + Utf8ToWide(req.helpUrl);
+            } else if (!req.installer.empty()) line = strings_.Fmt("prereq.bundled", {req.name});
+            else if (!req.downloadUrl.empty()) line = strings_.Fmt("prereq.download", {req.name, req.downloadSize ? FormatBytes(req.downloadSize) : std::wstring(L"?")});
+            else line = strings_.Fmt("prereq.missing", {req.name}) + (req.helpUrl.empty() ? L"" : L" " + Utf8ToWide(req.helpUrl));
+            notice += (notice.empty() ? L"" : L"\n") + line;
+        }
+    }
+    h.set("prerequisites", notice);
     h.set("requiredBytes", engine.RequiredBytes());
     h.set("freeBytes", fs::FreeSpace(dir));
     return h;

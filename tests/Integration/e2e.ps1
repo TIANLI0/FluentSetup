@@ -70,7 +70,7 @@ function New-Package([string] $version, [scriptblock] $populate, [hashtable] $ov
     $project.files.source = "stage-$version"
     $project.ui.license = '..\..\samples\DemoApp\LICENSE.txt'
     $project.output.directory = 'dist'
-    foreach ($k in $overrides.Keys) { $project.install.$k = $overrides[$k] }
+    foreach ($k in $overrides.Keys) { $project.install | Add-Member -NotePropertyName $k -NotePropertyValue $overrides[$k] -Force }
     foreach ($k in $rootProps.Keys) { $project | Add-Member -NotePropertyName $k -NotePropertyValue $rootProps[$k] -Force }
     $projectPath = Join-Path $work "project-$version.json"
     [IO.File]::WriteAllText($projectPath, ($project | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
@@ -280,6 +280,87 @@ if ($quiet -match '^"([^"]+)"\s*(.*)$') { $code = (Start-Process $Matches[1] -Ar
 Check 'uninstall.exe of a package with actions runs (exit 0)' { $code -eq 0 }
 Check 'beforeUninstall action honoured the recorded choice' { Test-Path $marker }
 Check 'uninstalled' { -not (Test-Path $arpKey) -and -not (Test-Path (Join-Path $installDir 'DemoApp.exe')) }
+
+Write-Host '==> Legacy install adopted, install cleanup, required option, action fallbacks' -ForegroundColor Cyan
+Remove-Existing
+$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$legacyKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FluentSetup.E2E.Legacy'
+$legacyDir = Join-Path $env:LOCALAPPDATA 'Programs\FluentSetup E2E Legacy'
+$oldLink = Join-Path ([Environment]::GetFolderPath('Programs')) 'FluentSetup E2E Old.lnk'
+Remove-Item -Recurse -Force $legacyDir -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $legacyDir | Out-Null
+'old build' | Set-Content (Join-Path $legacyDir 'DemoApp.exe')
+New-Item -Force $legacyKey | Out-Null  # an older installer's entry without InstallLocation: found through UninstallString
+Set-ItemProperty $legacyKey -Name DisplayName -Value 'FluentSetup E2E (old name)'
+Set-ItemProperty $legacyKey -Name DisplayVersion -Value '0.9.0'
+Set-ItemProperty $legacyKey -Name UninstallString -Value "`"$legacyDir\uninst.exe`""
+Set-ItemProperty $runKey -Name 'FluentSetupE2E-Old' -Value 'old.exe'
+'' | Set-Content $oldLink
+$legacyPkg = New-Package '6.0.0' { param($s) } @{
+    legacyUninstallKeys = @('FluentSetup.E2E.Legacy')
+    cleanup = @{ removeRunValues = @('FluentSetupE2E-Old'); removeShortcuts = @('FluentSetup E2E Old.lnk') }
+} @{
+    options = @(@{ id = 'core'; label = @{ 'en-US' = 'Core component (required)' }; required = $true })
+    actions = @(
+        @{ id = 'retry'; when = 'afterInstall'; run = 'DemoApp.exe'; arguments = @('--exit-code', '5'); fallbackArguments = @('--version'); ifOption = 'core'; onFailure = 'fail' },
+        @{ when = 'afterInstall'; run = 'DemoApp.exe'; arguments = @('--exit-code', '7'); onFailure = 'warn'; fallbackRunValue = @{ name = 'FluentSetupE2E-Auto'; arguments = @('--autostart') } })
+    uninstall = @{ removeRunValues = @('FluentSetupE2E-Auto') }
+}
+$code = Run-Setup $legacyPkg @('/quiet', '/option', 'core=no') 'legacy'
+$legacyMarker = Join-Path $legacyDir 'version-check.txt'
+Check 'legacy: install exit 0' { $code -eq 0 }
+Check 'legacy: older install found through its uninstall key and upgraded in place' { (Get-ItemProperty $arpKey).InstallLocation -eq $legacyDir -and (Get-Item (Join-Path $legacyDir 'DemoApp.exe')).Length -gt 1KB }
+Check 'legacy: old uninstall entry removed' { -not (Test-Path $legacyKey) }
+Check 'cleanup: old Run value and shortcut removed' { $null -eq (Get-ItemProperty $runKey).'FluentSetupE2E-Old' -and -not (Test-Path $oldLink) }
+Check 'required option cannot be switched off; fallback arguments ran after the failure' { Test-Path $legacyMarker }
+Check 'fallbackRunValue registered after the action failed' { (Get-ItemProperty $runKey).'FluentSetupE2E-Auto' -like '*DemoApp.exe*--autostart' }
+$quiet = (Get-ItemProperty $arpKey).QuietUninstallString
+$code = -1
+if ($quiet -match '^"([^"]+)"\s*(.*)$') { $code = (Start-Process $Matches[1] -ArgumentList $Matches[2] -Wait -PassThru).ExitCode }
+Check 'legacy: uninstall exit 0, Run value cleaned up' { $code -eq 0 -and $null -eq (Get-ItemProperty $runKey).'FluentSetupE2E-Auto' }
+Remove-ItemProperty $runKey -Name 'FluentSetupE2E-Old', 'FluentSetupE2E-Auto' -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force $legacyDir, $legacyKey, $oldLink -ErrorAction SilentlyContinue
+
+Write-Host '==> Prerequisites: .NET version checks, missing runtime, verified download' -ForegroundColor Cyan
+Remove-Existing
+$netcore = Get-ChildItem "$env:ProgramFiles\dotnet\shared\Microsoft.NETCore.App" -Directory -ErrorAction SilentlyContinue |
+    Where-Object Name -match '^\d+\.\d+\.\d+$' | Sort-Object { [version]$_.Name } | Select-Object -Last 1
+if ($netcore) {
+    $present = New-Package '7.0.0' { param($s) } @{} @{ requirements = @{ dotNet = @(@{ runtime = 'core'; version = "$(([version]$netcore.Name).Major).0.0" }) } }
+    $code = Run-Setup $present @('/quiet') 'prereq-present'
+    Check ".NET $($netcore.Name) satisfies the requirement" { $code -eq 0 }
+    Remove-Existing
+}
+$missing = New-Package '7.0.1' { param($s) } @{} @{ requirements = @{ dotNet = @(@{ runtime = 'core'; version = '99.0.0'; helpUrl = 'https://dotnet.microsoft.com/download' }) } }
+$code = Run-Setup $missing @('/quiet') 'prereq-missing'
+Check 'missing .NET 99 without a source stops setup (exit 17), nothing installed' { $code -eq 17 -and -not (Test-Path $arpKey) }
+# WebView2 older than the package's minimum: the bundled "updater" (here DemoApp, which changes nothing) runs, the
+# runtime is still too old -> onFailure fail rolls everything back; onFailure warn installs with a warning.
+$wv = @{ required = $true; minVersion = '999.0.0.0'; installer = 'DemoApp.exe'; arguments = @('--version') }
+$strict = New-Package '7.0.4' { param($s) } @{} @{ requirements = @{ webView2 = $wv + @{ onFailure = 'fail' } } }
+$code = Run-Setup $strict @('/quiet') 'webview2-strict'
+Check 'WebView2 below minVersion, onFailure fail: exit 17 and rolled back' { $code -eq 17 -and -not (Test-Path $arpKey) -and -not (Test-Path (Join-Path $installDir 'DemoApp.exe')) }
+$lenient = New-Package '7.0.5' { param($s) } @{} @{ requirements = @{ webView2 = $wv + @{ onFailure = 'warn' } } }
+$code = Run-Setup $lenient @('/quiet') 'webview2-warn'
+Check 'WebView2 below minVersion, onFailure warn: installed, reported in the log' { $code -eq 0 -and (Test-Path $arpKey) -and (Get-Content (Join-Path $logs 'webview2-warn.log') -Raw) -match 'WebView2' }
+Remove-Existing
+# A real https download, verified by SHA-256 (the NuGet CLI the build script uses; it exits 0 for "help").
+$nuget = Join-Path $root 'out\tools\nuget.exe'
+if (Test-Path $nuget) {
+    $download = @{ url = 'https://dist.nuget.org/win-x86-commandline/v6.14.0/nuget.exe'; sha256 = (Get-FileHash $nuget).Hash; size = (Get-Item $nuget).Length }
+    $bad = New-Package '7.0.2' { param($s) } @{} @{ requirements = @{ dotNet = @(@{ runtime = 'core'; version = '99.0.0'; arguments = @('help'); download = @{ url = $download.url; sha256 = ('0' * 64); size = 0 } }) } }
+    $code = Run-Setup $bad @('/quiet') 'prereq-badhash'
+    $log = Get-Content (Join-Path $logs 'prereq-badhash.log') -Raw
+    if ($log -match 'Cannot connect|Download failed|HTTP') {
+        Write-Host '  [SKIP] download checks (no internet access)' -ForegroundColor Yellow
+    } else {
+        Check 'download with the wrong SHA-256 is refused before anything is installed' { $code -eq 17 -and $log -match 'SHA-256' -and -not (Test-Path $arpKey) }
+        $good = New-Package '7.0.3' { param($s) } @{} @{ requirements = @{ dotNet = @(@{ runtime = 'core'; version = '99.0.0'; arguments = @('help'); download = $download }) } }
+        $code = Run-Setup $good @('/quiet') 'prereq-download'
+        $log = Get-Content (Join-Path $logs 'prereq-download.log') -Raw
+        Check 'verified download runs; still-missing runtime becomes a warning' { $code -eq 0 -and $log -match 'Installing prerequisite' -and (Test-Path $arpKey) }
+    }
+}
 
 Remove-Existing
 Check 'environment restored (no ARP entry)' { -not (Test-Path $arpKey) }

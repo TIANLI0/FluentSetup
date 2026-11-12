@@ -137,7 +137,7 @@ sequenceDiagram
    WinUI fails, the Win32 fallback UI runs (section 6).
 
 Public switches: `/quiet|/silent`, `/uninstall`, `/log <file>`, `/dir <path>`, `/scope user|machine`,
-`/desktop-shortcut yes|no`, `/start-menu-shortcut yes|no`, `/option <id>=yes|no` (repeatable), `/lang en-US|zh-CN`,
+`/desktop-shortcut yes|no`, `/start-menu-shortcut yes|no`, `/option <id>=yes|no` (repeatable), `/lang en-US|zh-CN|ja-JP|ko-KR`,
 `/ui auto|winui|win32`, `/help`. Internal switches (between FluentSetup processes):
 
 | Switch | Used by |

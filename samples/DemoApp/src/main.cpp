@@ -1,5 +1,5 @@
 // DemoApp: a tiny native app used to exercise FluentSetup end to end (install, upgrade, uninstall).
-// "DemoApp.exe --version" prints the version to a file next to the exe so tests can check which build is installed.
+// "DemoApp.exe --exit-code N" exits with N; "DemoApp.exe --version" prints the version to a file next to the exe so tests can check which build is installed.
 #include <windows.h>
 
 #include <cstdio>
@@ -10,6 +10,8 @@
 #endif
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR cmd, int) {
+    // "--exit-code N": exit with N at once (tests use it to make an install action fail).
+    if (const wchar_t* e = cmd ? wcsstr(cmd, L"--exit-code ") : nullptr) return _wtoi(e + 12);
     if (cmd && wcsstr(cmd, L"--version")) {
         wchar_t path[MAX_PATH];
         GetModuleFileNameW(nullptr, path, MAX_PATH);

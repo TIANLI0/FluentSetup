@@ -323,7 +323,7 @@ public sealed partial class MainViewModel : ObservableObject
     private static readonly string[] Offers = ["off", "on", "optionalOff", "optionalOn"];
     private static readonly string[] Themes = ["system", "light", "dark"];
     private static readonly string[] Backdrops = ["mica", "micaAlt", "none"];
-    private static readonly string[] Languages = ["auto", "en-US", "zh-CN"];
+    private static readonly string[] Languages = ["auto", .. FluentSetup.Builder.Core.Packaging.Localization.SupportedLanguages];
     private static readonly string[] Architectures = ["x64", "arm64"];
     private static readonly string[] Compressions = ["fast", "normal", "max"];
 
@@ -395,7 +395,7 @@ public sealed partial class MainViewModel : ObservableObject
         p.Install.MinWindowsBuild = double.IsNaN(MinWindowsBuild) ? 0 : (int)MinWindowsBuild;
         p.Ui.Title = UiTitle; p.Ui.WelcomeText = WelcomeText; p.Ui.FinishText = FinishText; p.Ui.Theme = Themes[Math.Clamp(ThemeIndex, 0, 2)];
         p.Ui.Backdrop = Backdrops[Math.Clamp(BackdropIndex, 0, 2)]; p.Ui.UseSystemAccent = UseSystemAccent; p.Ui.AccentColor = AccentColor.Trim();
-        p.Ui.License = License.Trim(); p.Ui.DefaultLanguage = Languages[Math.Clamp(LanguageIndex, 0, 2)];
+        p.Ui.License = License.Trim(); p.Ui.DefaultLanguage = Languages[Math.Clamp(LanguageIndex, 0, Languages.Length - 1)];
         p.Output.Directory = OutputDirectory.Trim(); p.Output.FileName = OutputFileName.Trim(); p.Output.Architecture = Architectures[Math.Clamp(ArchitectureIndex, 0, 1)];
         p.Output.Compression = Compressions[Math.Clamp(CompressionIndex, 0, 2)]; p.Output.IncludeWinUI = IncludeWinUI;
         p.Signing.Enabled = SigningEnabled; p.Signing.CertificateThumbprint = CertificateThumbprint.Trim(); p.Signing.CertificateFile = CertificateFile.Trim();

@@ -23,7 +23,47 @@ public static partial class ExtensionValidator
     public static int? NetFrameworkRelease(string version) => NetFrameworkReleases.TryGetValue(version, out var r) ? r : null;
     public static IReadOnlyCollection<string> KnownNetFrameworkVersions => NetFrameworkReleases.Keys;
 
+    [GeneratedRegex(@"^[0-9a-fA-F]{64}$")]
+    private static partial Regex Sha256Regex();
+
+    /// <summary>Full shared-framework name and display name for a project's runtime value.</summary>
+    public static (string Runtime, string Label) DotNetRuntime(string value) => value switch
+    {
+        "desktop" or "Microsoft.WindowsDesktop.App" => ("Microsoft.WindowsDesktop.App", ".NET Desktop Runtime"),
+        "core" or "Microsoft.NETCore.App" => ("Microsoft.NETCore.App", ".NET Runtime"),
+        "aspnetcore" or "Microsoft.AspNetCore.App" => ("Microsoft.AspNetCore.App", "ASP.NET Core Runtime"),
+        _ => ("", ""),
+    };
+
+    /// <summary>All prerequisites that can carry an installer or download, with their field names.</summary>
+    private static IEnumerable<(PrerequisiteSource Source, string Field)> Sources(SetupProject p)
+    {
+        if (p.Requirements.NetFrameworkSetup is { } nf) yield return (nf, "requirements.netFrameworkSetup");
+        if (p.Requirements.WebView2.Required) yield return (p.Requirements.WebView2, "requirements.webView2");
+        foreach (var (r, i) in p.Requirements.DotNet.Select((r, i) => (r, i))) yield return (r, $"requirements.dotNet[{i}]");
+    }
+
+    private static void ValidateSource(PrerequisiteSource s, string field, DiagnosticBag d)
+    {
+        if (!string.IsNullOrEmpty(s.Installer) && !PathRules.TryNormalizeRelative(s.Installer, out _, out var why))
+            d.Error("FS1604", field + ".installer", $"Not a valid relative path: {why}.");
+        if (s.Arguments.Count > 32 || s.Arguments.Any(x => x.Length > 1024 || x.Contains('\0'))) d.Error("FS1605", field + ".arguments", "Too many or too long arguments.");
+        if (s.Download is { } dl)
+        {
+            if (!Uri.TryCreate(dl.Url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps || dl.Url.Length > 2048)
+                d.Error("FS1606", field + ".download.url", "Downloads must use an https URL.");
+            if (!Sha256Regex().IsMatch(dl.Sha256))
+                d.Error("FS1607", field + ".download.sha256", "Give the SHA-256 of the file (64 hex characters); setup refuses to run anything that does not match.");
+            if (dl.Size < 0) d.Error("FS1608", field + ".download.size", "Size must be the file size in bytes, or 0 if unknown.");
+            if (!string.IsNullOrEmpty(s.Installer)) d.Info("FS1609", field, "Both a bundled installer and a download are set; the bundled installer is used.");
+        }
+        if (s.OnFailure is not ("warn" or "fail")) d.Error("FS1660", field + ".onFailure", "Use warn or fail.");
+        if (!string.IsNullOrEmpty(s.HelpUrl) && (!Uri.TryCreate(s.HelpUrl, UriKind.Absolute, out var h) || h.Scheme != Uri.UriSchemeHttps))
+            d.Error("FS1615", field + ".helpUrl", "The help link must be an https URL.");
+    }
+
     private static bool IsExeName(string n) => PathRules.IsValidComponent(n, out _) && n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+    private static bool IsLnkName(string n) => PathRules.IsValidComponent(n, out _) && n.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase);
     private static bool IsTaskOrValueName(string n) => n.Length is > 0 and <= 128 && n.All(c => c >= 0x20 && !"\\/:*?\"<>|".Contains(c));
 
     public static void Validate(SetupProject p, DiagnosticBag d)
@@ -38,9 +78,39 @@ public static partial class ExtensionValidator
         {
             d.Error("FS1603", "requirements.netFramework", $"Unknown .NET Framework version. Use one of: {string.Join(", ", NetFrameworkReleases.Keys)}.");
         }
-        if (!string.IsNullOrEmpty(p.Requirements.WebView2.Installer) && !PathRules.TryNormalizeRelative(p.Requirements.WebView2.Installer, out _, out var why))
+        if (!string.IsNullOrEmpty(p.Requirements.WebView2.MinVersion) && !ProjectValidator.IsValidVersion(p.Requirements.WebView2.MinVersion))
+            d.Error("FS1614", "requirements.webView2.minVersion", "Not a valid version.");
+        if (p.Requirements.NetFrameworkSetup is not null && string.IsNullOrEmpty(p.Requirements.NetFramework))
+            d.Warning("FS1616", "requirements.netFrameworkSetup", "Ignored: requirements.netFramework is not set.");
+        foreach (var (r, i) in p.Requirements.DotNet.Select((r, i) => (r, i)))
         {
-            d.Error("FS1604", "requirements.webView2.installer", $"Not a valid relative path: {why}.");
+            var field = $"requirements.dotNet[{i}]";
+            if (DotNetRuntime(r.Runtime).Runtime.Length == 0) d.Error("FS1617", field + ".runtime", "Use desktop, core or aspnetcore.");
+            if (!ProjectValidator.IsValidVersion(r.Version)) d.Error("FS1618", field + ".version", "Give the minimum runtime version, e.g. 8.0.0.");
+            if (r.RollForward is not ("patch" or "minor" or "major")) d.Error("FS1619", field + ".rollForward", "Use patch, minor or major.");
+        }
+        foreach (var (s, field) in Sources(p)) ValidateSource(s, field, d);
+        foreach (var (n, i) in p.Install.LegacyUninstallKeys.Select((n, i) => (n, i)))
+        {
+            if (!IsTaskOrValueName(n) || n.Equals(p.App.Id, StringComparison.OrdinalIgnoreCase))
+                d.Error("FS1650", $"install.legacyUninstallKeys[{i}]", "An uninstall key name of an older product (not this app's id).");
+        }
+        foreach (var (n, i) in p.Install.Ngen.Select((n, i) => (n, i)))
+        {
+            if (!PathRules.TryNormalizeRelative(n, out var rel, out _) || !(rel.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || rel.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
+                d.Error("FS1651", $"install.ngen[{i}]", "A relative path of an .exe or .dll among the files to install.");
+        }
+        var c0 = p.Install.Cleanup;
+        foreach (var (list, name, check) in new (List<string>, string, Func<string, bool>)[] {
+                     (c0.RemoveScheduledTasks, "install.cleanup.removeScheduledTasks", IsTaskOrValueName),
+                     (c0.RemoveRunValues, "install.cleanup.removeRunValues", IsTaskOrValueName),
+                     (c0.RemoveShortcuts, "install.cleanup.removeShortcuts", IsLnkName),
+                     (c0.RemoveUninstallKeys, "install.cleanup.removeUninstallKeys", n => IsTaskOrValueName(n) && !n.Equals(p.App.Id, StringComparison.OrdinalIgnoreCase)),
+                     (p.Uninstall.RemoveShortcuts, "uninstall.removeShortcuts", IsLnkName) })
+        {
+            if (list.Count > 32) d.Error("FS1652", name, "At most 32 entries.");
+            foreach (var (n, i) in list.Select((n, i) => (n, i)))
+                if (!check(n)) d.Error("FS1653", $"{name}[{i}]", $"'{n}' is not a valid name here.");
         }
 
         var ids = new HashSet<string>(StringComparer.Ordinal);
@@ -48,7 +118,7 @@ public static partial class ExtensionValidator
         {
             if (!OptionIdRegex().IsMatch(o.Id)) d.Error("FS1610", $"options[{i}].id", "Option ids use letters, digits, '-' and '_' (max 32).");
             else if (!ids.Add(o.Id)) d.Error("FS1611", $"options[{i}].id", $"Duplicate option id '{o.Id}'.");
-            if (o.Label.Count == 0 || o.Label.Values.Any(string.IsNullOrWhiteSpace)) d.Error("FS1612", $"options[{i}].label", "Give the option a label (per language).");
+            if (o.Label.Count == 0 || o.Label.Values.Any(string.IsNullOrWhiteSpace)) d.Error("FS1612", $"options[{i}].label", "Give the option a label (per language, or in the localization files plus one here).");
         }
         if (p.Options.Count > 16) d.Error("FS1613", "options", "At most 16 options.");
 
@@ -70,6 +140,10 @@ public static partial class ExtensionValidator
             {
                 d.Error("FS1626", field + ".skipIfInstalled", "Needs hive HKLM|HKCU, a key below it (up to 255 characters), a value name (up to 128 characters; empty = the key's default value) and a version.");
             }
+            if (!string.IsNullOrEmpty(a.Id) && !OptionIdRegex().IsMatch(a.Id)) d.Error("FS1629", field + ".id", "Action ids use letters, digits, '-' and '_' (max 32).");
+            if (a.FallbackArguments is { } fb && (fb.Count > 32 || fb.Any(x => x.Length > 1024 || x.Contains('\0')))) d.Error("FS1622", field + ".fallbackArguments", "Too many or too long arguments.");
+            if (a.FallbackRunValue is { } rv && (!IsTaskOrValueName(rv.Name) || rv.Arguments.Count > 32))
+                d.Error("FS1633", field + ".fallbackRunValue", "Needs a Run value name and at most 32 arguments.");
             if (a.When == "afterInstall" && a.OnFailure == "fail")
             {
                 d.Info("FS1627", field, "If this step fails the installation is rolled back; effects of the program itself (drivers, tasks) cannot be undone by setup.");
@@ -104,9 +178,15 @@ public static partial class ExtensionValidator
             if (PathRules.TryNormalizeRelative(a.Run, out var run, out _) && !set.Contains(run))
                 d.Error("FS1640", $"actions[{i}].run", $"'{run}' is not among the files to install.");
         }
-        if (!string.IsNullOrEmpty(p.Requirements.WebView2.Installer) && PathRules.TryNormalizeRelative(p.Requirements.WebView2.Installer, out var w, out _) && !set.Contains(w))
+        foreach (var (s, field) in Sources(p))
         {
-            d.Error("FS1641", "requirements.webView2.installer", $"'{w}' is not among the files to install.");
+            if (!string.IsNullOrEmpty(s.Installer) && PathRules.TryNormalizeRelative(s.Installer, out var w, out _) && !set.Contains(w))
+                d.Error("FS1641", field + ".installer", $"'{w}' is not among the files to install.");
+        }
+        foreach (var (n, i) in p.Install.Ngen.Select((n, i) => (n, i)))
+        {
+            if (PathRules.TryNormalizeRelative(n, out var rel, out _) && !set.Contains(rel))
+                d.Error("FS1642", $"install.ngen[{i}]", $"'{rel}' is not among the files to install.");
         }
     }
 }

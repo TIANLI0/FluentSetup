@@ -1,53 +1,60 @@
 # Case study: packaging THRM
 
-[THRM](https://github.com/TIANLI0/THRM) is a Wails (Go + WebView2) desktop app that previously shipped with an NSIS
-installer. [`samples/THRM/fluentsetup.json`](../samples/THRM/fluentsetup.json) packages the same build output with
-FluentSetup. It is the reference for the declarative install extensions, because THRM needs more than copying files.
+[THRM](https://github.com/TIANLI0/THRM) is a Wails v3 (Go + WebView2) desktop app with a separate core service, a
+.NET Framework temperature bridge and the PawnIO driver. It used to ship with an NSIS installer
+(`build/windows/installer/project.nsi` in the THRM repository). [`samples/THRM`](../samples/THRM) packages the same build
+output with FluentSetup and reproduces what the NSIS script does. It is the reference for the declarative install
+extensions.
+
+```
+samples/THRM/
+  fluentsetup.json       structure: files, install, requirements, options, actions, uninstall, ui
+  locales/en-US.json     option labels, action names and license file per language
+  locales/zh-CN.json
+  locales/ja-JP.json
+  locales/ko-KR.json
+```
 
 > The sample reads THRM's build output from absolute paths (`D:/develop/BS2PRO-Controller/build/...`). Adjust
-> `files.source`, `files.extra`, `app.icon` and `ui.licenses` to your checkout before building.
+> `files.source`, `files.extra`, `app.icon`, `ui.license` and the `license` entries in `locales/*.json` to your
+> checkout. Build THRM first (`build_bridge.bat`, then `build.bat` in the THRM repository), then:
 
 ```powershell
 src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe build samples\THRM\fluentsetup.json
 # -> out\thrm\THRM-3.8.0-Setup.exe
 ```
 
-## What the NSIS script did, and the FluentSetup equivalent
+## NSIS script → FluentSetup project
 
 | NSIS installer | FluentSetup project |
 |---|---|
-| Per-machine install into `Program Files\THRM`, admin required | `install.scope: "machine"`. The UI shows the UAC shield on the install button. Only the elevated worker does privileged work. |
-| Kill `THRM.exe`, `THRM Core.exe`, bridge processes before copying | `install.closeProcesses`. The first page lists the running ones ("... are running and will be closed"). They are closed in the Preparing step. |
-| Upgrading over an existing NSIS install | `install.adoptExistingInstall: true`. An Apps & features entry with the same id that FluentSetup did not write is adopted. Its install folder is reused and its entry is replaced by a FluentSetup one. |
-| Check .NET Framework 4.7.2 | `requirements.netFramework: "4.7.2"` (checks the registry `Release` value). |
-| Install the WebView2 runtime if missing | `requirements.webView2` with the bundled `MicrosoftEdgeWebview2Setup.exe` (`/silent /install`). It runs only when the runtime is missing. |
-| Install the PawnIO driver | `actions[0]`: runs `drivers/PawnIO/PawnIO_setup.exe -install -silent` after the files are in place. Exit code 0 or 183 counts as success. It is skipped when PawnIO 2.2.0.0 or newer is already registered. A failure becomes a warning on the result page. |
-| "Start with Windows" checkbox | `options[autostart]` is shown as a checkbox on the first page. `actions[1]` runs `THRM Core.exe --install-autostart` only when it is ticked (`ifOption`). |
-| Uninstall: remove scheduled task, Run value, app data | `uninstall.removeScheduledTasks: ["THRM"]`, `removeRunValues: ["THRM"]`, `removeData` (`{AppData}`/`{CommonAppData}` folders). |
-| English and Chinese license pages | `ui.licenses` keyed by language. The one matching the UI language is shown. |
-| THRM's in-app updater runs the installer with `/S` | `/S` is accepted as an alias of `/quiet`. |
+| Per-machine install into `Program Files\THRM`, admin required | `install.scope: "machine"`; UAC shield on the install button; privileged work only in the elevated worker. |
+| Languages: Simplified Chinese, English, Japanese, Korean | The installer UI ships all four (`shared/localization`); THRM's own texts are in `locales/<lang>.json`. |
+| License page with "I accept" checkbox, shown on every install | `ui.licenseMode: "always"`, per-language license file in each locale file. |
+| Components page: main program (required), "Start with Windows" (selected), "Install PawnIO" (required) | `options`: `pawnio` with `required: true` (shown checked and locked), `autostart` (checked by default). Shown on the first page. |
+| `.NET Framework 4.7.2` check, abort with a message | `requirements.netFramework: "4.7.2"` with `netFrameworkSetup.helpUrl`; setup stops with exit code 17 and the link. |
+| WebView2 bootstrapper when the runtime is missing | `requirements.webView2` with the bundled `MicrosoftEdgeWebview2Setup.exe`, plus `minVersion` and `onFailure: "fail"`: an outdated runtime is updated, and THRM is not installed on one that stays too old. |
+| `taskkill` of THRM, THRM Core, bridges, legacy BS2PRO executables and `SpaceStationService.exe` | `install.closeProcesses` (WM_CLOSE first, then terminate). |
+| Detect an older install under the legacy uninstall keys (`BS2PRO-Controller`, `TIANLI0BS2PRO`, …) and upgrade it in place, then delete those keys | `install.legacyUninstallKeys` (folder from InstallLocation, UninstallString or DisplayIcon); the keys are removed after a successful install. The current `THRM` key is adopted through `adoptExistingInstall`. |
+| Delete scheduled tasks `THRM`, `BS2PRO-Controller`, `BS2PRO-Core`; legacy Run values; legacy shortcuts | `install.cleanup` (runs before the autostart action re-registers the task). |
+| PawnIO: skip if the installed version is ≥ the bundled one; silent install; exit code 183 = already installed; on failure retry interactively; a failure only warns | `actions[pawnio]`: `skipIfInstalled` (64- and 32-bit registry views), `successExitCodes: [0, 183]`, `fallbackArguments: ["-install"]`, `onFailure: "warn"`. |
+| Autostart: `THRM Core.exe --install-autostart`; on failure write `HKCU\…\Run\THRM = "THRM Core.exe" --autostart` | `actions[autostart]` with `ifOption: "autostart"` and `fallbackRunValue`. |
+| `ngen install /queue` for the bridge; `ngen uninstall` before replacing or removing it | `install.ngen: ["bridge/THRM TempBridge.exe"]`. |
+| Uninstall: close processes, delete tasks, Run values, startup shortcuts, `%AppData%\THRM.exe` (WebView2 data), `%AppData%\THRM`, `%LocalAppData%\THRM`; keep PawnIO (shared driver) | `uninstall.removeScheduledTasks`, `removeRunValues`, `removeShortcuts`, `removeData`; PawnIO is not removed. |
+| THRM's in-app updater runs the installer with `/S` | `/S` is an alias of `/quiet`. |
 
-Every action runs a file from the package's own payload. It runs with `CreateProcess`, without a shell, inside a job
-object, with a timeout. See [project-file.md](project-file.md) and [security.md](security.md).
+Every action runs a file from the package's own payload, with `CreateProcess`, without a shell, inside a job object and
+with a timeout. Prerequisite downloads (not used by THRM) are https-only and verified by SHA-256. See
+[project-file.md](project-file.md) and [security.md](security.md).
 
-## Verified
+## Differences that remain
 
-On a PC that had THRM 3.8.0 installed by NSIS in `D:\BS2PRO-Controller`:
-
-- The install adopted the existing entry and kept the folder. THRM's running processes were closed. The PawnIO action
-  was skipped because the installed version was new enough. The autostart registration exited with 0.
-- THRM was relaunched ("Launch when ready").
-- The Apps & features entry is now FluentSetup's (`FluentSetup=1`). The `\THRM` scheduled task and the shortcuts are
-  present.
-
-## Not carried over (yet)
-
-These parts of the NSIS script are intentionally not in the FluentSetup project:
-
-- **Stopping `SpaceStationService`.** It is a third-party service. FluentSetup only closes processes that belong to
-  the app being installed.
-- **NGen of the bridge assemblies.** It is optional. .NET compiles them on first use.
-- **Clean-up of the legacy "BS2PRO" product name** (old shortcuts, registry keys). If it is still needed, it can
-  be added as an `afterInstall` action that runs a clean-up tool shipped in the payload.
-- **Package size.** The FluentSetup package is 28.8 MB, the NSIS one 21.4 MB. LZMA with NSIS's BCJ filter compresses
-  x86/x64 code better than zstd without a filter. See [size-report.md](size-report.md).
+- **WebView2 minimum version.** Neither THRM nor Wails v3.1.0 declares one; the sample uses `120.0.0.0` as a policy
+  value. Raise it to whatever the app actually needs.
+- **"Remove settings?" question on uninstall.** NSIS asks whether to delete `%AppData%\BS2PRO` and
+  `%LocalAppData%\BS2PRO`. FluentSetup has no uninstall-time question; those legacy folders are kept.
+- **`%TEMP%\THRM`** is not removed (temporary files; the elevated uninstaller would see the administrator's `%TEMP%`).
+- **Config backup/restore** (`config.json`, `settings.ini` in the install folder) is not needed: FluentSetup only
+  replaces files it ships and never deletes files it did not install.
+- **Package size.** The FluentSetup package is about 28 MB, the NSIS one about 21 MB. LZMA with NSIS's BCJ filter
+  compresses x86/x64 code better than zstd without a filter. See [size-report.md](size-report.md).

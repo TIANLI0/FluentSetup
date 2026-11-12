@@ -102,11 +102,32 @@ std::optional<InstalledProduct> QueryForeign(const std::wstring& appId, Scope sc
     p.name = ReadString(key.get(), L"DisplayName");
     p.version = ReadString(key.get(), L"DisplayVersion");
     p.publisher = ReadString(key.get(), L"Publisher");
-    std::wstring normalized;
-    if (path::ValidateAbsoluteSyntax(ReadString(key.get(), L"InstallLocation"), normalized) == path::Problem::None) {
-        p.installDir = normalized;
+    // InstallLocation, else the folder of the uninstaller or of the icon ("C:\App\app.exe",0). Older installers
+    // (NSIS, Inno, hand-written keys) do not always write InstallLocation.
+    const auto folderOf = [](std::wstring v) -> std::wstring {
+        if (v.empty()) return {};
+        if (v.front() == L'"') {
+            const size_t close = v.find(L'"', 1);
+            v = close == std::wstring::npos ? v.substr(1) : v.substr(1, close - 1);
+        } else if (const size_t exe = ToLower(v).find(L".exe"); exe != std::wstring::npos) {
+            v = v.substr(0, exe + 4);
+        }
+        return path::Parent(v);
+    };
+    for (const std::wstring& candidate : {ReadString(key.get(), L"InstallLocation"), folderOf(ReadString(key.get(), L"UninstallString")),
+                                          folderOf(ReadString(key.get(), L"DisplayIcon"))}) {
+        std::wstring normalized;
+        if (!candidate.empty() && path::ValidateAbsoluteSyntax(candidate, normalized) == path::Problem::None && fs::IsDirectory(normalized)) {
+            p.installDir = normalized;
+            break;
+        }
     }
     return p;
+}
+
+bool DeleteForeignArpEntry(const std::wstring& keyName, Scope scope) {
+    if (!ForeignArpEntryExists(keyName, scope)) return false;  // never one of ours
+    return ::RegDeleteKeyExW(RootFor(scope), ArpKeyPath(keyName).c_str(), kView, 0) == ERROR_SUCCESS;
 }
 
 json::Value RecordToJson(const InstallRecord& r) {

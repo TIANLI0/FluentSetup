@@ -95,6 +95,13 @@
   "state.RollingBack": "正在撤销更改…",
   "state.Completed": "已完成",
   "state.Failed": "出现问题",
+  "state.Downloading": "正在下载",
+  "state.InstallingPrerequisites": "正在安装必需组件",
+  "prereq.bundled": "还将安装 {0}。",
+  "prereq.download": "需要 {0}，将从网络下载（{1}）并安装。",
+  "prereq.missing": "需要先安装 {0}。",
+  "prereq.upgrade": "{0} 版本过低（已安装 {1}，需要 {2} 或更高），将自动升级。",
+  "prereq.tooOld": "{0} 版本过低（已安装 {1}，需要 {2} 或更高），请先升级。",
 
   "cancel.title": "要取消安装吗？",
   "cancel.title.uninstall": "要取消卸载吗？",
@@ -162,5 +169,5 @@
   "fallback.browse": "浏览(&R)…",
   "fallback.viewLog": "查看日志",
 
-  "usage": "用法：Setup.exe [选项]\n\n/quiet  不显示任何界面进行安装\n/uninstall  卸载已安装的应用\n/dir <路径>  安装位置\n/scope user|machine  为当前用户或所有用户安装\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  打开或关闭安装包定义的选项\n/log <文件>  将日志写入此文件\n/lang en-US|zh-CN  界面语言\n/ui auto|winui|win32  界面技术（诊断用）\n\n退出代码 0 表示成功；其他代码请参阅文档。"
+  "usage": "用法：Setup.exe [选项]\n\n/quiet  不显示任何界面进行安装\n/uninstall  卸载已安装的应用\n/dir <路径>  安装位置\n/scope user|machine  为当前用户或所有用户安装\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  打开或关闭安装包定义的选项\n/log <文件>  将日志写入此文件\n/lang en-US|zh-CN|ja-JP|ko-KR  界面语言\n/ui auto|winui|win32  界面技术（诊断用）\n\n退出代码 0 表示成功；其他代码请参阅文档。"
 }

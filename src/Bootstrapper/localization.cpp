@@ -38,9 +38,25 @@ std::vector<std::wstring> UserLanguages() {
     return out;
 }
 
+// One embedded table per language (shared/localization/<lang>.json). Adding a language = a JSON file, an RCDATA line
+// and an entry here.
+struct Language {
+    const wchar_t* prefix;  // matched against the start of a BCP-47 tag ("zh-Hans-CN" -> zh)
+    const wchar_t* name;
+    int resource;
+};
+constexpr Language kLanguages[] = {
+    {L"en", L"en-US", IDR_STRINGS_EN_US},
+    {L"zh", L"zh-CN", IDR_STRINGS_ZH_CN},
+    {L"ja", L"ja-JP", IDR_STRINGS_JA_JP},
+    {L"ko", L"ko-KR", IDR_STRINGS_KO_KR},
+};
+
 std::wstring Resolve(const std::wstring& tag) {
-    if (StartsWithIgnoreCase(tag, L"zh")) return L"zh-CN";
-    if (StartsWithIgnoreCase(tag, L"en")) return L"en-US";
+    for (const auto& l : kLanguages) {
+        const size_t n = wcslen(l.prefix);
+        if (tag.size() >= n && _wcsnicmp(tag.c_str(), l.prefix, n) == 0 && (tag.size() == n || tag[n] == L'-')) return l.name;
+    }
     return {};
 }
 
@@ -62,10 +78,11 @@ void Strings::Load(const std::wstring& requested, const std::wstring& packageDef
 
     // English is the base so that a key missing from a translation still shows sensible text.
     table_ = LoadTable(IDR_STRINGS_EN_US);
-    if (lang == L"zh-CN") {
+    for (const auto& l : kLanguages) {
+        if (lang != l.name || l.resource == IDR_STRINGS_EN_US) continue;
         // Keep the table alive for the loop: iterating LoadTable(...).object() would read a destroyed temporary.
-        const json::Value chinese = LoadTable(IDR_STRINGS_ZH_CN);
-        for (const auto& [k, v] : chinese.object()) table_.set(k, v);
+        const json::Value translated = LoadTable(l.resource);
+        for (const auto& [k, v] : translated.object()) table_.set(k, v);
     }
     for (const auto& [k, v] : overrides[WideToUtf8(lang)].object()) {
         if (v.isString() && v.asString().size() <= 4096) table_.set(k, v);

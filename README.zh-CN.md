@@ -12,8 +12,9 @@
 - **原生、自包含**：C++20 引导程序，静态链接 VC 运行时，内置 zstd 解码器。系统装有 Windows App Runtime 时使用 WinUI 3 界面，否则自动切换到布局相同的 Win32 界面，不会循环重启，也不会重复执行有副作用的步骤。
 - **安装可靠**：预写日志加被替换文件的备份，失败或取消时逐字节回滚；拒绝不安全的安装路径；逐文件 SHA-256 和 Authenticode 校验，能发现损坏或被篡改的安装包；提权由独立的 worker 进程完成，它只安装自身内嵌的安装包。
 - **完整生命周期**：按用户或按机器安装，升级、重新安装、防降级，注册到“应用和功能”，快捷方式，可自删除的 `uninstall.exe`，静默模式，还能接管由其他安装程序安装的同一应用。
-- **声明式扩展**：关闭正在运行的进程；检查前置条件（.NET Framework、WebView2，可附带安装程序）；自定义复选框；安装后或卸载前运行安装包内的程序；卸载时清理计划任务、Run 启动项和应用数据。
-- **无障碍与本地化**：英文和简体中文，跟随 Windows 显示语言；UI 自动化名称、键盘导航、浅色/深色/高对比度主题、按显示器 DPI 缩放。
+- **声明式扩展**：关闭正在运行的进程；必需（锁定）组件与可选组件；安装后或卸载前运行安装包内的程序（支持失败后的备用方式）；接管旧产品名下的安装；NGen；清理旧版本的计划任务、Run 启动项、快捷方式和卸载项。
+- **前置条件版本检查**：.NET Framework、.NET 运行时、WebView2 都可设置最低版本；缺失或版本过低时，用随包安装程序或可选的 https 下载（SHA-256 校验）安装/升级，否则停止并给出帮助链接；`onFailure: "fail"` 保证应用不会装在过旧的运行时上。
+- **无障碍与本地化**：英文、简体中文、日文、韩文，跟随 Windows 显示语言，安装包文本按语言拆分为独立文件；UI 自动化名称、键盘导航、浅色/深色/高对比度主题、按显示器 DPI 缩放。
 - **三种制作方式**：`fluentsetup` 命令行、WinUI 3 图形化 Builder，或直接调用 `Builder.Core` 库。
 
 ## 快速开始
@@ -37,7 +38,7 @@ $fs = '.\src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe'
 ```
 Setup.exe [/quiet | /S] [/uninstall] [/dir <路径>] [/scope user|machine]
           [/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no]
-          [/log <文件>] [/lang en-US|zh-CN] [/ui auto|winui|win32]
+          [/log <文件>] [/lang en-US|zh-CN|ja-JP|ko-KR] [/ui auto|winui|win32]
 ```
 
 退出代码 0 表示成功，其余代码见 [docs/diagnostics.md](docs/diagnostics.md)。

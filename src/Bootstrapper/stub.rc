@@ -9,6 +9,8 @@ IDI_APP ICON "..\\..\\assets\\default-app.ico"
 
 IDR_STRINGS_EN_US RCDATA "..\\..\\shared\\localization\\en-US.json"
 IDR_STRINGS_ZH_CN RCDATA "..\\..\\shared\\localization\\zh-CN.json"
+IDR_STRINGS_JA_JP RCDATA "..\\..\\shared\\localization\\ja-JP.json"
+IDR_STRINGS_KO_KR RCDATA "..\\..\\shared\\localization\\ko-KR.json"
 
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "stub.manifest"
 

@@ -84,6 +84,12 @@ public sealed class InstallSettings
     public List<string> CloseProcesses { get; set; } = [];
     /// <summary>Take over an installation of this app made by a previous installer (same uninstall key = app id).</summary>
     public bool AdoptExistingInstall { get; set; }
+    /// <summary>Uninstall keys of older product names: adopted (their folder is upgraded) and removed after installing.</summary>
+    public List<string> LegacyUninstallKeys { get; set; } = [];
+    /// <summary>.NET Framework assemblies (relative paths) to pre-compile with ngen (queued, best effort; per-machine installs).</summary>
+    public List<string> Ngen { get; set; } = [];
+    /// <summary>Leftovers of earlier versions removed during installation (before afterInstall actions run).</summary>
+    public InstallCleanupSettings Cleanup { get; set; } = new();
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
 }
 
@@ -102,7 +108,11 @@ public sealed class UiSettings
     public string License { get; set; } = "";
     /// <summary>Per-language license files (e.g. { "zh-CN": "license_zh.txt" }); falls back to <see cref="License"/>.</summary>
     public Dictionary<string, string> Licenses { get; set; } = [];
-    /// <summary>auto | en-US | zh-CN</summary>
+    /// <summary>firstInstall (default) | always: also before upgrades and reinstalls.</summary>
+    public string LicenseMode { get; set; } = "firstInstall";
+    /// <summary>Folder with one &lt;language&gt;.json per language (option labels, action names, license, strings).</summary>
+    public string Localization { get; set; } = "";
+    /// <summary>auto | en-US | zh-CN | ja-JP | ko-KR</summary>
     public string DefaultLanguage { get; set; } = "auto";
     /// <summary>Per-language overrides of installer strings, e.g. { "zh-CN": { "welcome.body": "…" } }.</summary>
     public Dictionary<string, Dictionary<string, string>> Strings { get; set; } = [];
@@ -138,15 +148,53 @@ public sealed class RequirementSettings
 {
     /// <summary>Minimum .NET Framework 4.x version, e.g. "4.7.2"; empty = not required.</summary>
     public string NetFramework { get; set; } = "";
+    /// <summary>Where to get .NET Framework when it is missing (bundled installer or download).</summary>
+    public PrerequisiteSource? NetFrameworkSetup { get; set; }
     public WebView2Settings WebView2 { get; set; } = new();
+    /// <summary>.NET (Core) shared runtimes, e.g. the Windows Desktop Runtime 8.</summary>
+    public List<DotNetRequirement> DotNet { get; set; } = [];
 }
 
-public sealed class WebView2Settings
+/// <summary>How setup obtains a missing prerequisite. Bundled installer first, then the download; neither = setup stops.</summary>
+public class PrerequisiteSource
+{
+    /// <summary>Relative path of an installer inside the installed files (add it with files.extra).</summary>
+    public string Installer { get; set; } = "";
+    public List<string> Arguments { get; set; } = [];
+    /// <summary>Download from the internet (https, verified with SHA-256) when nothing is bundled.</summary>
+    public DownloadSettings? Download { get; set; }
+    /// <summary>https link shown to the user when the prerequisite is missing and cannot be installed by setup.</summary>
+    public string HelpUrl { get; set; } = "";
+    /// <summary>warn (default): install the app anyway and report it | fail: if it is still missing or too old after its
+    /// installer ran, stop and roll the installation back.</summary>
+    public string OnFailure { get; set; } = "warn";
+}
+
+public sealed class DownloadSettings
+{
+    public string Url { get; set; } = "";
+    public string Sha256 { get; set; } = "";
+    /// <summary>Exact size in bytes (0 = unknown).</summary>
+    public long Size { get; set; }
+}
+
+public sealed class WebView2Settings : PrerequisiteSource
 {
     public bool Required { get; set; }
-    /// <summary>Optional bundled installer (relative path inside the installed files) run when the runtime is missing.</summary>
-    public string Installer { get; set; } = "";
-    public List<string> Arguments { get; set; } = ["/silent", "/install"];
+    /// <summary>Minimum runtime version, e.g. "120.0.2210.91"; empty = any.</summary>
+    public string MinVersion { get; set; } = "";
+    public WebView2Settings() => Arguments = ["/silent", "/install"];
+}
+
+public sealed class DotNetRequirement : PrerequisiteSource
+{
+    /// <summary>desktop (Microsoft.WindowsDesktop.App) | core (Microsoft.NETCore.App) | aspnetcore (Microsoft.AspNetCore.App)</summary>
+    public string Runtime { get; set; } = "desktop";
+    /// <summary>Minimum version, e.g. "8.0.0".</summary>
+    public string Version { get; set; } = "";
+    /// <summary>patch | minor (default, like .NET itself) | major: which newer installed versions count.</summary>
+    public string RollForward { get; set; } = "minor";
+    public DotNetRequirement() => Arguments = ["/install", "/quiet", "/norestart"];
 }
 
 public sealed class UserOptionSettings
@@ -155,10 +203,14 @@ public sealed class UserOptionSettings
     /// <summary>Label per language, e.g. { "en-US": "Start when I sign in", "zh-CN": "登录时启动" }.</summary>
     public Dictionary<string, string> Label { get; set; } = [];
     public bool Default { get; set; }
+    /// <summary>A component that is always installed: shown checked and locked (e.g. a driver the app needs).</summary>
+    public bool Required { get; set; }
 }
 
 public sealed class ActionSettings
 {
+    /// <summary>Optional id, used to translate <see cref="Name"/> in localization files.</summary>
+    public string Id { get; set; } = "";
     /// <summary>afterInstall | beforeUninstall</summary>
     public string When { get; set; } = "afterInstall";
     /// <summary>Relative path of an .exe inside the installed files.</summary>
@@ -173,6 +225,26 @@ public sealed class ActionSettings
     /// <summary>Skip when this registry value already holds at least this version (e.g. a driver already installed).</summary>
     public RegistryVersionCondition? SkipIfInstalled { get; set; }
     public Dictionary<string, string> Name { get; set; } = [];
+    /// <summary>When the program does not succeed: run it again visibly with these arguments (e.g. an interactive installer).</summary>
+    public List<string>? FallbackArguments { get; set; }
+    /// <summary>When it still does not succeed: register it under HKCU\...\Run instead (e.g. autostart without a scheduled task).</summary>
+    public RunValueSettings? FallbackRunValue { get; set; }
+}
+
+public sealed class RunValueSettings
+{
+    public string Name { get; set; } = "";
+    public List<string> Arguments { get; set; } = [];
+}
+
+public sealed class InstallCleanupSettings
+{
+    public List<string> RemoveScheduledTasks { get; set; } = [];
+    public List<string> RemoveRunValues { get; set; } = [];
+    /// <summary>Shortcut file names (e.g. "Old Name.lnk") removed from Start menu, Desktop and Startup folders.</summary>
+    public List<string> RemoveShortcuts { get; set; } = [];
+    /// <summary>Uninstall entries of other (older) product names to remove.</summary>
+    public List<string> RemoveUninstallKeys { get; set; } = [];
 }
 
 public sealed class RegistryVersionCondition
@@ -192,4 +264,6 @@ public sealed class UninstallSettings
     public List<string> RemoveScheduledTasks { get; set; } = [];
     /// <summary>Names of HKCU/HKLM ...\CurrentVersion\Run values the app registered.</summary>
     public List<string> RemoveRunValues { get; set; } = [];
+    /// <summary>Shortcut file names removed from Start menu, Desktop and Startup folders (e.g. legacy names).</summary>
+    public List<string> RemoveShortcuts { get; set; } = [];
 }

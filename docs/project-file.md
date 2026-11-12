@@ -134,6 +134,14 @@ syntax as above. A preserved file:
 | `minWindowsBuild` | integer | `17763` | 0–100000. On an older build Setup.exe exits with code 5. A value of 0 disables the check. Values from 1 to 17762 give a warning, because FluentSetup itself needs build 17763. |
 | `closeProcesses` | string[] | `[]` | Up to 32 bare `.exe` names, e.g. `"MyApp.exe"`. Before install and before uninstall these processes get `WM_CLOSE` and are terminated if still running after a grace period. |
 | `adoptExistingInstall` | bool | `false` | Takes over an installation made by a previous, non-FluentSetup installer that registered the uninstall key named `app.id`. Its folder and version count as the existing installation. Files of the old version that the new one does not ship are left in place, because no FluentSetup install record exists for them. |
+| `legacyUninstallKeys` | string[] | `[]` | Uninstall key names of **older product names** (e.g. before a rename). If the app is not installed under its own id, the first of these keys that points at an existing folder is adopted the same way (folder from `InstallLocation`, else from `UninstallString` or `DisplayIcon`). After a successful install these keys are deleted. Keys written by FluentSetup are never touched; the app's own id is not allowed here (FS1650). |
+| `ngen` | string[] | `[]` | .NET Framework assemblies among the installed files (`.exe`/`.dll`, max 16). After install they are queued with `ngen install /queue` (compiled when the PC is idle); before an upgrade replaces them and before uninstall, `ngen uninstall` drops the old native images. Only in elevated (per-machine) installs; failures are only logged. |
+| `cleanup.removeScheduledTasks` | string[] | `[]` | Leftovers of earlier versions removed **during installation**, after the files are in place and before `afterInstall` actions run (so an action can register its replacement). Task names in the root folder. |
+| `cleanup.removeRunValues` | string[] | `[]` | `...\CurrentVersion\Run` value names (HKCU and HKLM). |
+| `cleanup.removeShortcuts` | string[] | `[]` | Shortcut file names (`.lnk`) deleted from the per-user and all-users Start menu Programs, Desktop and Startup folders. Never list the app's own shortcut names here. |
+| `cleanup.removeUninstallKeys` | string[] | `[]` | Uninstall entries of other product names, deleted after the install is committed (not this app's id). |
+
+The `cleanup` steps are not undone by a rollback.
 
 The values `off`, `on`, `optionalOff` and `optionalOn` mean:
 
@@ -195,14 +203,34 @@ includes a failing `afterInstall` action with `onFailure: "fail"`.
 
 ## requirements
 
-These are checked before anything is changed.
+Prerequisites are checked before anything is changed. A missing (or too old) one is listed on the first page of the
+installer together with what setup will do about it.
 
 | Property | Type | Default | Meaning |
 |---|---|---|---|
-| `netFramework` | string | `""` | Minimum .NET Framework 4.x: one of `4.5`, `4.5.1`, `4.5.2`, `4.6`, `4.6.1`, `4.6.2`, `4.7`, `4.7.1`, `4.7.2`, `4.8`, `4.8.1`. Empty means not required. If it is missing, setup stops with exit code 17 (`PrerequisiteMissing`). |
-| `webView2.required` | bool | `false` | The app needs the Microsoft Edge WebView2 Evergreen runtime. |
-| `webView2.installer` | string | `""` | Optional bundled runtime installer, given as a relative path of a file **among the installed files**, typically added through `files.extra`. If the runtime is missing, this installer runs after the files are placed (600 s limit). Its failure is only a warning. Without it, a missing runtime stops setup with exit code 17. |
-| `webView2.arguments` | string[] | `["/silent", "/install"]` | Arguments for the bundled installer. |
+| `netFramework` | string | `""` | Minimum .NET Framework 4.x: one of `4.5`, `4.5.1`, `4.5.2`, `4.6`, `4.6.1`, `4.6.2`, `4.7`, `4.7.1`, `4.7.2`, `4.8`, `4.8.1`. Empty means not required. |
+| `netFrameworkSetup` | source | `null` | Where to get .NET Framework when it is missing (see *Prerequisite sources*). |
+| `webView2.required` | bool | `false` | The app needs the Microsoft Edge WebView2 Evergreen runtime (machine-wide or per-user registration). |
+| `webView2.minVersion` | string | `""` | Minimum runtime version, e.g. `"120.0.2210.91"`. An older runtime counts as missing: setup says it is too old and runs the installer to update it. Combine with `onFailure: "fail"` to refuse to install the app on an outdated runtime. |
+| `webView2.*` | source | | `installer`, `arguments` (default `["/silent", "/install"]`), `download`, `helpUrl`, `onFailure`. |
+| `dotNet[]` | object[] | `[]` | .NET (Core) shared runtimes, max 8. |
+| `dotNet[].runtime` | `desktop` \| `core` \| `aspnetcore` | `"desktop"` | `Microsoft.WindowsDesktop.App`, `Microsoft.NETCore.App` or `Microsoft.AspNetCore.App`, found under `%ProgramFiles%\dotnet\shared` (or the registered install location) for the package's architecture. |
+| `dotNet[].version` | string | | **Required.** Minimum version, e.g. `"8.0.0"`. |
+| `dotNet[].rollForward` | `patch` \| `minor` \| `major` | `"minor"` | Which newer versions count: same `major.minor`, same major (the .NET default), or any newer one. |
+| `dotNet[].*` | source | | `installer`, `arguments` (default `["/install", "/quiet", "/norestart"]`), `download`, `helpUrl`, `onFailure`. |
+
+### Prerequisite sources
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `installer` | string | `""` | Installer **among the installed files** (add it with `files.extra`). Runs after the app's files are placed, visible, up to 30 minutes. |
+| `arguments` | string[] | see above | Installer arguments. |
+| `download` | object | `null` | `{ "url": "https://…", "sha256": "<64 hex>", "size": <bytes or 0> }`. Used when no installer is bundled. Downloaded **before anything is changed** (progress is shown), over TLS 1.2+, https only (no redirect to http), into a private temporary folder, size-capped (exact `size`, else 512 MiB) and verified against `sha256` before it runs. A mismatch or network error stops setup with exit code 17 and nothing installed. |
+| `helpUrl` | string | `""` | https link shown when the prerequisite is missing and setup cannot install it. |
+| `onFailure` | `warn` \| `fail` | `"warn"` | After the installer ran, the prerequisite is checked again. `warn`: the app stays installed and the result page lists the problem. `fail`: the whole installation is rolled back (exit code 17). |
+
+With neither `installer` nor `download`, a missing prerequisite stops setup before anything is changed (exit code 17,
+`PrerequisiteMissing`, with `helpUrl` in the message).
 
 ## options
 
@@ -213,6 +241,10 @@ These are checkboxes on the installer's options page. Actions can depend on them
 | `id` | string | `""` | **Required.** Unique id: letters, digits, `-` and `_` (max 32). |
 | `label` | object | `{}` | **Required.** Text per language, e.g. `{ "en-US": "Start when I sign in", "zh-CN": "登录时启动" }`. At least one entry is needed and none may be blank. A plain string is not accepted. |
 | `default` | bool | `false` | Initial state. Quiet installs use this value unless `/option id=yes\|no` is given. |
+| `required` | bool | `false` | A component that is always installed (e.g. a driver the app needs): shown checked and **locked**, so users see it is part of the installation. `/option id=no` cannot turn it off. |
+
+Options are shown on the installer's first page, below the install location. Labels can also come from the
+localization folder (`ui.localization`).
 
 ## actions
 
@@ -233,6 +265,9 @@ Actions run programs from the app's own files after install or before uninstall.
 | `skipIfInstalled.value` | string | `"DisplayVersion"` | Name of a `REG_SZ` value. |
 | `skipIfInstalled.version` | string | `""` | Required version, using the same format as `app.version`. |
 | `name` | object | `{}` | Step name per language, used in the log and in failure messages. If empty, the file name is used. |
+| `id` | string | `""` | Optional id (letters, digits, `-`, `_`), used to translate `name` in the localization folder. |
+| `fallbackArguments` | string[] \| null | `null` | If the step does not succeed, run the same program again **visibly** with these arguments, e.g. an installer's interactive mode after its silent mode failed. Up to 30 minutes. |
+| `fallbackRunValue` | object \| null | `null` | `{ "name": "...", "arguments": [...] }`. If the step still does not succeed, register `"<run>" <arguments>` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` instead and count the step as done (e.g. autostart when a scheduled task cannot be created). List the name in `uninstall.removeRunValues`. |
 
 ### Security rules
 
@@ -254,6 +289,7 @@ failures are only logged.
 | `removeData` | string[] | `[]` | Folders deleted recursively. Each must be `{CommonAppData}\<path>`, `{LocalAppData}\<path>` or `{AppData}\<path>`, where `<path>` is a valid relative path. Only existing directories that are not links are removed. |
 | `removeScheduledTasks` | string[] | `[]` | Task names in the Task Scheduler root folder (max 128 characters, no `\/:*?"<>\|`). |
 | `removeRunValues` | string[] | `[]` | Value names deleted from `HKCU` and `HKLM` `Software\Microsoft\Windows\CurrentVersion\Run`. Same name rules as for tasks. |
+| `removeShortcuts` | string[] | `[]` | Shortcut file names (`.lnk`) deleted from the per-user and all-users Start menu Programs, Desktop and Startup folders (for shortcuts the app or older versions created). |
 
 The installed files and shortcuts, the app's uninstall registration and the install folder (if it is empty) are always
 removed. Preserved files and files the installer did not create are kept.
@@ -269,10 +305,32 @@ removed. Preserved files and files the installer did not create are kept.
 | `backdrop` | `mica` \| `micaAlt` \| `none` | `"mica"` | Window material of the WinUI front end. |
 | `useSystemAccent` | bool | `true` | Use the Windows accent colour. |
 | `accentColor` | string | `""` | `#RRGGBB`. Required when `useSystemAccent` is `false` (FS1303). |
-| `license` | string | `""` | Plain-text license file (max 1 MB). If set, a **first-time** install shows it and the user must accept it. |
-| `licenses` | object | `{}` | Per-language license files, e.g. `{ "zh-CN": "license_zh.txt" }`. Only `en-US` and `zh-CN` are used. Falls back to `license`. |
-| `defaultLanguage` | `auto` \| `en-US` \| `zh-CN` | `"auto"` | `auto` follows the user's Windows display languages: `zh*` gives zh-CN, `en*` gives en-US, anything else gives en-US. `/lang` overrides this setting. |
-| `strings` | object | `{}` | Per-language overrides of built-in strings, e.g. `{ "zh-CN": { "welcome.body": "…" } }`. Keys are listed in `shared/localization/en-US.json`. Only `en-US` and `zh-CN` are used (other languages give warning FS1307). Values longer than 4096 bytes are ignored. |
+| `license` | string | `""` | Plain-text license file (max 1 MB). If set, the user must accept it before installing. |
+| `licenseMode` | `firstInstall` \| `always` | `"firstInstall"` | `always` also shows the license before upgrades and reinstalls (e.g. a user agreement that must be accepted for every version). |
+| `licenses` | object | `{}` | Per-language license files, e.g. `{ "zh-CN": "license_zh.txt" }`. Falls back to `license`. |
+| `localization` | string | `""` | Folder with one `<language>.json` per language; see *Localization*. |
+| `defaultLanguage` | `auto` \| `en-US` \| `zh-CN` \| `ja-JP` \| `ko-KR` | `"auto"` | `auto` follows the user's Windows display languages (first one the installer supports; else en-US). `/lang` overrides this setting. |
+| `strings` | object | `{}` | Per-language overrides of built-in strings, e.g. `{ "zh-CN": { "welcome.body": "…" } }`. Keys are listed in `shared/localization/en-US.json`. Values longer than 4096 bytes are ignored. |
+
+### Localization
+
+The installer's own text ships in four languages: en-US, zh-CN, ja-JP and ko-KR (one file each in
+`shared/localization`). The package's own text (option labels, action names, license, string overrides) can be kept
+out of `fluentsetup.json` in a folder named by `ui.localization`, one file per language:
+
+```json
+// locales/ja-JP.json
+{
+  "options": { "autostart": "Windows 起動時に開始" },
+  "actions": { "pawnio": "PawnIO ドライバーのインストール" },
+  "license": "license_ja-JP.txt",
+  "strings": { "welcome.running": "{0} を終了してから続行します。" }
+}
+```
+
+`options` and `actions` are keyed by id (`options[].id`, `actions[].id`), `license` is relative to the localization
+folder. A file wins over inline texts for its language. Files for unsupported languages are reported (FS1321) and
+ignored; unknown ids give warnings (FS1323, FS1324).
 
 ## output
 
@@ -338,7 +396,7 @@ The installed `uninstall.exe` accepts the same switches.
 | `/desktop-shortcut yes\|no` | Desktop shortcut choice. Honoured only for `optionalOff`/`optionalOn`. |
 | `/start-menu-shortcut yes\|no` | Start menu shortcut choice. Honoured only for `optionalOff`/`optionalOn`. |
 | `/option <id>=yes\|no` | Value of a package option. Can be repeated. Ids the package does not define are ignored. |
-| `/lang en-US\|zh-CN` | UI language. Overrides `ui.defaultLanguage`. |
+| `/lang en-US\|zh-CN\|ja-JP\|ko-KR` | UI language. Overrides `ui.defaultLanguage`. |
 | `/log <file>` | Write the log to this absolute file path. Default: `%TEMP%\FluentSetup\<appId>-install-<timestamp>.log` (or `-uninstall-`). |
 | `/ui auto\|winui\|win32` | Front-end selection, for diagnostics. `win32` skips the WinUI front end. |
 | `/help`, `/h`, `/?` | Show usage. |

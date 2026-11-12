@@ -103,7 +103,8 @@ public static partial class ProjectValidator
         if (ui.Theme is not ("system" or "light" or "dark")) d.Error("FS1301", "ui.theme", "Theme must be system, light or dark.");
         if (ui.Backdrop is not ("mica" or "micaAlt" or "none")) d.Error("FS1302", "ui.backdrop", "Backdrop must be mica, micaAlt or none.");
         if (!ui.UseSystemAccent && !ColorRegex().IsMatch(ui.AccentColor)) d.Error("FS1303", "ui.accentColor", "Accent colour must look like #0067C0 when the system accent is not used.");
-        if (ui.DefaultLanguage is not ("auto" or "en-US" or "zh-CN")) d.Error("FS1304", "ui.defaultLanguage", "Default language must be auto, en-US or zh-CN.");
+        if (ui.DefaultLanguage != "auto" && !Localization.SupportedLanguages.Contains(ui.DefaultLanguage)) d.Error("FS1304", "ui.defaultLanguage", $"Default language must be auto or one of {string.Join(", ", Localization.SupportedLanguages)}.");
+        if (ui.LicenseMode is not ("firstInstall" or "always")) d.Error("FS1311", "ui.licenseMode", "Use firstInstall or always.");
         if (!string.IsNullOrEmpty(ui.License))
         {
             var lic = Resolve(projectDirectory, ui.License);
@@ -130,11 +131,12 @@ public static partial class ProjectValidator
 
         foreach (var (lang, file) in ui.Licenses)
         {
-            if (lang is not ("en-US" or "zh-CN")) d.Warning("FS1309", $"ui.licenses.{lang}", $"License for '{lang}' is ignored: the installer supports en-US and zh-CN.");
+            if (!Localization.SupportedLanguages.Contains(lang)) d.Warning("FS1309", $"ui.licenses.{lang}", $"License for '{lang}' is ignored: the installer supports {string.Join(", ", Localization.SupportedLanguages)}.");
             if (!File.Exists(Resolve(projectDirectory, file))) d.Error("FS1310", $"ui.licenses.{lang}", $"License file not found: {Resolve(projectDirectory, file)}");
             else if (new FileInfo(Resolve(projectDirectory, file)).Length > 1024 * 1024) d.Error("FS1306", $"ui.licenses.{lang}", "License file is larger than 1 MB.");
         }
         ExtensionValidator.Validate(p, d);
+        Localization.Load(p, projectDirectory, d);  // reports problems in the localization folder
 
         // signing
         var s = p.Signing;

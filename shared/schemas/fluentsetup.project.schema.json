@@ -4,10 +4,16 @@
   "title": "FluentSetup project (fluentsetup.json)",
   "description": "Describes a Windows installer built by FluentSetup. Mirrors src/Builder.Core/Model/ProjectModel.cs and the checks in ProjectValidator.cs / ExtensionValidator.cs. Property names are camelCase (matched case-insensitively by the builder); // comments and trailing commas are accepted by the builder. Unknown properties are not rejected: at the root and in app, files, install, ui, output and signing they are kept on save, elsewhere they are ignored. Relative file paths are resolved against the folder that contains the project file.",
   "type": "object",
-  "required": ["app", "files"],
+  "required": [
+    "app",
+    "files"
+  ],
   "properties": {
     "$schema": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Optional reference to this schema for editors. Ignored by the builder. New projects get \"https://fluentsetup.dev/schemas/fluentsetup.project.schema.json\"."
     },
     "schemaVersion": {
@@ -16,28 +22,48 @@
       "default": 1,
       "description": "Project format version. Files with a value greater than 1 are rejected by this FluentSetup; the value is rewritten to 1 on load."
     },
-    "app": { "$ref": "#/$defs/app" },
-    "files": { "$ref": "#/$defs/files" },
-    "install": { "$ref": "#/$defs/install" },
-    "requirements": { "$ref": "#/$defs/requirements" },
+    "app": {
+      "$ref": "#/$defs/app"
+    },
+    "files": {
+      "$ref": "#/$defs/files"
+    },
+    "install": {
+      "$ref": "#/$defs/install"
+    },
+    "requirements": {
+      "$ref": "#/$defs/requirements"
+    },
     "options": {
       "type": "array",
       "maxItems": 16,
       "default": [],
       "description": "User-selectable switches shown on the installer's options page (at most 16, ids must be unique). Actions can depend on them through ifOption; Setup.exe /option id=yes|no overrides the default.",
-      "items": { "$ref": "#/$defs/option" }
+      "items": {
+        "$ref": "#/$defs/option"
+      }
     },
     "actions": {
       "type": "array",
       "maxItems": 32,
       "default": [],
       "description": "Programs from the app's own installed files run after install or before uninstall (at most 32). No shell and no system tools: only an .exe that is part of the payload can be run.",
-      "items": { "$ref": "#/$defs/action" }
+      "items": {
+        "$ref": "#/$defs/action"
+      }
     },
-    "uninstall": { "$ref": "#/$defs/uninstall" },
-    "ui": { "$ref": "#/$defs/ui" },
-    "output": { "$ref": "#/$defs/output" },
-    "signing": { "$ref": "#/$defs/signing" }
+    "uninstall": {
+      "$ref": "#/$defs/uninstall"
+    },
+    "ui": {
+      "$ref": "#/$defs/ui"
+    },
+    "output": {
+      "$ref": "#/$defs/output"
+    },
+    "signing": {
+      "$ref": "#/$defs/signing"
+    }
   },
   "$defs": {
     "nonBlank": {
@@ -59,8 +85,13 @@
     },
     "relativeExePath": {
       "allOf": [
-        { "$ref": "#/$defs/relativePath" },
-        { "type": "string", "pattern": "\\.[Ee][Xx][Ee]$" }
+        {
+          "$ref": "#/$defs/relativePath"
+        },
+        {
+          "type": "string",
+          "pattern": "\\.[Ee][Xx][Ee]$"
+        }
       ],
       "description": "Relative path of an .exe inside the installed files (see relativePath rules)."
     },
@@ -83,14 +114,20 @@
     "localizedText": {
       "type": "object",
       "description": "Text per language, keyed by language tag, e.g. { \"en-US\": \"...\", \"zh-CN\": \"...\" }. The installer picks the UI language, then falls back to en-US. Values are cut to 256 characters by the installer. A plain string is not accepted by the builder.",
-      "propertyNames": { "maxLength": 16 },
-      "additionalProperties": { "type": "string" }
+      "propertyNames": {
+        "maxLength": 16
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
     },
-
     "app": {
       "type": "object",
       "description": "Identity of the app; shown in the installer and in Windows Settings > Apps.",
-      "required": ["id", "name"],
+      "required": [
+        "id",
+        "name"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -100,7 +137,11 @@
           "description": "Stable app identifier, e.g. \"Contoso.Notes\". ASCII letters, digits, '.', '-', '_' (max 64), must not start or end with '.'. Used as the uninstall registry key name; never change it between versions."
         },
         "name": {
-          "allOf": [{ "$ref": "#/$defs/nonBlank" }],
+          "allOf": [
+            {
+              "$ref": "#/$defs/nonBlank"
+            }
+          ],
           "type": "string",
           "maxLength": 128,
           "default": "",
@@ -137,94 +178,147 @@
         },
         "mainExecutable": {
           "type": "string",
-          "anyOf": [{ "const": "" }, { "$ref": "#/$defs/relativeExePath" }],
+          "anyOf": [
+            {
+              "const": ""
+            },
+            {
+              "$ref": "#/$defs/relativeExePath"
+            }
+          ],
           "default": "",
           "description": "Relative path of the program inside the installed files (must be among them). Used for shortcuts, \"launch after install\" and the Settings icon. Empty = no shortcuts and no launch (warning)."
         }
       }
     },
-
     "extraSource": {
       "type": "object",
-      "required": ["source"],
+      "required": [
+        "source"
+      ],
       "properties": {
         "source": {
-          "allOf": [{ "$ref": "#/$defs/nonBlank" }],
+          "allOf": [
+            {
+              "$ref": "#/$defs/nonBlank"
+            }
+          ],
           "type": "string",
           "description": "File or folder to add (relative to the project file or absolute). A file is installed as <target>\\<file name>; a folder's contents are installed below <target> without include/exclude filtering."
         },
         "target": {
           "type": "string",
-          "anyOf": [{ "const": "" }, { "$ref": "#/$defs/relativePath" }],
+          "anyOf": [
+            {
+              "const": ""
+            },
+            {
+              "$ref": "#/$defs/relativePath"
+            }
+          ],
           "default": "",
           "description": "Relative target folder inside the install folder; empty = the install folder itself."
         }
       }
     },
-
     "files": {
       "type": "object",
       "description": "Which files are installed.",
-      "required": ["source"],
+      "required": [
+        "source"
+      ],
       "properties": {
         "source": {
-          "allOf": [{ "$ref": "#/$defs/nonBlank" }],
+          "allOf": [
+            {
+              "$ref": "#/$defs/nonBlank"
+            }
+          ],
           "type": "string",
           "default": "",
           "description": "Folder whose contents are installed (required; relative to the project file or absolute). The output folder is skipped if it lies inside; symbolic links and junctions are skipped with a warning."
         },
         "include": {
           "type": "array",
-          "items": { "$ref": "#/$defs/glob" },
-          "default": ["**/*"],
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "default": [
+            "**/*"
+          ],
           "description": "Globs (relative to files.source) a file must match to be installed."
         },
         "exclude": {
           "type": "array",
-          "items": { "$ref": "#/$defs/glob" },
-          "default": ["**/*.pdb", "**/*.ilk", "**/*.obj", "**/.git/**", "**/Thumbs.db", "**/.DS_Store"],
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "default": [
+            "**/*.pdb",
+            "**/*.ilk",
+            "**/*.obj",
+            "**/.git/**",
+            "**/Thumbs.db",
+            "**/.DS_Store"
+          ],
           "description": "Globs of files (and folders, tested as \"folder/\") to leave out. Giving this property replaces the whole default list."
         },
         "preserve": {
           "type": "array",
-          "items": { "$ref": "#/$defs/glob" },
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
           "default": [],
           "description": "Globs (against the installed relative path) of user-data files: installed only if missing, never overwritten on update, kept on uninstall."
         },
         "extra": {
           "type": "array",
-          "items": { "$ref": "#/$defs/extraSource" },
+          "items": {
+            "$ref": "#/$defs/extraSource"
+          },
           "default": [],
           "description": "Additional files or folders from elsewhere, mapped into a target sub-folder."
         },
         "emptyDirectories": {
           "type": "array",
-          "items": { "$ref": "#/$defs/relativePath" },
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          },
           "default": [],
           "description": "Empty folders to create below the install folder (relative paths)."
         }
       }
     },
-
     "offer": {
       "type": "string",
-      "enum": ["off", "on", "optionalOff", "optionalOn"],
+      "enum": [
+        "off",
+        "on",
+        "optionalOff",
+        "optionalOn"
+      ],
       "description": "off = never; on = always, not shown; optionalOff / optionalOn = shown as a choice, unchecked / checked by default."
     },
-
     "install": {
       "type": "object",
       "description": "Where and how the app is installed.",
       "properties": {
         "scope": {
           "type": "string",
-          "enum": ["user", "machine", "userOrMachine"],
+          "enum": [
+            "user",
+            "machine",
+            "userOrMachine"
+          ],
           "default": "user",
           "description": "user = per-user install without administrator rights; machine = for all users (elevates); userOrMachine = the user chooses."
         },
         "defaultScope": {
           "type": "string",
-          "enum": ["user", "machine"],
+          "enum": [
+            "user",
+            "machine"
+          ],
           "default": "user",
           "description": "Pre-selected scope when scope is userOrMachine (ignored otherwise)."
         },
@@ -255,7 +349,11 @@
         },
         "launchAfterInstall": {
           "type": "string",
-          "enum": ["off", "optionalOff", "optionalOn"],
+          "enum": [
+            "off",
+            "optionalOff",
+            "optionalOn"
+          ],
           "default": "optionalOn",
           "description": "Offer to start app.mainExecutable on the finish page: off | optionalOff | optionalOn. \"on\" (launch without asking) is rejected. Never launched in /quiet mode."
         },
@@ -274,7 +372,9 @@
         "closeProcesses": {
           "type": "array",
           "maxItems": 32,
-          "items": { "$ref": "#/$defs/exeFileName" },
+          "items": {
+            "$ref": "#/$defs/exeFileName"
+          },
           "default": [],
           "description": "Image names (e.g. \"MyApp.exe\") closed before installing or uninstalling: first WM_CLOSE to their windows, then terminated (at most 32)."
         },
@@ -282,36 +382,153 @@
           "type": "boolean",
           "default": false,
           "description": "Take over an installation made by a previous (non-FluentSetup) installer registered under the uninstall key named app.id: its folder and version are used as the existing installation."
+        },
+        "legacyUninstallKeys": {
+          "type": "array",
+          "maxItems": 32,
+          "default": [],
+          "description": "Uninstall key names of older product names. Their install folder is adopted (upgraded in place) and the keys are removed after installing.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$"
+          }
+        },
+        "ngen": {
+          "type": "array",
+          "maxItems": 16,
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          },
+          "description": ".NET Framework assemblies (relative paths) queued for ngen after install and removed before uninstall/upgrade. Per-machine installs only; best effort."
+        },
+        "cleanup": {
+          "type": "object",
+          "default": {},
+          "description": "Leftovers of earlier versions removed during installation, after the files are in place and before afterInstall actions run. Not undone by a rollback.",
+          "properties": {
+            "removeScheduledTasks": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "description": "Scheduled tasks (root folder).",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$"
+              }
+            },
+            "removeRunValues": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "description": "HKCU/HKLM ...\\CurrentVersion\\Run value names.",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$"
+              }
+            },
+            "removeShortcuts": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "description": "Shortcut file names removed from the Start menu, Desktop and Startup folders.",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$"
+              }
+            },
+            "removeUninstallKeys": {
+              "type": "array",
+              "maxItems": 32,
+              "default": [],
+              "description": "Uninstall entries of other product names (never this app's id).",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$"
+              }
+            }
+          }
         }
       },
       "allOf": [
         {
-          "if": { "required": ["scope"], "properties": { "scope": { "const": "machine" } } },
+          "if": {
+            "required": [
+              "scope"
+            ],
+            "properties": {
+              "scope": {
+                "const": "machine"
+              }
+            }
+          },
           "then": {},
           "else": {
             "properties": {
-              "userDir": { "not": { "pattern": "\\{[Pp][Rr][Oo][Gg][Rr][Aa][Mm][Ff][Ii][Ll][Ee][Ss]\\}" } }
+              "userDir": {
+                "not": {
+                  "pattern": "\\{[Pp][Rr][Oo][Gg][Rr][Aa][Mm][Ff][Ii][Ll][Ee][Ss]\\}"
+                }
+              }
             }
           }
         },
         {
-          "if": { "required": ["scope"], "properties": { "scope": { "enum": ["machine", "userOrMachine"] } } },
+          "if": {
+            "required": [
+              "scope"
+            ],
+            "properties": {
+              "scope": {
+                "enum": [
+                  "machine",
+                  "userOrMachine"
+                ]
+              }
+            }
+          },
           "then": {
             "properties": {
-              "machineDir": { "not": { "pattern": "\\{([Ll][Oo][Cc][Aa][Ll])?[Aa][Pp][Pp][Dd][Aa][Tt][Aa]\\}" } }
+              "machineDir": {
+                "not": {
+                  "pattern": "\\{([Ll][Oo][Cc][Aa][Ll])?[Aa][Pp][Pp][Dd][Aa][Tt][Aa]\\}"
+                }
+              }
             }
           }
         }
       ]
     },
-
     "requirements": {
       "type": "object",
       "description": "Windows components the app needs; checked before anything is changed.",
       "properties": {
         "netFramework": {
           "type": "string",
-          "enum": ["", "4.5", "4.5.1", "4.5.2", "4.6", "4.6.1", "4.6.2", "4.7", "4.7.1", "4.7.2", "4.8", "4.8.1"],
+          "enum": [
+            "",
+            "4.5",
+            "4.5.1",
+            "4.5.2",
+            "4.6",
+            "4.6.1",
+            "4.6.2",
+            "4.7",
+            "4.7.1",
+            "4.7.2",
+            "4.8",
+            "4.8.1"
+          ],
           "default": "",
           "description": "Minimum .NET Framework 4.x version; empty = not required. When missing, setup stops with exit code 17 (PrerequisiteMissing)."
         },
@@ -326,25 +543,111 @@
             },
             "installer": {
               "type": "string",
-              "anyOf": [{ "const": "" }, { "$ref": "#/$defs/relativePath" }],
+              "anyOf": [
+                {
+                  "const": ""
+                },
+                {
+                  "$ref": "#/$defs/relativePath"
+                }
+              ],
               "default": "",
               "description": "Optional bundled runtime installer: relative path of a file among the installed files. Run (600 s limit) after the files are in place when the runtime is missing; failure is reported as a warning. Without it a missing runtime stops setup (exit code 17)."
             },
             "arguments": {
               "type": "array",
               "maxItems": 32,
-              "items": { "type": "string", "maxLength": 1024 },
-              "default": ["/silent", "/install"],
+              "items": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "default": [
+                "/silent",
+                "/install"
+              ],
               "description": "Command-line arguments for the bundled installer."
+            },
+            "minVersion": {
+              "$ref": "#/$defs/version",
+              "description": "Minimum WebView2 runtime version (empty = any)."
+            },
+            "download": {
+              "$ref": "#/$defs/download"
+            },
+            "helpUrl": {
+              "type": "string",
+              "pattern": "^https://",
+              "maxLength": 2048,
+              "description": "Link shown when the runtime is missing and cannot be installed."
+            },
+            "onFailure": {
+              "enum": [
+                "warn",
+                "fail"
+              ],
+              "default": "warn",
+              "description": "warn: install the app anyway and report it. fail: if the prerequisite is still missing or older than minVersion after its installer ran, stop and roll the installation back."
+            }
+          }
+        },
+        "netFrameworkSetup": {
+          "$ref": "#/$defs/prerequisiteSource",
+          "description": "How to obtain .NET Framework when requirements.netFramework is not met."
+        },
+        "dotNet": {
+          "type": "array",
+          "default": [],
+          "maxItems": 8,
+          "description": ".NET (Core) shared runtimes the app needs, detected under %ProgramFiles%\\dotnet\\shared.",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/prerequisiteSource"
+              }
+            ],
+            "type": "object",
+            "required": [
+              "version"
+            ],
+            "properties": {
+              "runtime": {
+                "enum": [
+                  "desktop",
+                  "core",
+                  "aspnetcore"
+                ],
+                "default": "desktop",
+                "description": "desktop = Microsoft.WindowsDesktop.App, core = Microsoft.NETCore.App, aspnetcore = Microsoft.AspNetCore.App."
+              },
+              "version": {
+                "$ref": "#/$defs/version",
+                "description": "Minimum version, e.g. 8.0.0."
+              },
+              "rollForward": {
+                "enum": [
+                  "patch",
+                  "minor",
+                  "major"
+                ],
+                "default": "minor",
+                "description": "Which newer installed versions count: same major.minor, same major (like .NET's default), or any."
+              },
+              "installer": true,
+              "arguments": true,
+              "download": true,
+              "helpUrl": true,
+              "onFailure": true
             }
           }
         }
       }
     },
-
     "option": {
       "type": "object",
-      "required": ["id", "label"],
+      "required": [
+        "id",
+        "label"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -360,17 +663,27 @@
           "type": "boolean",
           "default": false,
           "description": "Initial state of the checkbox (and the value used in /quiet mode unless /option overrides it)."
+        },
+        "required": {
+          "type": "boolean",
+          "default": false,
+          "description": "A component that is always installed: shown checked and locked."
         }
       }
     },
-
     "registryVersionCondition": {
       "type": "object",
-      "required": ["key", "version"],
+      "required": [
+        "key",
+        "version"
+      ],
       "properties": {
         "hive": {
           "type": "string",
-          "enum": ["HKLM", "HKCU"],
+          "enum": [
+            "HKLM",
+            "HKCU"
+          ],
           "default": "HKLM",
           "description": "Registry hive."
         },
@@ -392,14 +705,18 @@
         }
       }
     },
-
     "action": {
       "type": "object",
-      "required": ["run"],
+      "required": [
+        "run"
+      ],
       "properties": {
         "when": {
           "type": "string",
-          "enum": ["afterInstall", "beforeUninstall"],
+          "enum": [
+            "afterInstall",
+            "beforeUninstall"
+          ],
           "default": "afterInstall",
           "description": "afterInstall = after files, shortcuts and registration (before the install is committed, so a failure rolls it back); beforeUninstall = before any file is removed."
         },
@@ -410,7 +727,10 @@
         "arguments": {
           "type": "array",
           "maxItems": 32,
-          "items": { "type": "string", "maxLength": 1024 },
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
           "default": [],
           "description": "Arguments, each quoted as a separate argument (at most 32, 1024 characters each)."
         },
@@ -423,13 +743,23 @@
         },
         "successExitCodes": {
           "type": "array",
-          "items": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
-          "default": [0],
+          "items": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "default": [
+            0
+          ],
           "description": "Exit codes that mean success. An empty list makes every run a failure."
         },
         "onFailure": {
           "type": "string",
-          "enum": ["fail", "warn", "ignore"],
+          "enum": [
+            "fail",
+            "warn",
+            "ignore"
+          ],
           "default": "fail",
           "description": "fail = abort (after install: the installation is rolled back); warn = continue and show a warning at the end; ignore = continue, only log it."
         },
@@ -439,7 +769,14 @@
           "description": "Run only when the option with this id (must exist in options) is selected. Empty = always."
         },
         "skipIfInstalled": {
-          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/registryVersionCondition" }],
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/registryVersionCondition"
+            }
+          ],
           "default": null,
           "description": "Skip the step when a registry value already holds at least the given version (e.g. a driver that is already installed)."
         },
@@ -447,10 +784,45 @@
           "$ref": "#/$defs/localizedText",
           "default": {},
           "description": "Step name per language, used in logs and failure messages; falls back to the file name."
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "description": "Optional id, used to translate the name in localization files."
+        },
+        "fallbackArguments": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "description": "If the program does not succeed, run it again visibly with these arguments (e.g. an installer's interactive mode)."
+        },
+        "fallbackRunValue": {
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "description": "If it still does not succeed, register \"<run>\" <arguments> under HKCU\\...\\Run with this name instead.",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "arguments": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "string",
+                "maxLength": 1024
+              }
+            }
+          }
         }
       }
     },
-
     "uninstall": {
       "type": "object",
       "description": "Extra cleanup on uninstall, of things the app itself created. Performed after the uninstall is committed; failures are only logged.",
@@ -466,19 +838,40 @@
         },
         "removeScheduledTasks": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\\\/:*?\"<>|\\x00-\\x1F]+$" },
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^\\\\/:*?\"<>|\\x00-\\x1F]+$"
+          },
           "default": [],
           "description": "Names of scheduled tasks in the Task Scheduler root folder to delete."
         },
         "removeRunValues": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\\\/:*?\"<>|\\x00-\\x1F]+$" },
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^\\\\/:*?\"<>|\\x00-\\x1F]+$"
+          },
           "default": [],
           "description": "Value names deleted from HKCU and HKLM Software\\Microsoft\\Windows\\CurrentVersion\\Run."
+        },
+        "removeShortcuts": {
+          "type": "array",
+          "maxItems": 32,
+          "default": [],
+          "description": "Shortcut file names removed from the Start menu, Desktop and Startup folders.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$"
+          }
         }
       }
     },
-
     "ui": {
       "type": "object",
       "description": "Look and text of the installer.",
@@ -503,13 +896,21 @@
         },
         "theme": {
           "type": "string",
-          "enum": ["system", "light", "dark"],
+          "enum": [
+            "system",
+            "light",
+            "dark"
+          ],
           "default": "system",
           "description": "Colour theme of the installer window."
         },
         "backdrop": {
           "type": "string",
-          "enum": ["mica", "micaAlt", "none"],
+          "enum": [
+            "mica",
+            "micaAlt",
+            "none"
+          ],
           "default": "mica",
           "description": "Window backdrop material of the WinUI front end."
         },
@@ -530,13 +931,29 @@
         },
         "licenses": {
           "type": "object",
-          "additionalProperties": { "type": "string" },
+          "additionalProperties": {
+            "type": "string"
+          },
           "default": {},
-          "description": "Per-language license files, e.g. { \"zh-CN\": \"license_zh.txt\" }. Only en-US and zh-CN are used; falls back to license."
+          "description": "Per-language license files, e.g. { \"zh-CN\": \"license_zh.txt\" }. Only en-US and zh-CN are used; falls back to license.",
+          "propertyNames": {
+            "enum": [
+              "en-US",
+              "zh-CN",
+              "ja-JP",
+              "ko-KR"
+            ]
+          }
         },
         "defaultLanguage": {
           "type": "string",
-          "enum": ["auto", "en-US", "zh-CN"],
+          "enum": [
+            "auto",
+            "en-US",
+            "zh-CN",
+            "ja-JP",
+            "ko-KR"
+          ],
           "default": "auto",
           "description": "Installer language. auto = the user's Windows display language (zh* -> zh-CN, en* -> en-US, otherwise en-US). Setup.exe /lang overrides it."
         },
@@ -546,23 +963,56 @@
           "description": "Per-language overrides of built-in installer strings (keys from shared/localization/en-US.json), e.g. { \"zh-CN\": { \"welcome.body\": \"...\" } }. Only en-US and zh-CN are used; values over 4096 bytes are ignored.",
           "additionalProperties": {
             "type": "object",
-            "additionalProperties": { "type": "string" }
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "licenseMode": {
+          "enum": [
+            "firstInstall",
+            "always"
+          ],
+          "default": "firstInstall",
+          "description": "When the license must be accepted: before a first install only, or before every install (upgrades too)."
+        },
+        "localization": {
+          "type": "string",
+          "default": "",
+          "description": "Folder with one <language>.json per language (en-US, zh-CN, ja-JP, ko-KR): {\"options\": {id: text}, \"actions\": {id: text}, \"license\": file, \"strings\": {key: text}}."
+        }
+      },
+      "if": {
+        "required": [
+          "useSystemAccent"
+        ],
+        "properties": {
+          "useSystemAccent": {
+            "const": false
           }
         }
       },
-      "if": { "required": ["useSystemAccent"], "properties": { "useSystemAccent": { "const": false } } },
       "then": {
-        "required": ["accentColor"],
-        "properties": { "accentColor": { "pattern": "^#[0-9A-Fa-f]{6}$" } }
+        "required": [
+          "accentColor"
+        ],
+        "properties": {
+          "accentColor": {
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          }
+        }
       }
     },
-
     "output": {
       "type": "object",
       "description": "Where and how Setup.exe is written.",
       "properties": {
         "directory": {
-          "allOf": [{ "$ref": "#/$defs/nonBlank" }],
+          "allOf": [
+            {
+              "$ref": "#/$defs/nonBlank"
+            }
+          ],
           "type": "string",
           "default": "dist",
           "description": "Output folder, relative to the project file or absolute. Overridden by fluentsetup build -o."
@@ -575,13 +1025,20 @@
         },
         "architecture": {
           "type": "string",
-          "enum": ["x64", "arm64"],
+          "enum": [
+            "x64",
+            "arm64"
+          ],
           "default": "x64",
           "description": "Target CPU architecture of Setup.exe. Overridden by fluentsetup build --arch."
         },
         "compression": {
           "type": "string",
-          "enum": ["fast", "normal", "max"],
+          "enum": [
+            "fast",
+            "normal",
+            "max"
+          ],
           "default": "normal",
           "description": "Zstandard level: fast = 3, normal = 12, max = 19 with long-distance matching."
         },
@@ -592,7 +1049,6 @@
         }
       }
     },
-
     "signing": {
       "type": "object",
       "description": "Authenticode signing of Setup.exe with signtool.exe.",
@@ -628,12 +1084,103 @@
           "description": "Path of signtool.exe; empty = search the Windows 10/11 SDK and PATH."
         }
       },
-      "if": { "required": ["enabled"], "properties": { "enabled": { "const": true } } },
+      "if": {
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        }
+      },
       "then": {
         "anyOf": [
-          { "required": ["certificateThumbprint"], "properties": { "certificateThumbprint": { "minLength": 1 } } },
-          { "required": ["certificateFile"], "properties": { "certificateFile": { "minLength": 1 } } }
+          {
+            "required": [
+              "certificateThumbprint"
+            ],
+            "properties": {
+              "certificateThumbprint": {
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "required": [
+              "certificateFile"
+            ],
+            "properties": {
+              "certificateFile": {
+                "minLength": 1
+              }
+            }
+          }
         ]
+      }
+    },
+    "download": {
+      "type": "object",
+      "required": [
+        "url",
+        "sha256"
+      ],
+      "additionalProperties": true,
+      "description": "Download from the internet when nothing is bundled. Setup verifies the size and SHA-256 before running the file.",
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https://",
+          "maxLength": 2048,
+          "description": "https URL of the installer."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "description": "SHA-256 of the file (hex). Anything else is refused."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Exact size in bytes; 0 = unknown (downloads are then capped at 512 MiB)."
+        }
+      }
+    },
+    "prerequisiteSource": {
+      "type": "object",
+      "description": "Where setup gets a missing prerequisite: the bundled installer first, then the download. With neither, setup stops and shows helpUrl.",
+      "properties": {
+        "installer": {
+          "$ref": "#/$defs/relativeExePath",
+          "description": "Installer inside the installed files (add it with files.extra)."
+        },
+        "arguments": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "description": "Installer arguments."
+        },
+        "download": {
+          "$ref": "#/$defs/download"
+        },
+        "helpUrl": {
+          "type": "string",
+          "pattern": "^https://",
+          "maxLength": 2048,
+          "description": "Link shown when the prerequisite is missing and cannot be installed by setup."
+        },
+        "onFailure": {
+          "enum": [
+            "warn",
+            "fail"
+          ],
+          "default": "warn",
+          "description": "warn: install the app anyway and report it. fail: if the prerequisite is still missing or older than minVersion after its installer ran, stop and roll the installation back."
+        }
       }
     }
   }

@@ -35,6 +35,8 @@ enum class State {
     Cancelling,
     RollingBack,
     Failed,
+    Downloading,               // a missing prerequisite (only when the package allows downloads)
+    InstallingPrerequisites,
 };
 const char* StateName(State s) noexcept;
 

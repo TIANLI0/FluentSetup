@@ -95,6 +95,13 @@
   "state.RollingBack": "Undoing changes…",
   "state.Completed": "Done",
   "state.Failed": "Something went wrong",
+  "state.Downloading": "Downloading",
+  "state.InstallingPrerequisites": "Installing required components",
+  "prereq.bundled": "{0} will also be installed.",
+  "prereq.download": "{0} is needed and will be downloaded ({1}) and installed.",
+  "prereq.missing": "{0} must be installed first.",
+  "prereq.upgrade": "{0} {1} is too old ({2} or later is needed) and will be updated.",
+  "prereq.tooOld": "{0} {1} is too old: {2} or later is needed. Update it first.",
 
   "cancel.title": "Cancel the installation?",
   "cancel.title.uninstall": "Cancel the uninstall?",
@@ -162,5 +169,5 @@
   "fallback.browse": "B&rowse…",
   "fallback.viewLog": "View log",
 
-  "usage": "Usage: Setup.exe [options]\n\n/quiet  Install without any user interface\n/uninstall  Remove the installed app\n/dir <path>  Install location\n/scope user|machine  Install for the current user or for all users\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Turn a package-defined option on or off\n/log <file>  Write the log to this file\n/lang en-US|zh-CN  Interface language\n/ui auto|winui|win32  Interface technology (diagnostics)\n\nExit code 0 means success; see the documentation for the other codes."
+  "usage": "Usage: Setup.exe [options]\n\n/quiet  Install without any user interface\n/uninstall  Remove the installed app\n/dir <path>  Install location\n/scope user|machine  Install for the current user or for all users\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Turn a package-defined option on or off\n/log <file>  Write the log to this file\n/lang en-US|zh-CN|ja-JP|ko-KR  Interface language\n/ui auto|winui|win32  Interface technology (diagnostics)\n\nExit code 0 means success; see the documentation for the other codes."
 }

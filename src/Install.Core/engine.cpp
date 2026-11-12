@@ -34,6 +34,8 @@ const char* StateName(State s) noexcept {
         case State::Cancelling: return "Cancelling";
         case State::RollingBack: return "RollingBack";
         case State::Failed: return "Failed";
+        case State::Downloading: return "Downloading";
+        case State::InstallingPrerequisites: return "InstallingPrerequisites";
     }
     return "Idle";
 }
@@ -262,12 +264,16 @@ bool Engine::ScopeAllowed(Scope s) const noexcept {
 std::optional<InstalledProduct> Engine::FindExisting(bool* foreign) const {
     if (foreign) *foreign = false;
     if (auto p = FindInstalled(pkg_.appId)) return p;
-    if (pkg_.ext.adoptUninstallKey.empty()) return std::nullopt;
-    for (const Scope s : {Scope::Machine, Scope::User}) {
-        if (!ScopeAllowed(s)) continue;
-        if (auto p = QueryForeign(pkg_.appId, s); p && !p->installDir.empty()) {
-            if (foreign) *foreign = true;
-            return p;
+    std::vector<std::wstring> keys;
+    if (!pkg_.ext.adoptUninstallKey.empty()) keys.push_back(pkg_.appId);
+    keys.insert(keys.end(), pkg_.ext.legacyUninstallKeys.begin(), pkg_.ext.legacyUninstallKeys.end());
+    for (const auto& k : keys) {
+        for (const Scope s : {Scope::Machine, Scope::User}) {
+            if (!ScopeAllowed(s)) continue;
+            if (auto p = QueryForeign(k, s); p && !p->installDir.empty()) {
+                if (foreign) *foreign = true;
+                return p;
+            }
         }
     }
     return std::nullopt;
@@ -300,6 +306,9 @@ bool Engine::SanitizeOptions(InstallOptions& o) const {
     for (const auto& [id, on] : o.choices) {
         if (!choices.count(id)) return false;  // only options the package defines
         choices[id] = on;
+    }
+    for (const auto& opt : pkg_.ext.options) {
+        if (opt.required) choices[opt.id] = true;  // locked on, whatever the UI or /option says
     }
     o.choices = std::move(choices);
     return true;
@@ -551,11 +560,11 @@ void Engine::RunActions(Action::When when, const std::wstring& dir, const std::m
     for (const Action& a : pkg_.ext.actions) {
         if (a.when != when) continue;
         if (!a.ifOption.empty()) {
-            bool selected = false;
+            bool selected = false, required = false;
             for (const auto& o : pkg_.ext.options) {
-                if (o.id == a.ifOption) selected = o.defaultValue;
+                if (o.id == a.ifOption) selected = o.defaultValue, required = o.required;
             }
-            if (auto it = choices.find(a.ifOption); it != choices.end()) selected = it->second;
+            if (auto it = choices.find(a.ifOption); it != choices.end() && !required) selected = it->second;
             if (!selected) continue;
         }
         if (a.skipIfInstalled && RegistryVersionAtLeast(*a.skipIfInstalled)) {
@@ -567,8 +576,23 @@ void Engine::RunActions(Action::When when, const std::wstring& dir, const std::m
             throw Failure(ErrorCode::UnsafePath, L"Action target is not a file inside the install directory: " + a.run);
         }
         log::Info(L"Running %s (%zu argument(s))", a.run.c_str(), a.args.size());
-        const ActionResult r = RunProgram(exe, a.args, a.timeoutSeconds);
-        const bool ok = r.ok && std::find(a.successExitCodes.begin(), a.successExitCodes.end(), r.exitCode) != a.successExitCodes.end();
+        const auto succeeded = [&](const ActionResult& res) {
+            return res.ok && std::find(a.successExitCodes.begin(), a.successExitCodes.end(), res.exitCode) != a.successExitCodes.end();
+        };
+        ActionResult r = RunProgram(exe, a.args, a.timeoutSeconds);
+        if (!succeeded(r) && a.fallbackArgs) {
+            // e.g. a driver installer whose silent mode failed: give the user its own (visible) UI.
+            log::Warn(L"%s did not succeed (%s); retrying with its fallback arguments", a.run.c_str(),
+                      r.ok ? Printf(L"exit code %lld", static_cast<long long>(r.exitCode)).c_str() : r.detail.c_str());
+            r = RunProgram(exe, *a.fallbackArgs, 1800, true);
+        }
+        if (!succeeded(r) && !a.fallbackRunValue.empty()) {
+            if (WriteRunValue(a.fallbackRunValue, exe, a.fallbackRunArgs)) {
+                log::Warn(L"%s did not succeed; registered Run value %s instead", a.run.c_str(), a.fallbackRunValue.c_str());
+                continue;
+            }
+        }
+        const bool ok = succeeded(r);
         if (ok) {
             log::Info(L"%s finished (exit code %lld)", a.run.c_str(), static_cast<long long>(r.exitCode));
             continue;
@@ -616,10 +640,17 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
             throw Failure(ErrorCode::RegistryError, L"Another product already uses the uninstall key '" + pkg_.appId + L"'");
         }
         RecoverPending(scope);
-        std::vector<const Requirement*> installLater;  // missing prerequisites that ship their own installer
+        std::vector<const Requirement*> installLater;  // missing prerequisites with a bundled or downloadable installer
         for (const auto& req : pkg_.ext.requirements) {
-            if (RequirementSatisfied(req)) continue;
-            if (req.installer.empty()) throw Failure(ErrorCode::PrerequisiteMissing, req.name);
+            const std::wstring found = InstalledRequirementVersion(req);
+            if (RequirementSatisfied(req)) {
+                log::Info(L"Prerequisite %s present%s%s", req.name.c_str(), found.empty() ? L"" : L": ", found.c_str());
+                continue;
+            }
+            log::Info(L"Prerequisite %s missing%s%s", req.name.c_str(), found.empty() ? L"" : L" (found ", found.empty() ? L"" : (found + L", too old)").c_str());
+            if (!req.Installable()) {
+                throw Failure(ErrorCode::PrerequisiteMissing, req.name + (req.helpUrl.empty() ? std::wstring() : L"\n" + Utf8ToWide(req.helpUrl)));
+            }
             installLater.push_back(&req);
         }
 
@@ -633,6 +664,36 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         }
         dir = check.normalized;
         out.installDir = dir;
+
+        // Prerequisites without a bundled installer are downloaded now, before anything is changed: a network problem
+        // must not leave a half-installed app. Each file is checked against the size and SHA-256 in the package.
+        std::map<const Requirement*, std::wstring> downloaded;
+        std::wstring downloadDir;
+        ScopeExit removeDownloads([&] {
+            if (!downloadDir.empty()) fs::DeleteTree(downloadDir);
+        });
+        for (const Requirement* req : installLater) {
+            if (!req->installer.empty()) continue;
+            if (downloadDir.empty()) {
+                downloadDir = path::Join(path::TempRoot(), L"FluentSetup-d-" + RandomToken().substr(0, 16));
+                if (const DWORD e = security::CreatePrivateDirectory(downloadDir); e != 0) {
+                    downloadDir.clear();
+                    throw Failure(ErrorCode::IoError, L"Cannot create a download folder", e);
+                }
+            }
+            rep.Set(State::Downloading, 0.0, req->name);
+            const std::wstring dest = path::Join(downloadDir, Printf(L"prerequisite-%zu.exe", downloaded.size() + 1));
+            std::wstring error;
+            log::Info(L"Downloading %s from %S", req->name.c_str(), req->downloadUrl.c_str());
+            const bool ok = Download(req->downloadUrl, dest, req->downloadSha256, req->downloadSize, cancel,
+                                     [&](uint64_t done, uint64_t total) {
+                                         rep.Update(total ? static_cast<double>(done) / static_cast<double>(total) : -1.0,
+                                                    req->name + L" (" + FormatBytes(done) + L")");
+                                     }, error);
+            ThrowIfCancelled(cancel);
+            if (!ok) throw Failure(ErrorCode::PrerequisiteMissing, req->name + L": " + error);
+            downloaded[req] = dest;
+        }
 
         std::optional<InstallRecord> oldRecord;
         if (existing.foreign) {
@@ -650,6 +711,10 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         // ---- Preparing --------------------------------------------------------------------------------------
         rep.Set(State::Preparing, -1);
         for (const auto& still : CloseProcesses(pkg_.ext.closeProcesses)) log::Warn(L"%s could not be closed", still.c_str());
+        if (existing.product && security::IsElevated()) {
+            // The previous build's native images no longer match the assemblies about to be replaced.
+            for (const auto& a : pkg_.ext.ngen) RunNGen(path::Join(dir, a), false);
+        }
         SetPending(pkg_.appId, scope, dir);
         pendingSet = true;
         std::vector<std::wstring> created;
@@ -817,15 +882,46 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         WriteArp(pkg_.appId, scope, arp);
 
         // Bundled prerequisite installers, then the package's own post-install steps (payload executables only).
+        if (!installLater.empty()) rep.Set(State::InstallingPrerequisites, -1, {}, false);
         for (const Requirement* req : installLater) {
-            const ActionResult r = RunProgram(path::Join(dir, req->installer), req->installerArgs, 600);
-            if (!r.ok || !RequirementSatisfied(*req)) out.warnings.push_back(req->name + L" could not be installed");
+            const std::wstring exe = !req->installer.empty() ? path::Join(dir, req->installer) : downloaded[req];
+            rep.Update(-1, req->name);
+            log::Info(L"Installing prerequisite %s from %s", req->name.c_str(), exe.c_str());
+            const ActionResult r = RunProgram(exe, req->installerArgs, 1800);
+            if (!r.ok || !RequirementSatisfied(*req)) {
+                const std::wstring found = InstalledRequirementVersion(*req);
+                const std::wstring why = req->name + (found.empty() ? std::wstring() : L" " + found + L" < " + req->minVersionText) + L": " +
+                                         (r.ok ? Printf(L"installer exit code %lld", static_cast<long long>(r.exitCode)) : r.detail);
+                // A required minimum the app cannot run without: undo the installation rather than leave a broken app.
+                if (req->mustSucceed) {
+                    throw Failure(ErrorCode::PrerequisiteMissing, why + (req->helpUrl.empty() ? std::wstring() : L"\n" + Utf8ToWide(req->helpUrl)));
+                }
+                out.warnings.push_back(why);  // the app's files are in place; the user can install the runtime later
+            }
+        }
+        // Leftovers of earlier versions that would otherwise run alongside this one (tasks, Run values, shortcuts),
+        // removed before the actions so an action can register its own replacement. Not undone by a rollback.
+        const Cleanup& ic = pkg_.ext.installCleanup;
+        for (const auto& t : ic.removeScheduledTasks) {
+            if (DeleteScheduledTask(t)) log::Info(L"Removed scheduled task %s", t.c_str());
+        }
+        for (const auto& r : ic.removeRunValues) DeleteRunValue(r);
+        for (const auto& s : ic.removeShortcuts) DeleteShortcutsNamed(s);
+        if (security::IsElevated()) {
+            for (const auto& a : pkg_.ext.ngen) RunNGen(path::Join(dir, a), true);  // queued: compiled when the PC is idle
         }
         RunActions(Action::When::AfterInstall, dir, options.choices, out);
 
         // ---- Finalizing: point of no return -----------------------------------------------------------------
         rep.Set(State::Finalizing, 0.99, {}, false);
         journal->Commit();
+        // Uninstall entries of older product names now point at files this install replaced.
+        for (const auto& k : ic.removeUninstallKeys) {
+            if (!EqualsIgnoreCase(k, pkg_.appId) && DeleteForeignArpEntry(k, scope)) log::Info(L"Removed uninstall entry %s", k.c_str());
+        }
+        for (const auto& k : pkg_.ext.legacyUninstallKeys) {
+            if (!EqualsIgnoreCase(k, pkg_.appId) && DeleteForeignArpEntry(k, scope)) log::Info(L"Removed legacy uninstall entry %s", k.c_str());
+        }
         if (oldRecord) {
             std::vector<std::wstring> oldFiles;
             for (const auto& f : oldRecord->files) oldFiles.push_back(f.path);
@@ -922,6 +1018,9 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
 
         for (const auto& still : CloseProcesses(pkg_.ext.closeProcesses)) log::Warn(L"%s could not be closed", still.c_str());
         RunActions(Action::When::BeforeUninstall, dir, record.choices, out);
+        if (security::IsElevated()) {
+            for (const auto& a : pkg_.ext.ngen) RunNGen(path::Join(dir, a), false);  // drop native images before the files go
+        }
         rep.Set(State::Removing, 0.0);
         size_t i = 0;
         std::unordered_set<std::wstring> safeDirs;
@@ -974,6 +1073,7 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
             if (DeleteScheduledTask(t)) log::Info(L"Removed scheduled task %s", t.c_str());
         }
         for (const auto& v : pkg_.ext.cleanup.removeRunValues) DeleteRunValue(v);
+        for (const auto& s : pkg_.ext.cleanup.removeShortcuts) DeleteShortcutsNamed(s);
         for (const auto& tpl : pkg_.ext.cleanup.removeData) {
             const std::wstring target = ExpandDataTemplate(tpl);
             if (!target.empty() && fs::IsDirectory(target) && !fs::IsLinkLike(target)) {
