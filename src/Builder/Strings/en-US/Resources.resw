@@ -511,7 +511,7 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="UpgradeRelaunchBox.Header" xml:space="preserve"><value>Arguments when an in-app updater asks to relaunch the app (/relaunch)</value></data>
   <data name="UpgradeRelaunchBox.PlaceholderText" xml:space="preserve"><value>--updated</value></data>
   <data name="UpgradeCleanupSection.Text" xml:space="preserve"><value>Leftovers of earlier versions</value></data>
-  <data name="UpgradeCleanupDescription.Text" xml:space="preserve"><value>Removed while installing, after the files are in place and before the after-install actions run. A rollback does not bring them back.</value></data>
+  <data name="UpgradeCleanupDescription.Text" xml:space="preserve"><value>Removed while installing, after the files are in place and before the after-install actions run. A rollback puts removed files back; tasks, Run values, shortcuts and uninstall keys stay removed.</value></data>
   <data name="CleanupTasksBox.Header" xml:space="preserve"><value>Scheduled tasks</value></data>
   <data name="CleanupRunValuesBox.Header" xml:space="preserve"><value>Run values</value></data>
   <data name="CleanupShortcutsBox.Header" xml:space="preserve"><value>Shortcut names</value></data>
@@ -567,4 +567,21 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="VariableNameBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Variable name</value></data>
   <data name="VariableValueBox.PlaceholderText" xml:space="preserve"><value>Value</value></data>
   <data name="VariableValueBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Variable value</value></data>
+  <data name="Update_Available" xml:space="preserve"><value>FluentSetup {0} is available. You have {1}.</value></data>
+  <data name="Update_Checking" xml:space="preserve"><value>Checking for updates…</value></data>
+  <data name="Update_UpToDate" xml:space="preserve"><value>FluentSetup {0} is up to date.</value></data>
+  <data name="Update_CheckFailed" xml:space="preserve"><value>Could not check for updates: {0}</value></data>
+  <data name="Update_Downloading" xml:space="preserve"><value>Downloading FluentSetup {0}… {1}%</value></data>
+  <data name="Update_Failed" xml:space="preserve"><value>The update was not installed: {0}</value></data>
+  <data name="Update_NotInstalled" xml:space="preserve"><value>This copy was not installed with FluentSetup's Setup.exe. Download the new version from the release page.</value></data>
+  <data name="UpdateInfoBar.Title" xml:space="preserve"><value>Update available</value></data>
+  <data name="UpdateInstallButton.Content" xml:space="preserve"><value>Update</value></data>
+  <data name="UpdateNotesButton.Content" xml:space="preserve"><value>What's new</value></data>
+  <data name="SettingsUpdatesSection.Text" xml:space="preserve"><value>Updates</value></data>
+  <data name="SettingsUpdatesAutoTitle.Text" xml:space="preserve"><value>Check for updates automatically</value></data>
+  <data name="SettingsUpdatesAutoDescription.Text" xml:space="preserve"><value>Once a day when the Builder starts. Updates are verified with SHA-256 and installed only when you choose to.</value></data>
+  <data name="SettingsUpdatesAutoToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Check for updates automatically</value></data>
+  <data name="SettingsUpdatesCheckTitle.Text" xml:space="preserve"><value>FluentSetup version</value></data>
+  <data name="SettingsUpdatesCheck.Content" xml:space="preserve"><value>Check now</value></data>
+  <data name="SettingsUpdatesInstall.Content" xml:space="preserve"><value>Update</value></data>
 </root>

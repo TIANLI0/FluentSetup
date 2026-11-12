@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using FluentSetup.Builder.Core.Model;
 using FluentSetup.Builder.Core.Packaging;
+using FluentSetup.Builder.Core.Updates;
 using FluentSetup.Builder.Core.Validation;
 
 namespace FluentSetup.Cli;
@@ -35,6 +36,10 @@ public static class Program
           fluentsetup locale add <language> <project.json> [--force]
                                         Create <ui.localization>/<language>.json with every text to translate
                                         (installer strings, option/action/variant ids); any BCP-47 tag, e.g. fr-FR
+          fluentsetup update [--check] [--prerelease] [--json]
+                                        Update FluentSetup (Builder and CLI) to the latest release on GitHub:
+                                        downloads Setup.exe, verifies its SHA-256 and installs it.
+                                        --check only reports; --json (with --check) prints the result as JSON
           fluentsetup guide                     Print the complete project-authoring guide (for people and AI tools)
           fluentsetup schema                    Print the JSON Schema of fluentsetup.json
           fluentsetup --version | --help
@@ -73,6 +78,7 @@ public static class Program
                 "guide" => PrintResource("FluentSetup.Cli.ai-guide.md"),
                 "schema" => PrintResource("FluentSetup.Cli.fluentsetup.project.schema.json"),
                 "locale" => Locale(parsed),
+                "update" => await UpdateAsync(parsed, cts.Token),
                 _ => UsageError($"Unknown command '{args[0]}'."),
             };
         }
@@ -90,6 +96,86 @@ public static class Program
             Console.Error.WriteLine($"error: {ex.Message}");
             return 1;
         }
+    }
+
+    private static async Task<int> UpdateAsync(ParsedArgs a, CancellationToken ct)
+    {
+        bool checkOnly = a.Flag("check");
+        bool prerelease = a.Flag("prerelease");
+        bool json = a.Flag("json");
+        a.EnsureAllUsed();
+        if (a.PositionalOrDefault(0) is { } extra) throw new UsageException($"Unexpected argument '{extra}'.");
+        if (json && !checkOnly) throw new UsageException("--json is only for --check.");
+
+        string current = FluentSetupUpdates.CurrentVersion;
+        using var http = FluentSetupUpdates.CreateClient();
+        FluentSetupRelease? latest;
+        try
+        {
+            latest = await FluentSetupUpdates.GetLatestAsync(http, prerelease, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            Console.Error.WriteLine($"error: could not check for updates: {(ex is TaskCanceledException ? "GitHub did not answer in time." : ex.Message)}");
+            return 1;
+        }
+        bool newer = latest is not null && FluentSetupUpdates.CompareVersions(latest.Version, current) > 0;
+        string? installed = FluentSetupUpdates.InstalledFolder();
+
+        if (json)
+        {
+            var report = new Dictionary<string, object?>
+            {
+                ["currentVersion"] = current,
+                ["latestVersion"] = latest?.Version,
+                ["updateAvailable"] = newer,
+                ["releaseUrl"] = latest?.PageUrl,
+                ["installedWithSetup"] = installed is not null,
+            };
+            Console.WriteLine(JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+            return 0;
+        }
+        if (!newer)
+        {
+            Console.WriteLine($"FluentSetup {current} is up to date.");
+            return 0;
+        }
+        Console.WriteLine($"FluentSetup {latest!.Version} is available (this is {current}): {latest.PageUrl}");
+        if (checkOnly) return 0;
+        if (installed is null)
+        {
+            // A copy from the zip (or a build): replacing the running files is the user's call.
+            Console.Error.WriteLine("This copy was not installed with FluentSetup's Setup.exe, so it cannot update itself.");
+            if (latest.CliZip is { } zip) Console.Error.WriteLine($"Download the CLI: {zip.Url}");
+            Console.Error.WriteLine($"Or install everything with: {latest.Setup!.Url}");
+            return 1;
+        }
+
+        bool showProgress = !Console.IsErrorRedirected;
+        int lastPercent = -1;
+        var progress = new Progress<double>(f =>
+        {
+            int percent = (int)(f * 100);
+            if (!showProgress || percent == lastPercent) return;
+            lastPercent = percent;
+            Console.Error.Write("\r");
+            Console.Error.Write($"Downloading {latest.Setup!.Name}... {percent}%");
+        });
+        string setup;
+        try
+        {
+            setup = await FluentSetupUpdates.DownloadVerifiedAsync(http, latest, latest.Setup!, progress, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            if (showProgress) Console.Error.WriteLine();
+            Console.Error.WriteLine($"error: download failed: {(ex is TaskCanceledException ? "the server stopped answering." : ex.Message)}");
+            return 1;
+        }
+        if (showProgress) Console.Error.WriteLine();
+        Console.WriteLine("SHA-256 verified. Starting Setup (it closes FluentSetup if it is running).");
+        FluentSetupUpdates.StartSetup(setup, relaunch: false);
+        return 0;
     }
 
     private static int UsageError(string message)
@@ -349,7 +435,7 @@ internal sealed class ParsedArgs
     private readonly Dictionary<string, string?> _options = new(StringComparer.Ordinal);
     private readonly HashSet<string> _used = [];
     private readonly List<string> _defines = [];
-    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive"];
+    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease"];
 
     public static ParsedArgs Parse(string[] args)
     {

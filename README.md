@@ -51,6 +51,10 @@ Download from the [latest release](https://github.com/TIANLI0/FluentSetup/releas
 - **`fluentsetup-<version>-win-x64.zip`**: the command-line tool alone, self-contained (no .NET needed). Unzip it
   anywhere; for build servers and scripts.
 
+FluentSetup keeps itself up to date: the Builder looks for a new release once a day (Settings > Updates turns this
+off) and installs it when you click **Update**; on the command line, `fluentsetup update` does the same and
+`fluentsetup update --check` only reports. Downloads are verified against the release's `SHA256SUMS.txt`.
+
 ### 2. Describe your app
 
 In the **Builder** app: *New project*, pick the folder with your app's build output (for example

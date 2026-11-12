@@ -23,6 +23,36 @@
                 </Grid>
             </Border>
 
+            <TextBlock x:Uid="SettingsUpdatesSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE895;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="SettingsUpdatesAutoTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="SettingsUpdatesAutoDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.CheckForUpdatesAutomatically, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="SettingsUpdatesAutoToggle" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE72C;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="SettingsUpdatesCheckTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock Text="{x:Bind VM.UpdateStatus, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button x:Uid="SettingsUpdatesInstall" Command="{x:Bind VM.InstallUpdateCommand}" Style="{StaticResource AccentButtonStyle}"
+                                    Visibility="{x:Bind VM.IsUpdateAvailable, Mode=OneWay}" IsEnabled="{x:Bind VM.NotUpdating, Mode=OneWay}" />
+                            <Button x:Uid="SettingsUpdatesCheck" Command="{x:Bind VM.CheckForUpdatesCommand}" IsEnabled="{x:Bind VM.NotUpdating, Mode=OneWay}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
             <TextBlock x:Uid="SettingsRuntimeSection" Style="{StaticResource SectionHeaderStyle}" />
             <Border Style="{StaticResource RowCardStyle}">
                 <Grid ColumnSpacing="16">

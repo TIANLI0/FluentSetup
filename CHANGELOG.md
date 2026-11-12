@@ -45,3 +45,6 @@ First public release.
 - WinUI 3 Builder app that edits every setting of the project file, with live validation, file preview, installer
   preview, build history and package inspection.
 - GitHub Action: `uses: TIANLI0/FluentSetup@v1` installs the CLI on a Windows runner.
+- Updates of FluentSetup itself: the Builder checks GitHub Releases once a day (can be turned off in Settings) and
+  installs a new version with a progress window, then opens again; `fluentsetup update [--check]` on the command line.
+  The download must match `SHA256SUMS.txt` and GitHub's own digest.

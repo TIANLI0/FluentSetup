@@ -29,6 +29,8 @@
 - **`FluentSetup-<版本>-Setup.exe`**：Builder 图形界面加 `fluentsetup` 命令行（自动加入 PATH）。缺少 .NET 10 运行时或 Windows App Runtime 时安装程序会自动安装。需要 Windows 10 1809 或更高版本。
 - **`fluentsetup-<版本>-win-x64.zip`**：只有命令行，自包含（不需要 .NET），解压到任意位置即可，适合构建服务器和脚本。
 
+FluentSetup 会自动更新：Builder 每天检查一次新版本（可在“设置 > 更新”中关闭），点击**更新**即可安装；命令行用 `fluentsetup update` 更新，`fluentsetup update --check` 只检查不安装。下载的文件会用发布附带的 `SHA256SUMS.txt` 校验。
+
 ### 2. 描述你的应用
 
 在 **Builder** 中选择“新建项目”，选中应用的构建输出文件夹（例如 `bin\Release\publish`），填写名称、ID 和发布者，然后依次设置文件、安装选项、必备组件、选项与动作、升级、卸载和外观。输入时问题会实时列出。

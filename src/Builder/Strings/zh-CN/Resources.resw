@@ -511,7 +511,7 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="UpgradeRelaunchBox.Header" xml:space="preserve"><value>应用内更新程序请求重新启动应用时的参数（/relaunch）</value></data>
   <data name="UpgradeRelaunchBox.PlaceholderText" xml:space="preserve"><value>--updated</value></data>
   <data name="UpgradeCleanupSection.Text" xml:space="preserve"><value>早期版本的残留</value></data>
-  <data name="UpgradeCleanupDescription.Text" xml:space="preserve"><value>在安装过程中、文件就位之后且安装后操作运行之前删除。回滚不会恢复这些内容。</value></data>
+  <data name="UpgradeCleanupDescription.Text" xml:space="preserve"><value>在安装过程中、文件就位之后且安装后操作运行之前删除。回滚时会恢复删除的文件；计划任务、Run 值、快捷方式和卸载项不会恢复。</value></data>
   <data name="CleanupTasksBox.Header" xml:space="preserve"><value>计划任务</value></data>
   <data name="CleanupRunValuesBox.Header" xml:space="preserve"><value>Run 值</value></data>
   <data name="CleanupShortcutsBox.Header" xml:space="preserve"><value>快捷方式名称</value></data>
@@ -567,4 +567,21 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="VariableNameBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>变量名称</value></data>
   <data name="VariableValueBox.PlaceholderText" xml:space="preserve"><value>值</value></data>
   <data name="VariableValueBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>变量值</value></data>
+  <data name="Update_Available" xml:space="preserve"><value>FluentSetup {0} 已发布，当前版本为 {1}。</value></data>
+  <data name="Update_Checking" xml:space="preserve"><value>正在检查更新…</value></data>
+  <data name="Update_UpToDate" xml:space="preserve"><value>FluentSetup {0} 已是最新版本。</value></data>
+  <data name="Update_CheckFailed" xml:space="preserve"><value>检查更新失败：{0}</value></data>
+  <data name="Update_Downloading" xml:space="preserve"><value>正在下载 FluentSetup {0}… {1}%</value></data>
+  <data name="Update_Failed" xml:space="preserve"><value>没有安装更新：{0}</value></data>
+  <data name="Update_NotInstalled" xml:space="preserve"><value>此副本不是用 FluentSetup 安装程序安装的，请从发布页下载新版本。</value></data>
+  <data name="UpdateInfoBar.Title" xml:space="preserve"><value>有可用更新</value></data>
+  <data name="UpdateInstallButton.Content" xml:space="preserve"><value>更新</value></data>
+  <data name="UpdateNotesButton.Content" xml:space="preserve"><value>更新内容</value></data>
+  <data name="SettingsUpdatesSection.Text" xml:space="preserve"><value>更新</value></data>
+  <data name="SettingsUpdatesAutoTitle.Text" xml:space="preserve"><value>自动检查更新</value></data>
+  <data name="SettingsUpdatesAutoDescription.Text" xml:space="preserve"><value>每天在 Builder 启动时检查一次。更新会经过 SHA-256 校验，只在你确认后安装。</value></data>
+  <data name="SettingsUpdatesAutoToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>自动检查更新</value></data>
+  <data name="SettingsUpdatesCheckTitle.Text" xml:space="preserve"><value>FluentSetup 版本</value></data>
+  <data name="SettingsUpdatesCheck.Content" xml:space="preserve"><value>立即检查</value></data>
+  <data name="SettingsUpdatesInstall.Content" xml:space="preserve"><value>更新</value></data>
 </root>

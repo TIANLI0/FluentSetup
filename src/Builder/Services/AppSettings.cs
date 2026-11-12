@@ -13,6 +13,9 @@ public sealed class AppSettings
     public List<string> RecentProjects { get; set; } = [];
     /// <summary>system | light | dark</summary>
     public string Theme { get; set; } = "system";
+    /// <summary>Look for a new FluentSetup release when the Builder starts (at most once a day).</summary>
+    public bool CheckForUpdates { get; set; } = true;
+    public DateTimeOffset? LastUpdateCheck { get; set; }
 
     public static AppSettings Load()
     {

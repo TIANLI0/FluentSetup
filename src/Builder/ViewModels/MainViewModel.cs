@@ -316,6 +316,7 @@ public sealed partial class MainViewModel : ObservableObject
         nameof(ProjectPath), nameof(IsDirty), nameof(IsBuilding), nameof(BuildProgressValue), nameof(BuildProgressIndeterminate),
         nameof(BuildStatus), nameof(LastReport), nameof(ErrorCount), nameof(WarningCount), nameof(FilesSummary), nameof(IsCollecting),
         nameof(PayloadBytes), nameof(FileCount), nameof(BuilderThemeIndex), nameof(MainExecutableItem), nameof(IconImage),
+        nameof(UpdateRelease), nameof(UpdateStatus), nameof(IsUpdating), nameof(CheckForUpdatesAutomatically),
     ];
 
     private void OnAnyPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -889,4 +890,108 @@ public sealed partial class MainViewModel : ObservableObject
 
     [RelayCommand]
     private static void OpenSettingsFolder() => Ui.OpenFolder(AppSettings.Folder);
+
+    // ---- updates of FluentSetup itself -----------------------------------------------------------------------
+
+    [ObservableProperty] public partial FluentSetup.Builder.Core.Updates.FluentSetupRelease? UpdateRelease { get; set; }
+    [ObservableProperty] public partial string UpdateStatus { get; set; } = "";
+    [ObservableProperty] public partial bool IsUpdating { get; set; }
+
+    public bool IsUpdateAvailable => UpdateRelease is not null;
+    public bool NotUpdating => !IsUpdating;
+    public string UpdatePageUrl => UpdateRelease?.PageUrl ?? FluentSetup.Builder.Core.Updates.FluentSetupUpdates.ReleasesPage;
+
+    partial void OnIsUpdatingChanged(bool value) => OnPropertyChanged(nameof(NotUpdating));
+    public string UpdateMessage => UpdateRelease is { } r ? Loc.Format("Update_Available", r.Version, FluentSetup.Builder.Core.Updates.FluentSetupUpdates.CurrentVersion) : "";
+
+    public bool CheckForUpdatesAutomatically
+    {
+        get => Settings.CheckForUpdates;
+        set
+        {
+            if (Settings.CheckForUpdates == value) return;
+            Settings.CheckForUpdates = value;
+            Settings.Save();
+            OnPropertyChanged();
+        }
+    }
+
+    partial void OnUpdateReleaseChanged(FluentSetup.Builder.Core.Updates.FluentSetupRelease? value)
+    {
+        OnPropertyChanged(nameof(IsUpdateAvailable));
+        OnPropertyChanged(nameof(UpdateMessage));
+        OnPropertyChanged(nameof(UpdatePageUrl));
+    }
+
+    /// <summary>At start-up: at most once a day, and only if the user did not turn it off. Silent when nothing is found.</summary>
+    public async Task StartupUpdateCheckAsync()
+    {
+        if (!Settings.CheckForUpdates || Settings.LastUpdateCheck is { } last && DateTimeOffset.Now - last < TimeSpan.FromDays(1)) return;
+        await CheckCoreAsync(manual: false);
+    }
+
+    [RelayCommand]
+    private Task CheckForUpdatesAsync() => CheckCoreAsync(manual: true);
+
+    private async Task CheckCoreAsync(bool manual)
+    {
+        if (IsUpdating) return;
+        IsUpdating = true;
+        if (manual) UpdateStatus = Loc.Get("Update_Checking");
+        try
+        {
+            using var http = FluentSetup.Builder.Core.Updates.FluentSetupUpdates.CreateClient();
+            var latest = await FluentSetup.Builder.Core.Updates.FluentSetupUpdates.GetLatestAsync(http, includePrerelease: false, CancellationToken.None);
+            Settings.LastUpdateCheck = DateTimeOffset.Now;
+            Settings.Save();
+            var current = FluentSetup.Builder.Core.Updates.FluentSetupUpdates.CurrentVersion;
+            UpdateRelease = latest is not null && FluentSetup.Builder.Core.Updates.FluentSetupUpdates.CompareVersions(latest.Version, current) > 0 ? latest : null;
+            UpdateStatus = UpdateRelease is null ? Loc.Format("Update_UpToDate", current) : UpdateMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            // An automatic check stays quiet offline; a manual one says why.
+            if (manual) UpdateStatus = Loc.Format("Update_CheckFailed", ex.Message);
+        }
+        finally
+        {
+            IsUpdating = false;
+        }
+    }
+
+    [RelayCommand]
+    private static void OpenReleaseNotes(string? url) => Ui.OpenUrl(string.IsNullOrEmpty(url) ? FluentSetup.Builder.Core.Updates.FluentSetupUpdates.ReleasesPage : url);
+
+    /// <summary>Saves the project if needed, downloads and verifies the new Setup.exe, runs it with a progress window and closes.</summary>
+    [RelayCommand]
+    private async Task InstallUpdateAsync()
+    {
+        if (UpdateRelease is not { Setup: { } asset } release || IsUpdating) return;
+        if (FluentSetup.Builder.Core.Updates.FluentSetupUpdates.InstalledFolder() is null)
+        {
+            // A copy that Setup.exe did not install (a build from source, a copied folder): show where to get it.
+            UpdateStatus = Loc.Get("Update_NotInstalled");
+            Ui.OpenUrl(release.PageUrl);
+            return;
+        }
+        if (IsBuilding || !await ConfirmCloseProjectAsync()) return;
+        IsUpdating = true;
+        try
+        {
+            using var http = FluentSetup.Builder.Core.Updates.FluentSetupUpdates.CreateClient();
+            var progress = new Progress<double>(f => UpdateStatus = Loc.Format("Update_Downloading", release.Version, (int)(f * 100)));
+            var setup = await FluentSetup.Builder.Core.Updates.FluentSetupUpdates.DownloadVerifiedAsync(http, release, asset, progress, CancellationToken.None);
+            IsDirty = false;  // the user saved or discarded the changes above
+            FluentSetup.Builder.Core.Updates.FluentSetupUpdates.StartSetup(setup, relaunch: true);
+            Ui.Window?.Close();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            UpdateStatus = Loc.Format("Update_Failed", ex.Message);
+        }
+        finally
+        {
+            IsUpdating = false;
+        }
+    }
 }

@@ -57,6 +57,7 @@ public sealed partial class MainWindow : Window
             if (e.PropertyName == nameof(MainViewModel.HasProject) && !VM.HasProject) Navigate("overview");
         };
         AppWindow.Closing += OnClosing;
+        _ = VM.StartupUpdateCheckAsync();
         Nav.SelectedItem = Nav.MenuItems[0];
     }
 
