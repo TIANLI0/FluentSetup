@@ -131,7 +131,8 @@ public static partial class ProjectValidator
         }
         foreach (var lang in ui.Strings.Keys)
         {
-            if (lang is not ("en-US" or "zh-CN")) d.Warning("FS1307", $"ui.strings.{lang}", $"Strings for '{lang}' are ignored: the installer supports en-US and zh-CN.");
+            // Any language works: built-in ones get overrides, others bring their own strings.
+            if (!Localization.IsLanguageTag(lang)) d.Warning("FS1307", $"ui.strings.{lang}", $"Strings for '{lang}' are ignored: '{lang}' is not a language tag such as en-US, zh-CN or fr-FR.");
         }
         foreach (var (field, text, max) in new[] { ("ui.title", ui.Title, 128), ("ui.welcomeText", ui.WelcomeText, 2048), ("ui.finishText", ui.FinishText, 2048) })
         {

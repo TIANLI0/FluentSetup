@@ -37,7 +37,7 @@
   <data name="NavFiles.Content" xml:space="preserve"><value>安装文件</value></data>
   <data name="NavInstall.Content" xml:space="preserve"><value>安装选项</value></data>
   <data name="NavAppearance.Content" xml:space="preserve"><value>界面与外观</value></data>
-  <data name="NavUpgrade.Content" xml:space="preserve"><value>升级与卸载</value></data>
+  <data name="NavUpgrade.Content" xml:space="preserve"><value>升级</value></data>
   <data name="NavBuild.Content" xml:space="preserve"><value>构建</value></data>
   <data name="NavHistory.Content" xml:space="preserve"><value>构建历史</value></data>
   <data name="Common_Cancel" xml:space="preserve"><value>取消</value></data>
@@ -229,8 +229,8 @@
   <data name="AppearanceFinishBox.Header" xml:space="preserve"><value>完成说明（可选）</value></data>
   <data name="AppearanceFallbackInfo.Title" xml:space="preserve"><value>经典回退界面</value></data>
   <data name="AppearanceFallbackInfo.Message" xml:space="preserve"><value>在没有 Windows App Runtime 的电脑上，安装程序会自动使用页面和设置都相同的经典 Win32 窗口，确保始终可以离线安装。</value></data>
-  <data name="UpgradePageTitle.Text" xml:space="preserve"><value>升级与卸载</value></data>
-  <data name="UpgradePageDescription.Text" xml:space="preserve"><value>安装新版本以及用户卸载应用时会发生什么。</value></data>
+  <data name="UpgradePageTitle.Text" xml:space="preserve"><value>升级</value></data>
+  <data name="UpgradePageDescription.Text" xml:space="preserve"><value>安装新版本时会发生什么，包括覆盖由其他安装程序创建的安装。</value></data>
   <data name="UpgradeSection.Text" xml:space="preserve"><value>更新</value></data>
   <data name="UpgradeHowTitle.Text" xml:space="preserve"><value>更新会就地替换已安装的版本</value></data>
   <data name="UpgradeHowDescription.Text" xml:space="preserve"><value>已更改的文件会被替换，新版本不再包含的文件会被删除；如果更新失败，所有更改都会回滚。</value></data>
@@ -240,11 +240,11 @@
   <data name="UpgradeDataSection.Text" xml:space="preserve"><value>用户数据</value></data>
   <data name="UpgradePreserveDescription.Text" xml:space="preserve"><value>与这些模式匹配的文件仅在不存在时安装，更新时不会被覆盖，卸载时会被保留。</value></data>
   <data name="UpgradePreserveBox.Header" xml:space="preserve"><value>保留的文件（每行一个模式）</value></data>
-  <data name="UninstallSection.Text" xml:space="preserve"><value>卸载</value></data>
+  <data name="UninstallSection.Text" xml:space="preserve"><value>卸载的默认行为</value></data>
   <data name="UninstallRemovesTitle.Text" xml:space="preserve"><value>会删除</value></data>
   <data name="UninstallRemoves.Text" xml:space="preserve"><value>安装程序安装的所有文件、快捷方式、创建的空文件夹以及 Windows 设置中的条目。</value></data>
   <data name="UninstallKeepsTitle.Text" xml:space="preserve"><value>会保留</value></data>
-  <data name="UninstallKeeps.Text" xml:space="preserve"><value>保留的用户数据以及应用在安装后创建的文件（日志、设置、文档）。卸载不会整体删除文件夹。</value></data>
+  <data name="UninstallKeeps.Text" xml:space="preserve"><value>保留的用户数据以及应用在安装后创建的文件（日志、设置、文档），除非在下方列出。卸载不会自行整体删除文件夹。</value></data>
   <data name="BuildPageTitle.Text" xml:space="preserve"><value>构建</value></data>
   <data name="BuildPageDescription.Text" xml:space="preserve"><value>生成一个可在 Windows 10 1809 及更高版本上离线安装的 Setup.exe。</value></data>
   <data name="BuildButtonText.Text" xml:space="preserve"><value>构建安装包</value></data>
@@ -319,4 +319,252 @@
   <data name="SettingsOpenData.Content" xml:space="preserve"><value>打开数据文件夹</value></data>
   <data name="SettingsLicensesTitle.Text" xml:space="preserve"><value>开源组件</value></data>
   <data name="SettingsLicenses.Text" xml:space="preserve"><value>Zstandard (BSD)、ZstdSharp (MIT)、Windows App SDK (MIT)、CommunityToolkit.Mvvm (MIT)。</value></data>
+  <data name="NavPrerequisites.Content" xml:space="preserve"><value>必备组件</value></data>
+  <data name="NavOptions.Content" xml:space="preserve"><value>选项与操作</value></data>
+  <data name="NavUninstall.Content" xml:space="preserve"><value>卸载</value></data>
+  <data name="RowMoveUp.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>上移</value></data>
+  <data name="RowMoveUp.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>上移</value></data>
+  <data name="RowMoveDown.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>下移</value></data>
+  <data name="RowMoveDown.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>下移</value></data>
+  <data name="RowRemove.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>删除</value></data>
+  <data name="RowRemove.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>删除</value></data>
+  <data name="PrereqPageTitle.Text" xml:space="preserve"><value>必备组件</value></data>
+  <data name="PrereqPageDescription.Text" xml:space="preserve"><value>应用所需的 Windows 组件。安装程序会在做出任何更改之前检查它们，并可通过随附的安装程序或经过校验的下载来安装缺少的组件。</value></data>
+  <data name="PrereqWindowsSection.Text" xml:space="preserve"><value>Windows 组件</value></data>
+  <data name="PrereqWebView2Title.Text" xml:space="preserve"><value>Microsoft Edge WebView2 运行时</value></data>
+  <data name="PrereqWebView2Description.Text" xml:space="preserve"><value>适用于使用 WebView2 显示网页内容的应用。</value></data>
+  <data name="PrereqWebView2Toggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>需要 WebView2 运行时</value></data>
+  <data name="PrereqWebView2MinVersionBox.Header" xml:space="preserve"><value>最低版本（可选）</value></data>
+  <data name="PrereqWebView2MinVersionBox.PlaceholderText" xml:space="preserve"><value>120.0.2210.91</value></data>
+  <data name="PrereqWarTitle.Text" xml:space="preserve"><value>Windows App Runtime</value></data>
+  <data name="PrereqWarDescription.Text" xml:space="preserve"><value>适用于依赖框架的 WinUI 3 应用（Windows App SDK）。</value></data>
+  <data name="PrereqWarToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>需要 Windows App Runtime</value></data>
+  <data name="PrereqWarVersionBox.Header" xml:space="preserve"><value>Windows App SDK 版本</value></data>
+  <data name="PrereqWarVersionBox.PlaceholderText" xml:space="preserve"><value>2.5.1</value></data>
+  <data name="PrereqNetFxTitle.Text" xml:space="preserve"><value>.NET Framework</value></data>
+  <data name="PrereqNetFxDescription.Text" xml:space="preserve"><value>基于 .NET Framework 的应用所需的最低 .NET Framework 4.x 版本。</value></data>
+  <data name="PrereqNetFxCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>.NET Framework 版本</value></data>
+  <data name="Prereq_NotRequired" xml:space="preserve"><value>不需要</value></data>
+  <data name="PrereqNetFxSetupToggle.Header" xml:space="preserve"><value>指定安装程序的获取方式（安装程序、下载或帮助链接）</value></data>
+  <data name="PrereqDotNetSection.Text" xml:space="preserve"><value>.NET 运行时</value></data>
+  <data name="PrereqDotNetDescription.Text" xml:space="preserve"><value>依赖框架的 .NET 应用所需的共享运行时，例如 .NET 桌面运行时 8。</value></data>
+  <data name="PrereqAddDotNet.Text" xml:space="preserve"><value>添加运行时</value></data>
+  <data name="PrereqDotNetEmpty.Text" xml:space="preserve"><value>不需要 .NET 运行时。独立部署的应用自带运行时。</value></data>
+  <data name="DotNetRuntimeCombo.Header" xml:space="preserve"><value>运行时</value></data>
+  <data name="DotNetVersionBox.Header" xml:space="preserve"><value>最低版本</value></data>
+  <data name="DotNetVersionBox.PlaceholderText" xml:space="preserve"><value>8.0.0</value></data>
+  <data name="DotNetRollForwardCombo.Header" xml:space="preserve"><value>可接受的更高版本</value></data>
+  <data name="RollForwardPatch.Content" xml:space="preserve"><value>相同的主版本和次版本（patch）</value></data>
+  <data name="RollForwardMinor.Content" xml:space="preserve"><value>相同的主版本（minor）</value></data>
+  <data name="RollForwardMajor.Content" xml:space="preserve"><value>任何更高版本（major）</value></data>
+  <data name="SourceHelp.Text" xml:space="preserve"><value>安装程序会运行随附的安装程序（在“安装文件”页的“附加文件夹”中添加），否则下载该文件并校验其 SHA-256。两者都未设置时，安装程序会在做出任何更改之前停止，并显示帮助链接。</value></data>
+  <data name="SourceInstallerCombo.Header" xml:space="preserve"><value>随附的安装程序（位于安装的文件中）</value></data>
+  <data name="SourceInstallerCombo.PlaceholderText" xml:space="preserve"><value>redist\installer.exe</value></data>
+  <data name="SourceOnFailureCombo.Header" xml:space="preserve"><value>安装后仍然缺少时</value></data>
+  <data name="SourceOnFailureWarn.Content" xml:space="preserve"><value>继续安装应用并显示警告</value></data>
+  <data name="SourceOnFailureFail.Content" xml:space="preserve"><value>回滚整个安装</value></data>
+  <data name="SourceArgumentsBox.Header" xml:space="preserve"><value>安装程序参数（每行一个）</value></data>
+  <data name="SourceHelpUrlBox.Header" xml:space="preserve"><value>帮助链接（https）</value></data>
+  <data name="SourceHelpUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="SourceVariantsBox.Header" xml:space="preserve"><value>仅用于这些变体（逗号分隔；留空 = 始终）</value></data>
+  <data name="SourceDownloadToggle.Header" xml:space="preserve"><value>未随附安装程序时从网络下载</value></data>
+  <data name="SourceUrlBox.Header" xml:space="preserve"><value>下载地址（https）</value></data>
+  <data name="SourceUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="SourceComputeButton.Content" xml:space="preserve"><value>计算哈希和大小</value></data>
+  <data name="SourceComputeCancel.Content" xml:space="preserve"><value>取消</value></data>
+  <data name="SourceSha256Box.Header" xml:space="preserve"><value>SHA-256</value></data>
+  <data name="SourceSha256Box.PlaceholderText" xml:space="preserve"><value>64 个十六进制字符</value></data>
+  <data name="SourceSizeBox.Header" xml:space="preserve"><value>大小（字节，0 = 未知）</value></data>
+  <data name="Source_SummaryBundled" xml:space="preserve"><value>随附的安装程序：{0}</value></data>
+  <data name="Source_SummaryDownload" xml:space="preserve"><value>从 {0} 下载</value></data>
+  <data name="Source_SummaryNone" xml:space="preserve"><value>不由安装程序安装</value></data>
+  <data name="Download_NeedHttps" xml:space="preserve"><value>请输入 https:// 下载地址。</value></data>
+  <data name="Download_Starting" xml:space="preserve"><value>正在连接…</value></data>
+  <data name="Download_Progress" xml:space="preserve"><value>正在下载… {0}</value></data>
+  <data name="Download_ProgressPercent" xml:space="preserve"><value>正在下载… {0}%（{1} / {2}）</value></data>
+  <data name="Download_Done" xml:space="preserve"><value>已根据下载的文件（{0}）填写哈希和大小。</value></data>
+  <data name="Download_Cancelled" xml:space="preserve"><value>下载已取消。</value></data>
+  <data name="Download_Failed" xml:space="preserve"><value>下载失败：{0}</value></data>
+  <data name="Download_TooLarge" xml:space="preserve"><value>文件大于 4 GB。</value></data>
+  <data name="Download_Incomplete" xml:space="preserve"><value>下载提前结束。</value></data>
+  <data name="Download_Stalled" xml:space="preserve"><value>服务器停止响应。</value></data>
+  <data name="OptionsPageTitle.Text" xml:space="preserve"><value>选项与操作</value></data>
+  <data name="OptionsPageDescription.Text" xml:space="preserve"><value>安装程序提供的复选框，以及在安装后或卸载前运行的应用自身文件中的程序。</value></data>
+  <data name="OptionsSection.Text" xml:space="preserve"><value>选项</value></data>
+  <data name="OptionsSectionDescription.Text" xml:space="preserve"><value>显示在安装程序的第一页。静默安装使用默认值，除非指定了 /option id=yes|no。</value></data>
+  <data name="OptionsAdd.Text" xml:space="preserve"><value>添加选项</value></data>
+  <data name="OptionsEmpty.Text" xml:space="preserve"><value>没有选项。添加选项可让用户进行选择，例如是否随 Windows 启动应用。</value></data>
+  <data name="Options_Untitled" xml:space="preserve"><value>新选项</value></data>
+  <data name="Options_StateRequired" xml:space="preserve"><value>始终安装</value></data>
+  <data name="Options_StateOn" xml:space="preserve"><value>默认开启</value></data>
+  <data name="Options_StateOff" xml:space="preserve"><value>默认关闭</value></data>
+  <data name="OptionIdBox.Header" xml:space="preserve"><value>ID</value></data>
+  <data name="OptionIdBox.PlaceholderText" xml:space="preserve"><value>autostart</value></data>
+  <data name="OptionQuietCombo.Header" xml:space="preserve"><value>静默和被动安装时</value></data>
+  <data name="OptionQuietAsDefault.Content" xml:space="preserve"><value>与默认值相同</value></data>
+  <data name="OptionQuietOn.Content" xml:space="preserve"><value>选中</value></data>
+  <data name="OptionQuietOff.Content" xml:space="preserve"><value>不选中</value></data>
+  <data name="OptionLabelBox.Header" xml:space="preserve"><value>各语言的标签（每行一个：en-US = 文本）</value></data>
+  <data name="OptionLabelBox.PlaceholderText" xml:space="preserve"><value>en-US = Start when I sign in
+zh-CN = 登录时启动</value></data>
+  <data name="OptionDefaultCheck.Content" xml:space="preserve"><value>默认选中</value></data>
+  <data name="OptionRequiredCheck.Content" xml:space="preserve"><value>始终安装（显示为选中且不可更改）</value></data>
+  <data name="OptionStartupCheck.Content" xml:space="preserve"><value>选中此选项时随 Windows 启动应用</value></data>
+  <data name="OptionStartupNameBox.Header" xml:space="preserve"><value>Run 值名称</value></data>
+  <data name="OptionStartupNameBox.PlaceholderText" xml:space="preserve"><value>MyApp</value></data>
+  <data name="OptionStartupArgsBox.Header" xml:space="preserve"><value>参数（每行一个）</value></data>
+  <data name="OptionStartupArgsBox.PlaceholderText" xml:space="preserve"><value>--background</value></data>
+  <data name="OptionDetectCheck.Content" xml:space="preserve"><value>更新时，如果电脑上存在以下任一项则选中</value></data>
+  <data name="OptionDetectRunValueBox.Header" xml:space="preserve"><value>Run 值</value></data>
+  <data name="OptionDetectTaskBox.Header" xml:space="preserve"><value>计划任务</value></data>
+  <data name="OptionDetectTaskBox.PlaceholderText" xml:space="preserve"><value>Folder\Task</value></data>
+  <data name="ActionsSection.Text" xml:space="preserve"><value>操作</value></data>
+  <data name="ActionsSectionDescription.Text" xml:space="preserve"><value>只能运行已安装文件中的程序，不使用 shell，也不能运行系统工具。程序以隐藏方式按此顺序运行。</value></data>
+  <data name="ActionsAdd.Text" xml:space="preserve"><value>添加操作</value></data>
+  <data name="ActionsEmpty.Text" xml:space="preserve"><value>没有操作。添加操作可在文件就位后运行程序，例如驱动程序安装程序。</value></data>
+  <data name="Actions_Untitled" xml:space="preserve"><value>新操作</value></data>
+  <data name="Actions_WhenAfterInstall" xml:space="preserve"><value>安装后</value></data>
+  <data name="Actions_WhenBeforeUninstall" xml:space="preserve"><value>卸载前</value></data>
+  <data name="Actions_NoOption" xml:space="preserve"><value>（始终运行）</value></data>
+  <data name="Actions_ExitCodesInvalid" xml:space="preserve"><value>请使用逗号分隔的整数，例如 0, 3010。</value></data>
+  <data name="ActionRunCombo.Header" xml:space="preserve"><value>程序（位于安装的文件中）</value></data>
+  <data name="ActionRunCombo.PlaceholderText" xml:space="preserve"><value>tools\setup.exe</value></data>
+  <data name="ActionArgumentsBox.Header" xml:space="preserve"><value>参数（每行一个）</value></data>
+  <data name="ActionNameBox.Header" xml:space="preserve"><value>各语言的名称（每行一个：en-US = 文本）</value></data>
+  <data name="ActionNameBox.PlaceholderText" xml:space="preserve"><value>en-US = Installing the driver
+zh-CN = 正在安装驱动程序</value></data>
+  <data name="ActionWhenCombo.Header" xml:space="preserve"><value>运行时机</value></data>
+  <data name="ActionWhenAfterInstall.Content" xml:space="preserve"><value>安装后</value></data>
+  <data name="ActionWhenBeforeUninstall.Content" xml:space="preserve"><value>卸载前</value></data>
+  <data name="ActionIfOptionCombo.Header" xml:space="preserve"><value>仅在选中此选项时</value></data>
+  <data name="ActionOnFailureCombo.Header" xml:space="preserve"><value>失败时</value></data>
+  <data name="ActionOnFailureFail.Content" xml:space="preserve"><value>停止并回滚</value></data>
+  <data name="ActionOnFailureWarn.Content" xml:space="preserve"><value>继续并显示警告</value></data>
+  <data name="ActionOnFailureIgnore.Content" xml:space="preserve"><value>继续，仅记录日志</value></data>
+  <data name="ActionTimeoutBox.Header" xml:space="preserve"><value>超时（秒）</value></data>
+  <data name="ActionExitCodesBox.Header" xml:space="preserve"><value>表示成功的退出代码</value></data>
+  <data name="ActionExitCodesBox.PlaceholderText" xml:space="preserve"><value>0, 3010</value></data>
+  <data name="ActionIdBox.Header" xml:space="preserve"><value>ID（可选，用于本地化文件）</value></data>
+  <data name="ActionSkipCheck.Content" xml:space="preserve"><value>注册表值已达到此版本时跳过</value></data>
+  <data name="ActionSkipHiveCombo.Header" xml:space="preserve"><value>根键</value></data>
+  <data name="ActionSkipKeyBox.Header" xml:space="preserve"><value>项</value></data>
+  <data name="ActionSkipKeyBox.PlaceholderText" xml:space="preserve"><value>SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Driver</value></data>
+  <data name="ActionSkipValueBox.Header" xml:space="preserve"><value>值名称</value></data>
+  <data name="ActionSkipValueBox.PlaceholderText" xml:space="preserve"><value>DisplayVersion</value></data>
+  <data name="ActionSkipVersionBox.Header" xml:space="preserve"><value>版本</value></data>
+  <data name="ActionSkipVersionBox.PlaceholderText" xml:space="preserve"><value>2.0.0</value></data>
+  <data name="ActionFallbackArgsCheck.Content" xml:space="preserve"><value>失败时以其他参数再次运行（显示窗口）</value></data>
+  <data name="ActionFallbackArgsBox.Header" xml:space="preserve"><value>备用参数（每行一个）</value></data>
+  <data name="ActionFallbackRunCheck.Content" xml:space="preserve"><value>仍然失败时改为随 Windows 启动（Run 值）</value></data>
+  <data name="ActionFallbackRunNameBox.Header" xml:space="preserve"><value>Run 值名称</value></data>
+  <data name="ActionFallbackRunArgsBox.Header" xml:space="preserve"><value>参数（每行一个）</value></data>
+  <data name="UninstallPageTitle.Text" xml:space="preserve"><value>卸载</value></data>
+  <data name="UninstallPageDescription.Text" xml:space="preserve"><value>用户卸载应用时会发生什么，以及安装程序还会清理哪些内容。</value></data>
+  <data name="UninstallCleanupSection.Text" xml:space="preserve"><value>应用创建的内容</value></data>
+  <data name="UninstallCleanupDescription.Text" xml:space="preserve"><value>在应用文件删除之后移除，失败只会记录到日志中。</value></data>
+  <data name="UninstallDataBox.Header" xml:space="preserve"><value>数据文件夹（每行一个）</value></data>
+  <data name="UninstallDataBox.PlaceholderText" xml:space="preserve"><value>{LocalAppData}\Contoso\Cache</value></data>
+  <data name="UninstallRegistryBox.Header" xml:space="preserve"><value>注册表项（HKCU）</value></data>
+  <data name="UninstallRegistryBox.PlaceholderText" xml:space="preserve"><value>HKCU\Software\Contoso\App</value></data>
+  <data name="UninstallTasksBox.Header" xml:space="preserve"><value>计划任务</value></data>
+  <data name="UninstallRunValuesBox.Header" xml:space="preserve"><value>Run 值（随 Windows 启动）</value></data>
+  <data name="UninstallShortcutsBox.Header" xml:space="preserve"><value>快捷方式名称</value></data>
+  <data name="UninstallShortcutsBox.PlaceholderText" xml:space="preserve"><value>Old Name.lnk</value></data>
+  <data name="UninstallPathsHelp.Text" xml:space="preserve"><value>文件夹以 {LocalAppData}、{AppData}、{CommonAppData} 或 {InstallDir} 开头。计划任务可以位于文件夹中（Folder\Task）。</value></data>
+  <data name="UninstallUserDataSection.Text" xml:space="preserve"><value>设置和用户数据</value></data>
+  <data name="UninstallUserDataDescription.Text" xml:space="preserve"><value>卸载时由用户通过复选框决定是否删除。静默卸载会保留它们，除非指定了 /remove-user-data。</value></data>
+  <data name="UninstallUserDataBox.Header" xml:space="preserve"><value>文件或文件夹（每行一个）</value></data>
+  <data name="UninstallUserDataBox.PlaceholderText" xml:space="preserve"><value>{LocalAppData}\Contoso</value></data>
+  <data name="UninstallUserDataDefaultTitle.Text" xml:space="preserve"><value>默认删除</value></data>
+  <data name="UninstallUserDataDefaultDescription.Text" xml:space="preserve"><value>在交互式卸载中预先选中该复选框。</value></data>
+  <data name="UninstallUserDataDefaultToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>默认删除</value></data>
+  <data name="UninstallElevatedSection.Text" xml:space="preserve"><value>以管理员权限进行的更改</value></data>
+  <data name="UninstallElevatedDescription.Text" xml:space="preserve"><value>卸载时撤销。按用户卸载时会请求一次管理员权限；静默卸载会跳过此步骤。</value></data>
+  <data name="ElevatedIfExistsBox.Header" xml:space="preserve"><value>仅当以下任一项存在时（留空 = 始终）</value></data>
+  <data name="ElevatedDataBox.Header" xml:space="preserve"><value>要删除的文件或文件夹</value></data>
+  <data name="ElevatedTasksBox.Header" xml:space="preserve"><value>计划任务</value></data>
+  <data name="ElevatedTasksBox.PlaceholderText" xml:space="preserve"><value>App\Task</value></data>
+  <data name="ElevatedTraceBox.Header" xml:space="preserve"><value>要停止的 ETW 跟踪会话</value></data>
+  <data name="ElevatedRegistryBox.Header" xml:space="preserve"><value>注册表项</value></data>
+  <data name="ElevatedRegistryBox.PlaceholderText" xml:space="preserve"><value>HKLM\Software\Contoso\App</value></data>
+  <data name="ElevatedServiceTitle.Text" xml:space="preserve"><value>服务权限</value></data>
+  <data name="ElevatedServiceDescription.Text" xml:space="preserve"><value>从服务的访问控制列表中删除权限与这些 SDDL 权限完全一致的用户帐户条目。</value></data>
+  <data name="ElevatedServiceAdd.Text" xml:space="preserve"><value>添加服务</value></data>
+  <data name="ServiceNameBox.PlaceholderText" xml:space="preserve"><value>服务名称</value></data>
+  <data name="ServiceNameBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>服务名称</value></data>
+  <data name="ServiceRightsBox.PlaceholderText" xml:space="preserve"><value>权限，例如 LCRPWP, RPWPLC</value></data>
+  <data name="ServiceRightsBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>SDDL 权限</value></data>
+  <data name="UpgradeLegacySection.Text" xml:space="preserve"><value>早期的安装程序</value></data>
+  <data name="UpgradeAdoptTitle.Text" xml:space="preserve"><value>接管现有安装</value></data>
+  <data name="UpgradeAdoptDescription.Text" xml:space="preserve"><value>升级由之前的安装程序创建、并以本应用 ID 注册（相同卸载项）的安装。</value></data>
+  <data name="UpgradeAdoptToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>接管现有安装</value></data>
+  <data name="UpgradeLegacyKeysDescription.Text" xml:space="preserve"><value>旧产品名称的卸载项，例如改名前的名称或 Inno Setup 的 {GUID}_is1 项。其文件夹会被升级，安装完成后这些项会被删除。</value></data>
+  <data name="UpgradeLegacyKeysBox.Header" xml:space="preserve"><value>旧的卸载项（每行一个）</value></data>
+  <data name="UpgradeRunningSection.Text" xml:space="preserve"><value>应用正在运行时</value></data>
+  <data name="UpgradeCloseProcessesBox.Header" xml:space="preserve"><value>安装或卸载前要关闭的程序（每行一个 .exe 名称）</value></data>
+  <data name="UpgradeCloseProcessesBox.PlaceholderText" xml:space="preserve"><value>MyApp.exe</value></data>
+  <data name="UpgradeCloseCommandToggle.Header" xml:space="preserve"><value>先通过命令让已安装的应用退出</value></data>
+  <data name="UpgradeCloseRunCombo.Header" xml:space="preserve"><value>程序</value></data>
+  <data name="UpgradeCloseRunCombo.PlaceholderText" xml:space="preserve"><value>MyApp.exe</value></data>
+  <data name="UpgradeCloseArgsBox.Header" xml:space="preserve"><value>参数（每行一个）</value></data>
+  <data name="UpgradeCloseArgsBox.PlaceholderText" xml:space="preserve"><value>--exit</value></data>
+  <data name="UpgradeRelaunchBox.Header" xml:space="preserve"><value>应用内更新程序请求重新启动应用时的参数（/relaunch）</value></data>
+  <data name="UpgradeRelaunchBox.PlaceholderText" xml:space="preserve"><value>--updated</value></data>
+  <data name="UpgradeCleanupSection.Text" xml:space="preserve"><value>早期版本的残留</value></data>
+  <data name="UpgradeCleanupDescription.Text" xml:space="preserve"><value>在安装过程中、文件就位之后且安装后操作运行之前删除。回滚不会恢复这些内容。</value></data>
+  <data name="CleanupTasksBox.Header" xml:space="preserve"><value>计划任务</value></data>
+  <data name="CleanupRunValuesBox.Header" xml:space="preserve"><value>Run 值</value></data>
+  <data name="CleanupShortcutsBox.Header" xml:space="preserve"><value>快捷方式名称</value></data>
+  <data name="CleanupShortcutsBox.PlaceholderText" xml:space="preserve"><value>Old Name.lnk</value></data>
+  <data name="CleanupUninstallKeysBox.Header" xml:space="preserve"><value>其他产品的卸载项</value></data>
+  <data name="CleanupFilesBox.Header" xml:space="preserve"><value>安装文件夹中的文件</value></data>
+  <data name="CleanupFilesBox.PlaceholderText" xml:space="preserve"><value>unins*.exe</value></data>
+  <data name="InstallStartMenuFolderTitle.Text" xml:space="preserve"><value>开始菜单文件夹</value></data>
+  <data name="InstallStartMenuFolderDescription.Text" xml:space="preserve"><value>将快捷方式放入此文件夹，例如公司名称。留空 = 直接放在应用列表中。</value></data>
+  <data name="InstallStartMenuFolderBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>开始菜单文件夹</value></data>
+  <data name="InstallStartMenuFolderBox.PlaceholderText" xml:space="preserve"><value>无</value></data>
+  <data name="InstallIntegrationSection.Text" xml:space="preserve"><value>系统集成</value></data>
+  <data name="InstallPathBox.Header" xml:space="preserve"><value>要添加到 PATH 的文件夹（每行一个）</value></data>
+  <data name="InstallPathBox.PlaceholderText" xml:space="preserve"><value>cli</value></data>
+  <data name="InstallPathHelp.Text" xml:space="preserve"><value>相对于安装文件夹；. 表示安装文件夹本身。按用户安装会修改用户 PATH，按计算机安装会修改系统 PATH。</value></data>
+  <data name="InstallNgenBox.Header" xml:space="preserve"><value>要预编译的 .NET Framework 程序集（ngen）</value></data>
+  <data name="InstallNgenBox.PlaceholderText" xml:space="preserve"><value>MyApp.exe</value></data>
+  <data name="InstallNgenHelp.Text" xml:space="preserve"><value>仅在按计算机安装时通过 ngen 排队，并在电脑空闲时编译。</value></data>
+  <data name="VariantsSection.Text" xml:space="preserve"><value>变体</value></data>
+  <data name="VariantsDescription.Text" xml:space="preserve"><value>在一个安装包中提供多个构建版本，例如独立部署版和依赖框架版，由用户选择其一。每个变体有自己的源文件夹，此时不使用上方的应用文件夹。</value></data>
+  <data name="VariantsAdd.Text" xml:space="preserve"><value>添加变体…</value></data>
+  <data name="Variants_Untitled" xml:space="preserve"><value>新变体</value></data>
+  <data name="Variants_Default" xml:space="preserve"><value>默认</value></data>
+  <data name="VariantIdBox.Header" xml:space="preserve"><value>ID</value></data>
+  <data name="VariantIdBox.PlaceholderText" xml:space="preserve"><value>selfContained</value></data>
+  <data name="VariantDefaultCheck.Content" xml:space="preserve"><value>默认选中</value></data>
+  <data name="VariantSourceBox.Header" xml:space="preserve"><value>源文件夹</value></data>
+  <data name="VariantLabelBox.Header" xml:space="preserve"><value>各语言的标签（en-US = 文本）</value></data>
+  <data name="VariantLabelBox.PlaceholderText" xml:space="preserve"><value>zh-CN = 独立部署（包含运行时）</value></data>
+  <data name="VariantDescriptionBox.Header" xml:space="preserve"><value>各语言的说明（可选）</value></data>
+  <data name="VariantsOutputTitle.Text" xml:space="preserve"><value>此安装包中的变体</value></data>
+  <data name="VariantsOutputDescription.Text" xml:space="preserve"><value>以逗号分隔的 ID；留空 = 全部。只有一个变体时，安装时不提供选择。</value></data>
+  <data name="VariantsOutputBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>此安装包中的变体</value></data>
+  <data name="VariantsOutputBox.PlaceholderText" xml:space="preserve"><value>全部</value></data>
+  <data name="AppearanceLanguageSection.Text" xml:space="preserve"><value>许可协议与语言</value></data>
+  <data name="AppearanceLicenseModeTitle.Text" xml:space="preserve"><value>显示许可协议</value></data>
+  <data name="AppearanceLicenseModeDescription.Text" xml:space="preserve"><value>许可协议文件本身在“应用信息”页设置。</value></data>
+  <data name="AppearanceLicenseModeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>显示许可协议</value></data>
+  <data name="LicenseModeFirstInstall.Content" xml:space="preserve"><value>仅首次安装时</value></data>
+  <data name="LicenseModeAlways.Content" xml:space="preserve"><value>更新和重新安装前也显示</value></data>
+  <data name="AppearanceLocalizationTitle.Text" xml:space="preserve"><value>本地化文件夹</value></data>
+  <data name="AppearanceLocalizationDescription.Text" xml:space="preserve"><value>每种语言一个 &lt;语言&gt;.json，包含选项标签、操作名称、许可协议和文本覆盖。可用 fluentsetup locale add 创建。</value></data>
+  <data name="AppearanceLocalizationBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>本地化文件夹</value></data>
+  <data name="AppearanceLocalizationBox.PlaceholderText" xml:space="preserve"><value>locales</value></data>
+  <data name="AppearanceLicensesBox.Header" xml:space="preserve"><value>各语言的许可协议（每行一个：zh-CN = license_zh.txt）</value></data>
+  <data name="AppearanceStringsBox.Header" xml:space="preserve"><value>安装程序文本覆盖（每行一个：zh-CN: welcome.body = 文本）</value></data>
+  <data name="AppearanceStringsHelp.Text" xml:space="preserve"><value>键名见 shared/localization/en-US.json。换行请写作 \n。</value></data>
+  <data name="BuildVariablesSection.Text" xml:space="preserve"><value>变量</value></data>
+  <data name="BuildVariablesDescription.Text" xml:space="preserve"><value>可在项目的任何文本中使用 $(Name)。fluentsetup build -D Name=value 可覆盖其值，例如在 CI 中设置版本号。</value></data>
+  <data name="BuildVariablesAdd.Text" xml:space="preserve"><value>添加变量</value></data>
+  <data name="BuildVariablesEmpty.Text" xml:space="preserve"><value>没有变量。</value></data>
+  <data name="VariableNameBox.PlaceholderText" xml:space="preserve"><value>名称</value></data>
+  <data name="VariableNameBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>变量名称</value></data>
+  <data name="VariableValueBox.PlaceholderText" xml:space="preserve"><value>值</value></data>
+  <data name="VariableValueBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>变量值</value></data>
 </root>

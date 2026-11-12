@@ -71,6 +71,19 @@
                 <Border Style="{StaticResource RowCardStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE8B7;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="InstallStartMenuFolderTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="InstallStartMenuFolderDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            <TextBlock Text="{x:Bind VM.Errors.InstallStartMenuFolder, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallStartMenuFolder), Mode=OneWay}" />
+                        </StackPanel>
+                        <TextBox Grid.Column="2" Text="{x:Bind VM.StartMenuFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="240" VerticalAlignment="Center"
+                                 IsSpellCheckEnabled="False" x:Uid="InstallStartMenuFolderBox" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                         <FontIcon Glyph="&#xE7F4;" Style="{StaticResource RowIconStyle}" />
                         <TextBlock Grid.Column="1" x:Uid="InstallDesktopTitle" Style="{StaticResource RowTitleStyle}" VerticalAlignment="Center" />
                         <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.DesktopShortcutIndex, Mode=TwoWay}" x:Uid="InstallDesktopCombo">
@@ -92,6 +105,24 @@
                     </Grid>
                 </Border>
             </StackPanel>
+
+            <TextBlock x:Uid="InstallIntegrationSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <StackPanel Spacing="16">
+                    <Grid ColumnSpacing="24">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <StackPanel Spacing="4">
+                            <TextBox x:Uid="InstallPathBox" Text="{x:Bind VM.AddToPathText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                            <TextBlock x:Uid="InstallPathHelp" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBox x:Uid="InstallNgenBox" Text="{x:Bind VM.NgenText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                            <TextBlock x:Uid="InstallNgenHelp" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="{x:Bind VM.Errors.InstallIntegration, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallIntegration), Mode=OneWay}" />
+                </StackPanel>
+            </Border>
 
             <TextBlock x:Uid="InstallRequirementsSection" Style="{StaticResource SectionHeaderStyle}" />
             <Border Style="{StaticResource RowCardStyle}">

@@ -3,6 +3,7 @@
     x:Class="FluentSetup.Builder.Views.UpgradePage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentSetup.Builder.Views"
     Background="Transparent">
     <ScrollViewer>
         <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
@@ -34,26 +35,72 @@
                 </Border>
             </StackPanel>
 
+            <!-- Installations made by another installer or under an older name -->
+            <TextBlock x:Uid="UpgradeLegacySection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE8AB;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="UpgradeAdoptTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="UpgradeAdoptDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.AdoptExistingInstall, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="UpgradeAdoptToggle" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                    <StackPanel Spacing="12">
+                        <TextBlock x:Uid="UpgradeLegacyKeysDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        <TextBox x:Uid="UpgradeLegacyKeysBox" Text="{x:Bind VM.LegacyUninstallKeysText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.InstallLegacy, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallLegacy), Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- A running copy of the app -->
+            <TextBlock x:Uid="UpgradeRunningSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <StackPanel Spacing="16">
+                    <TextBox x:Uid="UpgradeCloseProcessesBox" Text="{x:Bind VM.CloseProcessesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                    <StackPanel Spacing="8">
+                        <ToggleSwitch x:Uid="UpgradeCloseCommandToggle" IsOn="{x:Bind VM.HasCloseCommand, Mode=TwoWay}" />
+                        <Grid ColumnSpacing="24" Visibility="{x:Bind VM.HasCloseCommand, Mode=OneWay}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <local:ProgramBox x:Uid="UpgradeCloseRunCombo" VerticalAlignment="Top" Choices="{x:Bind VM.ExecutableChoices}" Text="{x:Bind VM.CloseCommandRun, Mode=TwoWay}" />
+                            <TextBox x:Uid="UpgradeCloseArgsBox" Grid.Column="1" Text="{x:Bind VM.CloseCommandArgumentsText, Mode=TwoWay}" AcceptsReturn="True"
+                                     MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        </Grid>
+                    </StackPanel>
+                    <TextBox x:Uid="UpgradeRelaunchBox" Text="{x:Bind VM.RelaunchArgumentsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                    <TextBlock Text="{x:Bind VM.Errors.InstallRunning, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallRunning), Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Leftovers of earlier versions -->
+            <TextBlock x:Uid="UpgradeCleanupSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <StackPanel Spacing="16">
+                    <TextBlock x:Uid="UpgradeCleanupDescription" Style="{StaticResource RowDescriptionStyle}" />
+                    <Grid ColumnSpacing="24" RowSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBox x:Uid="CleanupTasksBox" Text="{x:Bind VM.CleanupScheduledTasksText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="CleanupRunValuesBox" Grid.Column="1" Text="{x:Bind VM.CleanupRunValuesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="CleanupShortcutsBox" Grid.Row="1" Text="{x:Bind VM.CleanupShortcutsText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="CleanupUninstallKeysBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind VM.CleanupUninstallKeysText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="CleanupFilesBox" Grid.Row="2" Text="{x:Bind VM.CleanupFilesText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="72" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                    </Grid>
+                    <TextBlock Text="{x:Bind VM.Errors.InstallCleanup, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallCleanup), Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+
             <TextBlock x:Uid="UpgradeDataSection" Style="{StaticResource SectionHeaderStyle}" />
             <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
                 <StackPanel Spacing="12">
                     <TextBlock x:Uid="UpgradePreserveDescription" Style="{StaticResource RowDescriptionStyle}" />
                     <TextBox x:Uid="UpgradePreserveBox" Text="{x:Bind VM.PreserveText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
                 </StackPanel>
-            </Border>
-
-            <TextBlock x:Uid="UninstallSection" Style="{StaticResource SectionHeaderStyle}" />
-            <Border Style="{StaticResource RowCardStyle}">
-                <Grid ColumnSpacing="16">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                    <FontIcon Glyph="&#xE74D;" Style="{StaticResource RowIconStyle}" VerticalAlignment="Top" Margin="4,2,20,0" />
-                    <StackPanel Grid.Column="1" Spacing="8">
-                        <TextBlock x:Uid="UninstallRemovesTitle" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock x:Uid="UninstallRemoves" Style="{StaticResource RowDescriptionStyle}" />
-                        <TextBlock x:Uid="UninstallKeepsTitle" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,4,0,0" />
-                        <TextBlock x:Uid="UninstallKeeps" Style="{StaticResource RowDescriptionStyle}" />
-                    </StackPanel>
-                </Grid>
             </Border>
         </StackPanel>
     </ScrollViewer>

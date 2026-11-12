@@ -37,7 +37,7 @@
   <data name="NavFiles.Content" xml:space="preserve"><value>Files</value></data>
   <data name="NavInstall.Content" xml:space="preserve"><value>Install options</value></data>
   <data name="NavAppearance.Content" xml:space="preserve"><value>Appearance</value></data>
-  <data name="NavUpgrade.Content" xml:space="preserve"><value>Upgrade &amp; uninstall</value></data>
+  <data name="NavUpgrade.Content" xml:space="preserve"><value>Upgrades</value></data>
   <data name="NavBuild.Content" xml:space="preserve"><value>Build</value></data>
   <data name="NavHistory.Content" xml:space="preserve"><value>Build history</value></data>
   <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
@@ -229,8 +229,8 @@
   <data name="AppearanceFinishBox.Header" xml:space="preserve"><value>Completion text (optional)</value></data>
   <data name="AppearanceFallbackInfo.Title" xml:space="preserve"><value>Classic fallback</value></data>
   <data name="AppearanceFallbackInfo.Message" xml:space="preserve"><value>On PCs without the Windows App Runtime the installer automatically uses a classic Win32 window with the same pages and settings, so installation always works offline.</value></data>
-  <data name="UpgradePageTitle.Text" xml:space="preserve"><value>Upgrade &amp; uninstall</value></data>
-  <data name="UpgradePageDescription.Text" xml:space="preserve"><value>What happens when a newer version is installed and when users remove the app.</value></data>
+  <data name="UpgradePageTitle.Text" xml:space="preserve"><value>Upgrades</value></data>
+  <data name="UpgradePageDescription.Text" xml:space="preserve"><value>What happens when a newer version is installed, also over an installation made by another installer.</value></data>
   <data name="UpgradeSection.Text" xml:space="preserve"><value>Updates</value></data>
   <data name="UpgradeHowTitle.Text" xml:space="preserve"><value>Updates replace the installed version in place</value></data>
   <data name="UpgradeHowDescription.Text" xml:space="preserve"><value>Changed files are replaced, files the new version no longer ships are removed, and everything is rolled back if the update fails.</value></data>
@@ -240,11 +240,11 @@
   <data name="UpgradeDataSection.Text" xml:space="preserve"><value>User data</value></data>
   <data name="UpgradePreserveDescription.Text" xml:space="preserve"><value>Files matching these patterns are installed only if missing, are never overwritten by updates and are kept on uninstall.</value></data>
   <data name="UpgradePreserveBox.Header" xml:space="preserve"><value>Preserved files (one pattern per line)</value></data>
-  <data name="UninstallSection.Text" xml:space="preserve"><value>Uninstall</value></data>
+  <data name="UninstallSection.Text" xml:space="preserve"><value>What uninstall does</value></data>
   <data name="UninstallRemovesTitle.Text" xml:space="preserve"><value>Removed</value></data>
   <data name="UninstallRemoves.Text" xml:space="preserve"><value>Every file setup installed, its shortcuts, empty folders it created and the Windows Settings entry.</value></data>
   <data name="UninstallKeepsTitle.Text" xml:space="preserve"><value>Kept</value></data>
-  <data name="UninstallKeeps.Text" xml:space="preserve"><value>Preserved user data and any file the app created after installation (logs, settings, documents). Uninstall never deletes a folder wholesale.</value></data>
+  <data name="UninstallKeeps.Text" xml:space="preserve"><value>Preserved user data and any file the app created after installation (logs, settings, documents), unless it is listed below. Uninstall never deletes a folder wholesale on its own.</value></data>
   <data name="BuildPageTitle.Text" xml:space="preserve"><value>Build</value></data>
   <data name="BuildPageDescription.Text" xml:space="preserve"><value>Creates a single Setup.exe that installs offline on Windows 10 1809 and later.</value></data>
   <data name="BuildButtonText.Text" xml:space="preserve"><value>Build installer</value></data>
@@ -319,4 +319,252 @@
   <data name="SettingsOpenData.Content" xml:space="preserve"><value>Open data folder</value></data>
   <data name="SettingsLicensesTitle.Text" xml:space="preserve"><value>Open-source components</value></data>
   <data name="SettingsLicenses.Text" xml:space="preserve"><value>Zstandard (BSD), ZstdSharp (MIT), Windows App SDK (MIT), CommunityToolkit.Mvvm (MIT).</value></data>
+  <data name="NavPrerequisites.Content" xml:space="preserve"><value>Prerequisites</value></data>
+  <data name="NavOptions.Content" xml:space="preserve"><value>Options &amp; actions</value></data>
+  <data name="NavUninstall.Content" xml:space="preserve"><value>Uninstall</value></data>
+  <data name="RowMoveUp.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Move up</value></data>
+  <data name="RowMoveUp.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Move up</value></data>
+  <data name="RowMoveDown.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Move down</value></data>
+  <data name="RowMoveDown.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Move down</value></data>
+  <data name="RowRemove.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Remove</value></data>
+  <data name="RowRemove.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Remove</value></data>
+  <data name="PrereqPageTitle.Text" xml:space="preserve"><value>Prerequisites</value></data>
+  <data name="PrereqPageDescription.Text" xml:space="preserve"><value>Windows components your app needs. Setup checks them before it changes anything and can install a missing one from a bundled installer or a verified download.</value></data>
+  <data name="PrereqWindowsSection.Text" xml:space="preserve"><value>Windows components</value></data>
+  <data name="PrereqWebView2Title.Text" xml:space="preserve"><value>Microsoft Edge WebView2 Runtime</value></data>
+  <data name="PrereqWebView2Description.Text" xml:space="preserve"><value>For apps that show web content with WebView2.</value></data>
+  <data name="PrereqWebView2Toggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Requires the WebView2 Runtime</value></data>
+  <data name="PrereqWebView2MinVersionBox.Header" xml:space="preserve"><value>Minimum version (optional)</value></data>
+  <data name="PrereqWebView2MinVersionBox.PlaceholderText" xml:space="preserve"><value>120.0.2210.91</value></data>
+  <data name="PrereqWarTitle.Text" xml:space="preserve"><value>Windows App Runtime</value></data>
+  <data name="PrereqWarDescription.Text" xml:space="preserve"><value>For framework-dependent WinUI 3 apps (Windows App SDK).</value></data>
+  <data name="PrereqWarToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Requires the Windows App Runtime</value></data>
+  <data name="PrereqWarVersionBox.Header" xml:space="preserve"><value>Windows App SDK version</value></data>
+  <data name="PrereqWarVersionBox.PlaceholderText" xml:space="preserve"><value>2.5.1</value></data>
+  <data name="PrereqNetFxTitle.Text" xml:space="preserve"><value>.NET Framework</value></data>
+  <data name="PrereqNetFxDescription.Text" xml:space="preserve"><value>Minimum .NET Framework 4.x for apps built on .NET Framework.</value></data>
+  <data name="PrereqNetFxCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>.NET Framework version</value></data>
+  <data name="Prereq_NotRequired" xml:space="preserve"><value>Not required</value></data>
+  <data name="PrereqNetFxSetupToggle.Header" xml:space="preserve"><value>Specify how setup gets it (installer, download or help link)</value></data>
+  <data name="PrereqDotNetSection.Text" xml:space="preserve"><value>.NET runtimes</value></data>
+  <data name="PrereqDotNetDescription.Text" xml:space="preserve"><value>Shared runtimes for framework-dependent .NET apps, e.g. the .NET Desktop Runtime 8.</value></data>
+  <data name="PrereqAddDotNet.Text" xml:space="preserve"><value>Add runtime</value></data>
+  <data name="PrereqDotNetEmpty.Text" xml:space="preserve"><value>No .NET runtime required. Self-contained apps carry their own.</value></data>
+  <data name="DotNetRuntimeCombo.Header" xml:space="preserve"><value>Runtime</value></data>
+  <data name="DotNetVersionBox.Header" xml:space="preserve"><value>Minimum version</value></data>
+  <data name="DotNetVersionBox.PlaceholderText" xml:space="preserve"><value>8.0.0</value></data>
+  <data name="DotNetRollForwardCombo.Header" xml:space="preserve"><value>Newer versions that count</value></data>
+  <data name="RollForwardPatch.Content" xml:space="preserve"><value>Same major.minor (patch)</value></data>
+  <data name="RollForwardMinor.Content" xml:space="preserve"><value>Same major version (minor)</value></data>
+  <data name="RollForwardMajor.Content" xml:space="preserve"><value>Any newer version (major)</value></data>
+  <data name="SourceHelp.Text" xml:space="preserve"><value>Setup runs a bundled installer (add it on the Files page under Additional folders), otherwise it downloads the file and verifies its SHA-256. With neither, setup stops before changing anything and shows the help link.</value></data>
+  <data name="SourceInstallerCombo.Header" xml:space="preserve"><value>Bundled installer (among the installed files)</value></data>
+  <data name="SourceInstallerCombo.PlaceholderText" xml:space="preserve"><value>redist\installer.exe</value></data>
+  <data name="SourceOnFailureCombo.Header" xml:space="preserve"><value>If it is still missing afterwards</value></data>
+  <data name="SourceOnFailureWarn.Content" xml:space="preserve"><value>Install the app and show a warning</value></data>
+  <data name="SourceOnFailureFail.Content" xml:space="preserve"><value>Roll the installation back</value></data>
+  <data name="SourceArgumentsBox.Header" xml:space="preserve"><value>Installer arguments (one per line)</value></data>
+  <data name="SourceHelpUrlBox.Header" xml:space="preserve"><value>Help link (https)</value></data>
+  <data name="SourceHelpUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="SourceVariantsBox.Header" xml:space="preserve"><value>Only for these variants (comma-separated; empty = always)</value></data>
+  <data name="SourceDownloadToggle.Header" xml:space="preserve"><value>Download it when no installer is bundled</value></data>
+  <data name="SourceUrlBox.Header" xml:space="preserve"><value>Download URL (https)</value></data>
+  <data name="SourceUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="SourceComputeButton.Content" xml:space="preserve"><value>Compute hash and size</value></data>
+  <data name="SourceComputeCancel.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="SourceSha256Box.Header" xml:space="preserve"><value>SHA-256</value></data>
+  <data name="SourceSha256Box.PlaceholderText" xml:space="preserve"><value>64 hexadecimal characters</value></data>
+  <data name="SourceSizeBox.Header" xml:space="preserve"><value>Size in bytes (0 = unknown)</value></data>
+  <data name="Source_SummaryBundled" xml:space="preserve"><value>Bundled installer: {0}</value></data>
+  <data name="Source_SummaryDownload" xml:space="preserve"><value>Downloaded from {0}</value></data>
+  <data name="Source_SummaryNone" xml:space="preserve"><value>Not installed by setup</value></data>
+  <data name="Download_NeedHttps" xml:space="preserve"><value>Enter an https:// download URL.</value></data>
+  <data name="Download_Starting" xml:space="preserve"><value>Connecting…</value></data>
+  <data name="Download_Progress" xml:space="preserve"><value>Downloading… {0}</value></data>
+  <data name="Download_ProgressPercent" xml:space="preserve"><value>Downloading… {0} % ({1} of {2})</value></data>
+  <data name="Download_Done" xml:space="preserve"><value>Filled in the hash and size of the downloaded file ({0}).</value></data>
+  <data name="Download_Cancelled" xml:space="preserve"><value>Download cancelled.</value></data>
+  <data name="Download_Failed" xml:space="preserve"><value>Download failed: {0}</value></data>
+  <data name="Download_TooLarge" xml:space="preserve"><value>The file is larger than 4 GB.</value></data>
+  <data name="Download_Incomplete" xml:space="preserve"><value>The download ended early.</value></data>
+  <data name="Download_Stalled" xml:space="preserve"><value>The server stopped responding.</value></data>
+  <data name="OptionsPageTitle.Text" xml:space="preserve"><value>Options &amp; actions</value></data>
+  <data name="OptionsPageDescription.Text" xml:space="preserve"><value>Checkboxes the installer offers, and programs from your app&apos;s own files that setup runs after installing or before uninstalling.</value></data>
+  <data name="OptionsSection.Text" xml:space="preserve"><value>Options</value></data>
+  <data name="OptionsSectionDescription.Text" xml:space="preserve"><value>Shown on the installer&apos;s first page. Quiet installs use the default unless /option id=yes|no is given.</value></data>
+  <data name="OptionsAdd.Text" xml:space="preserve"><value>Add option</value></data>
+  <data name="OptionsEmpty.Text" xml:space="preserve"><value>No options. Add one to let users choose, for example, to start the app with Windows.</value></data>
+  <data name="Options_Untitled" xml:space="preserve"><value>New option</value></data>
+  <data name="Options_StateRequired" xml:space="preserve"><value>Always installed</value></data>
+  <data name="Options_StateOn" xml:space="preserve"><value>On by default</value></data>
+  <data name="Options_StateOff" xml:space="preserve"><value>Off by default</value></data>
+  <data name="OptionIdBox.Header" xml:space="preserve"><value>ID</value></data>
+  <data name="OptionIdBox.PlaceholderText" xml:space="preserve"><value>autostart</value></data>
+  <data name="OptionQuietCombo.Header" xml:space="preserve"><value>In quiet and passive installs</value></data>
+  <data name="OptionQuietAsDefault.Content" xml:space="preserve"><value>Same as the default</value></data>
+  <data name="OptionQuietOn.Content" xml:space="preserve"><value>Selected</value></data>
+  <data name="OptionQuietOff.Content" xml:space="preserve"><value>Not selected</value></data>
+  <data name="OptionLabelBox.Header" xml:space="preserve"><value>Label per language (one per line: en-US = text)</value></data>
+  <data name="OptionLabelBox.PlaceholderText" xml:space="preserve"><value>en-US = Start when I sign in
+zh-CN = 登录时启动</value></data>
+  <data name="OptionDefaultCheck.Content" xml:space="preserve"><value>Selected by default</value></data>
+  <data name="OptionRequiredCheck.Content" xml:space="preserve"><value>Always installed (shown checked and locked)</value></data>
+  <data name="OptionStartupCheck.Content" xml:space="preserve"><value>Start the app with Windows while this option is selected</value></data>
+  <data name="OptionStartupNameBox.Header" xml:space="preserve"><value>Run value name</value></data>
+  <data name="OptionStartupNameBox.PlaceholderText" xml:space="preserve"><value>MyApp</value></data>
+  <data name="OptionStartupArgsBox.Header" xml:space="preserve"><value>Arguments (one per line)</value></data>
+  <data name="OptionStartupArgsBox.PlaceholderText" xml:space="preserve"><value>--background</value></data>
+  <data name="OptionDetectCheck.Content" xml:space="preserve"><value>On updates, select it if one of these exists on the PC</value></data>
+  <data name="OptionDetectRunValueBox.Header" xml:space="preserve"><value>Run value</value></data>
+  <data name="OptionDetectTaskBox.Header" xml:space="preserve"><value>Scheduled task</value></data>
+  <data name="OptionDetectTaskBox.PlaceholderText" xml:space="preserve"><value>Folder\Task</value></data>
+  <data name="ActionsSection.Text" xml:space="preserve"><value>Actions</value></data>
+  <data name="ActionsSectionDescription.Text" xml:space="preserve"><value>Programs from the installed files only: no shell and no system tools. They run hidden, in this order.</value></data>
+  <data name="ActionsAdd.Text" xml:space="preserve"><value>Add action</value></data>
+  <data name="ActionsEmpty.Text" xml:space="preserve"><value>No actions. Add one to run, for example, a driver installer after the files are in place.</value></data>
+  <data name="Actions_Untitled" xml:space="preserve"><value>New action</value></data>
+  <data name="Actions_WhenAfterInstall" xml:space="preserve"><value>After install</value></data>
+  <data name="Actions_WhenBeforeUninstall" xml:space="preserve"><value>Before uninstall</value></data>
+  <data name="Actions_NoOption" xml:space="preserve"><value>(Always)</value></data>
+  <data name="Actions_ExitCodesInvalid" xml:space="preserve"><value>Use whole numbers separated by commas, e.g. 0, 3010.</value></data>
+  <data name="ActionRunCombo.Header" xml:space="preserve"><value>Program (among the installed files)</value></data>
+  <data name="ActionRunCombo.PlaceholderText" xml:space="preserve"><value>tools\setup.exe</value></data>
+  <data name="ActionArgumentsBox.Header" xml:space="preserve"><value>Arguments (one per line)</value></data>
+  <data name="ActionNameBox.Header" xml:space="preserve"><value>Name per language (one per line: en-US = text)</value></data>
+  <data name="ActionNameBox.PlaceholderText" xml:space="preserve"><value>en-US = Installing the driver
+zh-CN = 正在安装驱动程序</value></data>
+  <data name="ActionWhenCombo.Header" xml:space="preserve"><value>When</value></data>
+  <data name="ActionWhenAfterInstall.Content" xml:space="preserve"><value>After install</value></data>
+  <data name="ActionWhenBeforeUninstall.Content" xml:space="preserve"><value>Before uninstall</value></data>
+  <data name="ActionIfOptionCombo.Header" xml:space="preserve"><value>Only when this option is selected</value></data>
+  <data name="ActionOnFailureCombo.Header" xml:space="preserve"><value>If it fails</value></data>
+  <data name="ActionOnFailureFail.Content" xml:space="preserve"><value>Stop and roll back</value></data>
+  <data name="ActionOnFailureWarn.Content" xml:space="preserve"><value>Continue and show a warning</value></data>
+  <data name="ActionOnFailureIgnore.Content" xml:space="preserve"><value>Continue and only log it</value></data>
+  <data name="ActionTimeoutBox.Header" xml:space="preserve"><value>Timeout (seconds)</value></data>
+  <data name="ActionExitCodesBox.Header" xml:space="preserve"><value>Success exit codes</value></data>
+  <data name="ActionExitCodesBox.PlaceholderText" xml:space="preserve"><value>0, 3010</value></data>
+  <data name="ActionIdBox.Header" xml:space="preserve"><value>ID (optional, for localization files)</value></data>
+  <data name="ActionSkipCheck.Content" xml:space="preserve"><value>Skip when a registry value already holds at least this version</value></data>
+  <data name="ActionSkipHiveCombo.Header" xml:space="preserve"><value>Hive</value></data>
+  <data name="ActionSkipKeyBox.Header" xml:space="preserve"><value>Key</value></data>
+  <data name="ActionSkipKeyBox.PlaceholderText" xml:space="preserve"><value>SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Driver</value></data>
+  <data name="ActionSkipValueBox.Header" xml:space="preserve"><value>Value name</value></data>
+  <data name="ActionSkipValueBox.PlaceholderText" xml:space="preserve"><value>DisplayVersion</value></data>
+  <data name="ActionSkipVersionBox.Header" xml:space="preserve"><value>Version</value></data>
+  <data name="ActionSkipVersionBox.PlaceholderText" xml:space="preserve"><value>2.0.0</value></data>
+  <data name="ActionFallbackArgsCheck.Content" xml:space="preserve"><value>If it fails, run it again visibly with other arguments</value></data>
+  <data name="ActionFallbackArgsBox.Header" xml:space="preserve"><value>Fallback arguments (one per line)</value></data>
+  <data name="ActionFallbackRunCheck.Content" xml:space="preserve"><value>If it still fails, start it with Windows instead (Run value)</value></data>
+  <data name="ActionFallbackRunNameBox.Header" xml:space="preserve"><value>Run value name</value></data>
+  <data name="ActionFallbackRunArgsBox.Header" xml:space="preserve"><value>Arguments (one per line)</value></data>
+  <data name="UninstallPageTitle.Text" xml:space="preserve"><value>Uninstall</value></data>
+  <data name="UninstallPageDescription.Text" xml:space="preserve"><value>What happens when users remove the app, and what else setup cleans up.</value></data>
+  <data name="UninstallCleanupSection.Text" xml:space="preserve"><value>What the app created</value></data>
+  <data name="UninstallCleanupDescription.Text" xml:space="preserve"><value>Removed after the app&apos;s files are gone. Failures are only logged.</value></data>
+  <data name="UninstallDataBox.Header" xml:space="preserve"><value>Data folders (one per line)</value></data>
+  <data name="UninstallDataBox.PlaceholderText" xml:space="preserve"><value>{LocalAppData}\Contoso\Cache</value></data>
+  <data name="UninstallRegistryBox.Header" xml:space="preserve"><value>Registry keys (HKCU)</value></data>
+  <data name="UninstallRegistryBox.PlaceholderText" xml:space="preserve"><value>HKCU\Software\Contoso\App</value></data>
+  <data name="UninstallTasksBox.Header" xml:space="preserve"><value>Scheduled tasks</value></data>
+  <data name="UninstallRunValuesBox.Header" xml:space="preserve"><value>Run values (start with Windows)</value></data>
+  <data name="UninstallShortcutsBox.Header" xml:space="preserve"><value>Shortcut names</value></data>
+  <data name="UninstallShortcutsBox.PlaceholderText" xml:space="preserve"><value>Old Name.lnk</value></data>
+  <data name="UninstallPathsHelp.Text" xml:space="preserve"><value>Folders start with {LocalAppData}, {AppData}, {CommonAppData} or {InstallDir}. Scheduled tasks may be in a folder (Folder\Task).</value></data>
+  <data name="UninstallUserDataSection.Text" xml:space="preserve"><value>Settings and user data</value></data>
+  <data name="UninstallUserDataDescription.Text" xml:space="preserve"><value>Users decide about these with a checkbox when uninstalling. Silent uninstalls keep them unless /remove-user-data is given.</value></data>
+  <data name="UninstallUserDataBox.Header" xml:space="preserve"><value>Files or folders (one per line)</value></data>
+  <data name="UninstallUserDataBox.PlaceholderText" xml:space="preserve"><value>{LocalAppData}\Contoso</value></data>
+  <data name="UninstallUserDataDefaultTitle.Text" xml:space="preserve"><value>Delete by default</value></data>
+  <data name="UninstallUserDataDefaultDescription.Text" xml:space="preserve"><value>Pre-selects the checkbox in interactive uninstalls.</value></data>
+  <data name="UninstallUserDataDefaultToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Delete by default</value></data>
+  <data name="UninstallElevatedSection.Text" xml:space="preserve"><value>Changes made with administrator rights</value></data>
+  <data name="UninstallElevatedDescription.Text" xml:space="preserve"><value>Undone on uninstall. A per-user uninstall asks once for administrator permission; silent uninstalls skip this step.</value></data>
+  <data name="ElevatedIfExistsBox.Header" xml:space="preserve"><value>Only if one of these exists (empty = always)</value></data>
+  <data name="ElevatedDataBox.Header" xml:space="preserve"><value>Files or folders to remove</value></data>
+  <data name="ElevatedTasksBox.Header" xml:space="preserve"><value>Scheduled tasks</value></data>
+  <data name="ElevatedTasksBox.PlaceholderText" xml:space="preserve"><value>App\Task</value></data>
+  <data name="ElevatedTraceBox.Header" xml:space="preserve"><value>ETW trace sessions to stop</value></data>
+  <data name="ElevatedRegistryBox.Header" xml:space="preserve"><value>Registry keys</value></data>
+  <data name="ElevatedRegistryBox.PlaceholderText" xml:space="preserve"><value>HKLM\Software\Contoso\App</value></data>
+  <data name="ElevatedServiceTitle.Text" xml:space="preserve"><value>Service permissions</value></data>
+  <data name="ElevatedServiceDescription.Text" xml:space="preserve"><value>Removes user-account entries with exactly these SDDL rights from a service&apos;s access list.</value></data>
+  <data name="ElevatedServiceAdd.Text" xml:space="preserve"><value>Add service</value></data>
+  <data name="ServiceNameBox.PlaceholderText" xml:space="preserve"><value>Service name</value></data>
+  <data name="ServiceNameBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Service name</value></data>
+  <data name="ServiceRightsBox.PlaceholderText" xml:space="preserve"><value>Rights, e.g. LCRPWP, RPWPLC</value></data>
+  <data name="ServiceRightsBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>SDDL rights</value></data>
+  <data name="UpgradeLegacySection.Text" xml:space="preserve"><value>Earlier installers</value></data>
+  <data name="UpgradeAdoptTitle.Text" xml:space="preserve"><value>Take over an existing installation</value></data>
+  <data name="UpgradeAdoptDescription.Text" xml:space="preserve"><value>Upgrades an installation made by a previous installer that registered this app&apos;s ID (the same uninstall key).</value></data>
+  <data name="UpgradeAdoptToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Take over an existing installation</value></data>
+  <data name="UpgradeLegacyKeysDescription.Text" xml:space="preserve"><value>Uninstall keys of older product names, e.g. before a rename or an Inno Setup {GUID}_is1 key. Their folder is upgraded and the keys are removed after installing.</value></data>
+  <data name="UpgradeLegacyKeysBox.Header" xml:space="preserve"><value>Older uninstall keys (one per line)</value></data>
+  <data name="UpgradeRunningSection.Text" xml:space="preserve"><value>When the app is running</value></data>
+  <data name="UpgradeCloseProcessesBox.Header" xml:space="preserve"><value>Programs to close before installing or uninstalling (one .exe name per line)</value></data>
+  <data name="UpgradeCloseProcessesBox.PlaceholderText" xml:space="preserve"><value>MyApp.exe</value></data>
+  <data name="UpgradeCloseCommandToggle.Header" xml:space="preserve"><value>First ask the installed app to exit with a command</value></data>
+  <data name="UpgradeCloseRunCombo.Header" xml:space="preserve"><value>Program</value></data>
+  <data name="UpgradeCloseRunCombo.PlaceholderText" xml:space="preserve"><value>MyApp.exe</value></data>
+  <data name="UpgradeCloseArgsBox.Header" xml:space="preserve"><value>Arguments (one per line)</value></data>
+  <data name="UpgradeCloseArgsBox.PlaceholderText" xml:space="preserve"><value>--exit</value></data>
+  <data name="UpgradeRelaunchBox.Header" xml:space="preserve"><value>Arguments when an in-app updater asks to relaunch the app (/relaunch)</value></data>
+  <data name="UpgradeRelaunchBox.PlaceholderText" xml:space="preserve"><value>--updated</value></data>
+  <data name="UpgradeCleanupSection.Text" xml:space="preserve"><value>Leftovers of earlier versions</value></data>
+  <data name="UpgradeCleanupDescription.Text" xml:space="preserve"><value>Removed while installing, after the files are in place and before the after-install actions run. A rollback does not bring them back.</value></data>
+  <data name="CleanupTasksBox.Header" xml:space="preserve"><value>Scheduled tasks</value></data>
+  <data name="CleanupRunValuesBox.Header" xml:space="preserve"><value>Run values</value></data>
+  <data name="CleanupShortcutsBox.Header" xml:space="preserve"><value>Shortcut names</value></data>
+  <data name="CleanupShortcutsBox.PlaceholderText" xml:space="preserve"><value>Old Name.lnk</value></data>
+  <data name="CleanupUninstallKeysBox.Header" xml:space="preserve"><value>Uninstall keys of other products</value></data>
+  <data name="CleanupFilesBox.Header" xml:space="preserve"><value>Files in the install folder</value></data>
+  <data name="CleanupFilesBox.PlaceholderText" xml:space="preserve"><value>unins*.exe</value></data>
+  <data name="InstallStartMenuFolderTitle.Text" xml:space="preserve"><value>Start menu folder</value></data>
+  <data name="InstallStartMenuFolderDescription.Text" xml:space="preserve"><value>Puts the shortcut into this folder, e.g. your company name. Empty = directly in the app list.</value></data>
+  <data name="InstallStartMenuFolderBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Start menu folder</value></data>
+  <data name="InstallStartMenuFolderBox.PlaceholderText" xml:space="preserve"><value>None</value></data>
+  <data name="InstallIntegrationSection.Text" xml:space="preserve"><value>System integration</value></data>
+  <data name="InstallPathBox.Header" xml:space="preserve"><value>Folders to add to PATH (one per line)</value></data>
+  <data name="InstallPathBox.PlaceholderText" xml:space="preserve"><value>cli</value></data>
+  <data name="InstallPathHelp.Text" xml:space="preserve"><value>Relative to the install folder; . is the install folder itself. Per-user installs change the user PATH, per-machine installs the system PATH.</value></data>
+  <data name="InstallNgenBox.Header" xml:space="preserve"><value>.NET Framework assemblies to precompile (ngen)</value></data>
+  <data name="InstallNgenBox.PlaceholderText" xml:space="preserve"><value>MyApp.exe</value></data>
+  <data name="InstallNgenHelp.Text" xml:space="preserve"><value>Queued with ngen in per-machine installs and compiled when the PC is idle.</value></data>
+  <data name="VariantsSection.Text" xml:space="preserve"><value>Variants</value></data>
+  <data name="VariantsDescription.Text" xml:space="preserve"><value>Alternative builds in one package, e.g. self-contained and framework-dependent. The user picks one. Each has its own source folder; the app folder above is then not used.</value></data>
+  <data name="VariantsAdd.Text" xml:space="preserve"><value>Add variant…</value></data>
+  <data name="Variants_Untitled" xml:space="preserve"><value>New variant</value></data>
+  <data name="Variants_Default" xml:space="preserve"><value>Default</value></data>
+  <data name="VariantIdBox.Header" xml:space="preserve"><value>ID</value></data>
+  <data name="VariantIdBox.PlaceholderText" xml:space="preserve"><value>selfContained</value></data>
+  <data name="VariantDefaultCheck.Content" xml:space="preserve"><value>Selected by default</value></data>
+  <data name="VariantSourceBox.Header" xml:space="preserve"><value>Source folder</value></data>
+  <data name="VariantLabelBox.Header" xml:space="preserve"><value>Label per language (en-US = text)</value></data>
+  <data name="VariantLabelBox.PlaceholderText" xml:space="preserve"><value>en-US = Self-contained (includes runtimes)</value></data>
+  <data name="VariantDescriptionBox.Header" xml:space="preserve"><value>Description per language (optional)</value></data>
+  <data name="VariantsOutputTitle.Text" xml:space="preserve"><value>Variants in this package</value></data>
+  <data name="VariantsOutputDescription.Text" xml:space="preserve"><value>IDs separated by commas; empty = all. With one variant there is no choice when installing.</value></data>
+  <data name="VariantsOutputBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Variants in this package</value></data>
+  <data name="VariantsOutputBox.PlaceholderText" xml:space="preserve"><value>All</value></data>
+  <data name="AppearanceLanguageSection.Text" xml:space="preserve"><value>License and languages</value></data>
+  <data name="AppearanceLicenseModeTitle.Text" xml:space="preserve"><value>Show the license agreement</value></data>
+  <data name="AppearanceLicenseModeDescription.Text" xml:space="preserve"><value>The license file itself is set on the App info page.</value></data>
+  <data name="AppearanceLicenseModeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Show the license agreement</value></data>
+  <data name="LicenseModeFirstInstall.Content" xml:space="preserve"><value>On first install only</value></data>
+  <data name="LicenseModeAlways.Content" xml:space="preserve"><value>Also before updates and reinstalls</value></data>
+  <data name="AppearanceLocalizationTitle.Text" xml:space="preserve"><value>Localization folder</value></data>
+  <data name="AppearanceLocalizationDescription.Text" xml:space="preserve"><value>One &lt;language&gt;.json per language with option labels, action names, license and text overrides. fluentsetup locale add creates one.</value></data>
+  <data name="AppearanceLocalizationBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Localization folder</value></data>
+  <data name="AppearanceLocalizationBox.PlaceholderText" xml:space="preserve"><value>locales</value></data>
+  <data name="AppearanceLicensesBox.Header" xml:space="preserve"><value>License per language (one per line: zh-CN = license_zh.txt)</value></data>
+  <data name="AppearanceStringsBox.Header" xml:space="preserve"><value>Installer text overrides (one per line: zh-CN: welcome.body = text)</value></data>
+  <data name="AppearanceStringsHelp.Text" xml:space="preserve"><value>Keys are listed in shared/localization/en-US.json. Write line breaks as \n.</value></data>
+  <data name="BuildVariablesSection.Text" xml:space="preserve"><value>Variables</value></data>
+  <data name="BuildVariablesDescription.Text" xml:space="preserve"><value>Use $(Name) in any text of the project. fluentsetup build -D Name=value overrides a value, e.g. the version in CI.</value></data>
+  <data name="BuildVariablesAdd.Text" xml:space="preserve"><value>Add variable</value></data>
+  <data name="BuildVariablesEmpty.Text" xml:space="preserve"><value>No variables.</value></data>
+  <data name="VariableNameBox.PlaceholderText" xml:space="preserve"><value>Name</value></data>
+  <data name="VariableNameBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Variable name</value></data>
+  <data name="VariableValueBox.PlaceholderText" xml:space="preserve"><value>Value</value></data>
+  <data name="VariableValueBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Variable value</value></data>
 </root>

@@ -17,6 +17,15 @@ $cli = Join-Path $root 'src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentse
 $budget = 5MB
 
 if (-not $Setup) {
+    # The sample's files are build output (not in git): build the demo app into them on a fresh checkout.
+    $staging = Join-Path $root 'samples\DemoApp\out\staging'
+    if (-not (Test-Path (Join-Path $staging 'DemoApp.exe'))) {
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        $msbuild = & $vswhere -latest -prerelease -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+        & $msbuild (Join-Path $root 'samples\DemoApp\DemoApp.vcxproj') /p:Configuration=Release /p:Platform=x64 "/p:DemoOut=$staging" /nologo /v:q | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Building the DemoApp sample failed' }
+        Copy-Item (Join-Path $root 'samples\DemoApp\LICENSE.txt') $staging
+    }
     $out = Join-Path $root 'out\size-report'
     & $cli build (Join-Path $root 'samples\DemoApp\fluentsetup.json') --output $out | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Building the DemoApp package failed' }

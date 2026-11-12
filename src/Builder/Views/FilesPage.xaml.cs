@@ -28,5 +28,6 @@ public static class Converters
     };
 
     public static Visibility VisibleIf(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
+    public static Visibility VisibleIfNot(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
     public static Visibility VisibleIfText(string? value) => string.IsNullOrEmpty(value) ? Visibility.Collapsed : Visibility.Visible;
 }

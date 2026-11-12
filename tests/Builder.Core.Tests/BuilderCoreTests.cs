@@ -398,6 +398,28 @@ public class SerializerTests
 
     [Fact]
     public void RejectsNewerSchema() => Assert.Throws<InvalidDataException>(() => ProjectSerializer.Parse("""{ "schemaVersion": 99 }"""));
+
+    [Fact]
+    public void NullValuesAreReportedNotThrown()
+    {
+        var p = ProjectSerializer.Parse("""
+            { "app": { "id": null, "name": "X", "version": null },
+              "files": { "source": null, "include": [null, "**/*"], "exclude": null },
+              "install": { "closeCommand": null, "cleanup": null },
+              "requirements": { "dotNet": [{ "runtime": null, "version": null, "download": { "url": "https://x/y.exe", "sha256": null } }, null] },
+              "options": [null, { "id": "a", "label": { "en-US": null }, "detect": null }],
+              "ui": { "strings": { "fr-FR": null } } }
+            """);
+        Assert.Equal("", p.App.Id);
+        Assert.Null(p.Install.CloseCommand);           // optional sections stay absent
+        Assert.Null(p.Options[0].Detect);
+        Assert.Single(p.Options);                      // a null option is no option
+        Assert.Single(p.Requirements.DotNet);
+        Assert.Equal(["", "**/*"], p.Files.Include);
+        using var dir = new TempDir();
+        var codes = ProjectValidator.Validate(p, dir.Path).Items.Where(d => d.Severity == Severity.Error).Select(d => d.Code).ToHashSet();
+        foreach (var c in new[] { "FS1001", "FS1007", "FS1607", "FS1618", "FS1612" }) Assert.Contains(c, codes);
+    }
 }
 
 public class IconAndResourceTests

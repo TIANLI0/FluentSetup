@@ -396,7 +396,13 @@ $quiet = (Get-ItemProperty $arpKey).QuietUninstallString
 $code = -1
 if ($quiet -match '^"([^"]+)"\s*(.*)$') { $code = (Start-Process $Matches[1] -ArgumentList "$($Matches[2]) /log `"$(Join-Path $logs 'uninst-keep.log')`"" -Wait -PassThru).ExitCode }
 Check 'silent uninstall keeps user data' { $code -eq 0 -and (Test-Path $dataDir) }
-Check 'elevated cleanup skipped in silent mode (needs UAC)' { (Get-ChildItem $logs -Filter 'uninst-keep*' | Get-Content -Raw) -match 'Skipping the administrator cleanup' }
+$uninstKeepLog = Get-ChildItem $logs -Filter 'uninst-keep*' | Get-Content -Raw
+if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    # Already elevated (e.g. a CI runner): the uninstall undoes the elevated changes itself, no prompt involved.
+    Check 'elevated cleanup runs directly when uninstall is already elevated' { $uninstKeepLog -match 'Undoing changes the app made with administrator rights' }
+} else {
+    Check 'elevated cleanup skipped in silent mode (needs UAC)' { $uninstKeepLog -match 'Skipping the administrator cleanup' }
+}
 # NSIS: /S /D=<path with spaces> (last, unquoted); then uninstall with /remove-user-data
 $p = Start-Process $compat -ArgumentList "/S /D=$nsisDir" -Wait -PassThru
 Check 'NSIS /S /D=path with spaces' { $p.ExitCode -eq 0 -and (Test-Path "$nsisDir\DemoApp.exe") }

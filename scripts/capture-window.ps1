@@ -13,7 +13,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if (-not ('FsCapture5.Native' -as [type])) {
-    Add-Type -Language CSharp -ReferencedAssemblies System.Drawing -TypeDefinition @'
+    # Windows PowerShell has Bitmap in System.Drawing; PowerShell 7 in System.Drawing.Common.
+    $drawing = if ($PSVersionTable.PSEdition -eq 'Core') { @('System.Drawing.Common', 'System.Drawing.Primitives') } else { @('System.Drawing') }
+    Add-Type -Language CSharp -ReferencedAssemblies $drawing -TypeDefinition @'
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
