@@ -1,0 +1,95 @@
+name: Release
+
+# Push a tag vX.Y.Z (matching Directory.Build.props, src/Bootstrapper/main.cpp and packaging/fluentsetup.json, with a
+# "## [X.Y.Z]" section in CHANGELOG.md) to build, test and publish:
+#   fluentsetup-X.Y.Z-win-x64.zip   CLI + installer runtime (used by the GitHub Action in action.yml)
+#   FluentSetup-X.Y.Z-Setup.exe     Builder app + CLI
+#   SHA256SUMS.txt
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)publish, e.g. v1.0.0
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-2025
+    timeout-minutes: 75
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $version = $env:TAG -replace '^v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.\-]+)?$') { throw "Tag $env:TAG is not vX.Y.Z" }
+          $changelog = Get-Content CHANGELOG.md -Raw -Encoding UTF8
+          $m = [regex]::Match($changelog, '(?ms)^## \[' + [regex]::Escape($version) + '\][^\r\n]*\r?\n(.*?)(?=^## |\z)')
+          if (-not $m.Success) { throw "CHANGELOG.md has no section for $version" }
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP\notes.md", $m.Groups[1].Value.Trim() + "`n", [Text.UTF8Encoding]::new($false))
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$($version.Contains('-').ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Build
+        shell: pwsh
+        run: ./scripts/build.ps1 -Configuration Release
+
+      - name: Tests (native, managed, end-to-end)
+        shell: pwsh
+        run: |
+          ./out/bin/x64/Release/FluentSetup.Tests.Native.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test tests/Builder.Core.Tests -c Release --no-build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tests/Integration/e2e.ps1
+
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package-release.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          $assets = Get-ChildItem out/release -File | ForEach-Object FullName
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:TAG @assets --clobber
+          } else {
+            $flags = @('--title', "FluentSetup $env:VERSION", '--notes-file', "$env:RUNNER_TEMP\notes.md", '--verify-tag')
+            if ($env:PRERELEASE -eq 'true') { $flags += '--prerelease' } else { $flags += '--latest' }
+            gh release create $env:TAG @assets @flags
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # "uses: TIANLI0/FluentSetup@v1" follows the latest 1.x release.
+      - name: Move the major tag
+        if: steps.version.outputs.prerelease == 'false'
+        shell: pwsh
+        run: |
+          $major = 'v' + ('${{ steps.version.outputs.version }}' -split '\.')[0]
+          git tag -f $major HEAD
+          git push -f origin "refs/tags/${major}"

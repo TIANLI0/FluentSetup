@@ -132,11 +132,13 @@ sequenceDiagram
    uninstaller started without `--phase2` relocates itself (section 2.4), and a `Global\FluentSetup-<appId>` mutex
    ensures one setup/uninstall per app at a time (exit code 16 `AlreadyRunning`).
 6. `/quiet`: the controller runs with `DefaultOptions()` and no UI. A per-machine silent operation from a
-   non-elevated process fails with `ElevationRequired` (6) instead of showing a UAC prompt.
+   non-elevated process (typically an app's own updater) asks for the elevated worker through the UAC prompt, the only
+   UI it ever shows; declining gives `ElevationRequired` (6). `/passive` (Inno `/SILENT`) runs the normal front end,
+   which starts at once with the defaults and closes itself after a success.
 7. Interactive: WinUI is attempted unless `/ui win32` is given (`/ui winui` behaves like `auto`); otherwise, or if
    WinUI fails, the Win32 fallback UI runs (section 6).
 
-Public switches: `/quiet|/silent`, `/uninstall`, `/log <file>`, `/dir <path>`, `/scope user|machine`,
+Public switches: `/quiet|/verysilent|/s`, `/passive|/silent`, `/relaunch|/update`, `/uninstall`, `/log <file>`, `/dir <path>`, `/scope user|machine`,
 `/desktop-shortcut yes|no`, `/start-menu-shortcut yes|no`, `/option <id>=yes|no` (repeatable), `/lang en-US|zh-CN|ja-JP|ko-KR`,
 `/ui auto|winui|win32`, `/help`. Internal switches (between FluentSetup processes):
 

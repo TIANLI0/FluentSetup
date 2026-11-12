@@ -23,7 +23,8 @@ Win32 fallback, transactional (any failure rolls back), Apps & features entry, s
    package, `--report r.json` writes a machine-readable report.
 5. `fluentsetup inspect <Setup.exe> --verify --json` → what is inside, sizes, integrity.
 6. Test without a UI: `Setup.exe /quiet /log <file>` then `"<install dir>\uninstall.exe" /uninstall /quiet`. Exit code
-   0 = success (§8). Per-user packages need no administrator rights; per-machine quiet installs must be started elevated.
+   0 = success (§8). Per-user packages need no administrator rights; a per-machine quiet install started without them
+   shows the UAC prompt (start it elevated for unattended tests).
 
 Relative paths in the project are relative to the project file. Absolute paths work but make the project
 machine-specific.
@@ -37,10 +38,11 @@ machine-specific.
 | User data inside the install folder? | `files.preserve` globs: installed only if missing, never overwritten or removed. Better: keep user data in `%LocalAppData%`. |
 | Runtimes the app needs | `requirements` (§6): `netFramework`, `dotNet[]`, `windowsAppRuntime`, `webView2`, each with a minimum version and a source (bundled installer or verified download). |
 | Ship self-contained and/or framework-dependent? | `files.variants` (§7): both builds in one package, the user picks; or `output.variants`/`--variant` for separate packages. |
-| Optional extras (autostart, a driver, …) | `options[]`: checkboxes on the first page. `required: true` = always installed, shown locked. `startup` = Run entry while checked. |
+| Optional extras (autostart, a driver, …) | `options[]`: checkboxes on the first page. `required: true` = always installed, shown locked. `startup` = Run entry while checked. `detect` = on updates, start from whether a Run value / scheduled task exists (the app can toggle it itself). `quietDefault` = value in unattended first installs. |
 | Programs to run after install / before uninstall | `actions[]`: only `.exe` files from the package itself, no shell. |
 | App running while updating? | `install.closeProcesses` (image names) and `install.closeCommand` (e.g. `App.exe --exit` for tray apps). |
-| Replacing another installer (NSIS, Inno, MSI-less)? | `install.adoptExistingInstall` (same uninstall key = app id) or `install.legacyUninstallKeys` (old key names, e.g. Inno `"{GUID}_is1"`), plus `install.cleanup` for old tasks/Run values/shortcuts. |
+| Replacing another installer (NSIS, Inno, MSI-less)? | `install.adoptExistingInstall` (same uninstall key = app id) or `install.legacyUninstallKeys` (old key names, e.g. Inno `"{GUID}_is1"`), plus `install.cleanup` for old tasks/Run values/shortcuts (`"Folder\\Old.lnk"` for a Start menu folder) and `install.cleanup.removeFiles` for the old uninstaller (`"unins*.exe"`, `"unins*.dat"`). Keep the old Start menu folder with `install.startMenuFolder`, the asset file name the app's updater looks for with `output.fileName`, and its command line (§11). |
+| Version (or other values) set by the release pipeline | `"variables": { "Version": "1.0.0" }`, `"version": "$(Version)"`, then `fluentsetup build p.json -D Version=1.2.3`. |
 | Command-line tool? | `install.addToPath: ["cli"]` (folder relative to the install folder; `""` = the folder itself): user PATH for per-user installs, machine PATH for per-machine; removed on uninstall. |
 | Settings/data to ask about on uninstall | `uninstall.userData: { "paths": ["{LocalAppData}\\App"], "default": false }`: a checkbox on the uninstall page; silent uninstalls keep the data unless `/remove-user-data`. |
 | Things the app did with administrator rights (ETW sessions, service permissions, scheduled tasks, ProgramData files) | `uninstall.elevated` (§8): undone with one UAC prompt during an interactive per-user uninstall, directly in a per-machine one. |
@@ -52,7 +54,7 @@ machine-specific.
 
 ```jsonc
 {
-  "$schema": "https://fluentsetup.dev/schemas/fluentsetup.project.schema.json",
+  "$schema": "https://raw.githubusercontent.com/TIANLI0/FluentSetup/main/shared/schemas/fluentsetup.project.schema.json",
   "schemaVersion": 1,
   "app": { "id": "Company.App", "name": "App", "publisher": "Company", "version": "1.2.0",
            "description": "", "website": "https://…", "icon": "app.ico", "mainExecutable": "App.exe" },
@@ -226,7 +228,7 @@ silent uninstalls skip it and log a warning). Per-machine uninstalls already run
 
 ## 11. Setup.exe command line and exit codes
 
-`Setup.exe [/quiet | /S | /silent] [/uninstall] [/dir <path>] [/scope user|machine] [/variant <id>]
+`Setup.exe [/quiet | /S | /passive | /silent] [/uninstall] [/dir <path>] [/scope user|machine] [/variant <id>]
 [/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no] [/remove-user-data] [/relaunch]
 [/log <file>] [/lang <tag>] [/ui auto|winui|win32]`
 
@@ -234,13 +236,14 @@ Compatible switches of other installers, so existing scripts and in-app updaters
 
 | Inno Setup | NSIS | FluentSetup meaning |
 |---|---|---|
-| `/SILENT`, `/VERYSILENT` | `/S` | quiet |
+| `/VERYSILENT` | `/S` | quiet (UAC prompt if a per-machine install needs it) |
+| `/SILENT` | | passive: progress window only, closes after success |
 | `/DIR="path"` | `/D=path` (last, unquoted, spaces allowed) | install folder |
 | `/LOG="file"` (or `/LOG`) | | log file |
 | `/LANG=english` (Inno names) | | language |
 | `/TASKS="a,b"`, `/MERGETASKS="a,!b"` | | `desktopicon` = desktop shortcut, other names = option ids; `/TASKS` turns unlisted ones off |
 | `/NOICONS`, `/CURRENTUSER`, `/ALLUSERS` | | no Start menu shortcut, per-user, per-machine |
-| `/RELAUNCH=1` | | start the app after a quiet install with `install.relaunchArguments` |
+| `/RELAUNCH=1` | `/UPDATE` (common custom switch) | start the app after a quiet or passive install with `install.relaunchArguments` |
 | `/SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /SP- /NOCANCEL …` | `/NCRC`, `_?=` | accepted, no effect (setup never reboots and closes the app itself) |
 
 | Code | Meaning |

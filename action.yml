@@ -1,0 +1,63 @@
+name: Setup FluentSetup
+description: Installs the fluentsetup CLI (self-contained, with the installer runtime) and puts it on PATH.
+author: TIANLI0
+branding:
+  icon: package
+  color: blue
+
+inputs:
+  version:
+    description: >-
+      FluentSetup version, e.g. 1.0.0. Default: the version of the action ref (uses: TIANLI0/FluentSetup@v1.0.0),
+      else the latest release.
+    required: false
+    default: ''
+
+outputs:
+  path:
+    description: Full path of fluentsetup.exe.
+    value: ${{ steps.install.outputs.path }}
+  version:
+    description: The installed version.
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: pwsh
+      env:
+        FS_VERSION: ${{ inputs.version }}
+        FS_REF: ${{ github.action_ref }}
+        FS_REPO: ${{ github.action_repository }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $repo = if ($env:FS_REPO) { $env:FS_REPO } else { 'TIANLI0/FluentSetup' }
+        $version = $env:FS_VERSION.Trim().TrimStart('v')
+        if (-not $version -and $env:FS_REF -match '^v?(\d+\.\d+\.\d+(-[0-9A-Za-z.\-]+)?)$') { $version = $Matches[1] }
+        $headers = @{ 'User-Agent' = 'fluentsetup-action'; 'Accept' = 'application/vnd.github+json' }
+        if ($env:GH_TOKEN) { $headers['Authorization'] = "Bearer $env:GH_TOKEN" }
+        if (-not $version) {
+          $latest = Invoke-RestMethod -Headers $headers "https://api.github.com/repos/$repo/releases/latest"
+          $version = $latest.tag_name.TrimStart('v')
+        }
+        $name = "fluentsetup-$version-win-x64.zip"
+        $base = "https://github.com/$repo/releases/download/v$version"
+        $dir = Join-Path $env:RUNNER_TEMP "fluentsetup\$version"
+        New-Item -ItemType Directory -Force $dir | Out-Null
+        $zip = Join-Path $env:RUNNER_TEMP $name
+        Write-Host "FluentSetup $version from $base"
+        Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'fluentsetup-action' } "$base/$name" -OutFile $zip
+        $sums = (Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'fluentsetup-action' } "$base/SHA256SUMS.txt").Content
+        $expected = ($sums -split "`n" | Where-Object { $_ -match "^([0-9a-fA-F]{64})\s+\*?$([regex]::Escape($name))\s*$" } | ForEach-Object { $Matches[1] }) | Select-Object -First 1
+        if (-not $expected) { throw "SHA256SUMS.txt has no entry for $name" }
+        $actual = (Get-FileHash $zip -Algorithm SHA256).Hash
+        if ($actual -ne $expected.ToUpperInvariant()) { throw "SHA-256 mismatch for ${name}: $actual, expected $expected" }
+        Expand-Archive $zip -DestinationPath $dir -Force
+        $exe = Join-Path $dir 'fluentsetup.exe'
+        & $exe --version
+        if ($LASTEXITCODE -ne 0) { throw 'fluentsetup does not start' }
+        Add-Content $env:GITHUB_PATH $dir
+        "path=$exe" >> $env:GITHUB_OUTPUT
+        "version=$version" >> $env:GITHUB_OUTPUT

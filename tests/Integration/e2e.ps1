@@ -355,8 +355,8 @@ Check 'default variant a: installed with shared + a files only' {
     $code -eq 0 -and (Test-Path "$installDir\common.txt") -and (Test-Path "$installDir\only-a.txt") -and -not (Test-Path "$installDir\only-b.dll") -and
     (Get-Content "$installDir\differs.txt") -eq 'built for A' -and (Get-ItemProperty $arpKey).FluentSetupVariant -eq 'a' }
 Check 'option startup entry registered for the main executable' { (Get-ItemProperty $runKey).'FluentSetupE2E-Startup' -like "*$appName\DemoApp.exe*--background" }
-Start-Process (Join-Path $installDir 'DemoApp.exe')  # running app: the update must close it (close command, then closeProcesses)
-Start-Sleep -Seconds 1
+$running = Start-Process (Join-Path $installDir 'DemoApp.exe') -PassThru  # running app: the update must close it (close command, then closeProcesses)
+for ($i = 0; $i -lt 50 -and -not $running.HasExited -and $running.MainWindowHandle -eq 0; $i++) { Start-Sleep -Milliseconds 200; $running.Refresh() }
 $vproject.requirements.dotNet[0].variants = @('a')    # now b has no missing prerequisite
 [IO.File]::WriteAllText($vpath, ($vproject | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
 & $cli build $vpath | Out-Null
@@ -405,6 +405,63 @@ $code = -1
 if ($quiet -match '^"([^"]+)"\s*(.*)$') { $code = (Start-Process $Matches[1] -ArgumentList "$($Matches[2]) /remove-user-data" -Wait -PassThru).ExitCode }
 Check 'uninstall /remove-user-data deletes the user data' { $code -eq 0 -and -not (Test-Path $dataDir) }
 Remove-Item -Recurse -Force $innoDir, $nsisDir, $dataDir -ErrorAction SilentlyContinue
+
+Write-Host '==> Replacing an Inno Setup install: passive /SILENT, leftovers, Start menu folder, detected options, /UPDATE' -ForegroundColor Cyan
+Remove-Existing
+$isKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{F5E2E000-0000-4000-8000-00000000E2E0}_is1'
+$isDir = Join-Path $env:LOCALAPPDATA 'Programs\FluentSetup E2E Inno App'
+$programs = [Environment]::GetFolderPath('Programs')
+$group = Join-Path $programs 'FluentSetup E2E Group'
+$vendorKey = 'HKCU:\Software\FluentSetupE2E'
+Remove-Item -Recurse -Force $isDir, $group -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $isDir, $group, $vendorKey | Out-Null
+'old build' | Set-Content "$isDir\DemoApp.exe"
+'inno uninstaller' | Set-Content "$isDir\unins000.exe"
+'inno data' | Set-Content "$isDir\unins000.dat"
+'user file' | Set-Content "$isDir\keep.txt"
+'' | Set-Content "$group\Uninstall FluentSetup E2E.lnk"
+New-Item -Force $isKey | Out-Null
+Set-ItemProperty $isKey -Name DisplayVersion -Value '0.5.0'
+Set-ItemProperty $isKey -Name InstallLocation -Value "$isDir\"
+Set-ItemProperty $isKey -Name 'Inno Setup: Selected Tasks' -Value ''
+Set-ItemProperty $runKey -Name 'FluentSetupE2E-Managed' -Value 'set by the app itself'   # the app turned autostart on
+Set-ItemProperty $vendorKey -Name InstallDir -Value $isDir
+$migrate = New-Package '11.0.0' { param($s) } @{
+    legacyUninstallKeys = @('{F5E2E000-0000-4000-8000-00000000E2E0}_is1')
+    startMenuFolder = 'FluentSetup E2E Group'
+    relaunchArguments = @('--version')
+    cleanup = @{ removeFiles = @('unins*.exe', 'unins???.dat'); removeShortcuts = @('FluentSetup E2E Group\Uninstall FluentSetup E2E.lnk') }
+} @{
+    options = @(
+        @{ id = 'autostart'; label = @{ 'en-US' = 'Start with Windows' }; default = $false; startup = @{ name = 'FluentSetupE2E-Managed'; arguments = @('--background') } },
+        @{ id = 'enable'; label = @{ 'en-US' = 'Enable now' }; default = $true; quietDefault = $false; detect = @{ runValue = 'FluentSetupE2E-NotThere' } })
+    actions = @(@{ when = 'afterInstall'; run = 'DemoApp.exe'; arguments = @('--version'); ifOption = 'enable'; onFailure = 'fail' })
+    uninstall = @{ removeData = @('{InstallDir}\logs'); removeRegistryKeys = @('HKCU\Software\FluentSetupE2E') }
+}
+# What an Inno-based in-app updater runs: /SILENT is passive here (progress window, closes itself after success).
+$log = Join-Path $logs 'passive.log'
+$p = Start-Process $migrate -ArgumentList '/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$log`"" -PassThru
+if (-not $p.WaitForExit(180000)) { $p.Kill(); Write-Host '  passive setup did not close itself' -ForegroundColor Red }
+$passiveLog = Get-Content $log -Raw
+Check 'passive /SILENT: installed and closed itself, exit 0' { $p.HasExited -and $p.ExitCode -eq 0 -and $passiveLog -match 'Front end: (WinUI|Win32)|falling back to Win32' }
+Check 'Inno install adopted in place, its uninstall key removed' { (Get-ItemProperty $arpKey).InstallLocation -eq $isDir -and -not (Test-Path $isKey) }
+Check 'removeFiles: unins000.exe/.dat removed, other files kept' { -not (Test-Path "$isDir\unins000.exe") -and -not (Test-Path "$isDir\unins000.dat") -and (Test-Path "$isDir\keep.txt") }
+Check 'startMenuFolder: shortcut in the group, old group entry removed' { (Test-Path "$group\$appName.lnk") -and -not (Test-Path "$group\Uninstall FluentSetup E2E.lnk") -and -not (Test-Path (Join-Path $programs "$appName.lnk")) }
+Check 'startup option detected on (app-managed Run value), rewritten quoted' { (Get-ItemProperty $runKey).'FluentSetupE2E-Managed' -eq "`"$isDir\DemoApp.exe`" --background" }
+Check 'detect: option off when its Run value is missing, action skipped' { -not (Test-Path "$isDir\version-check.txt") -and $passiveLog -match 'Option enable detected as off' }
+New-Item -ItemType Directory -Force "$isDir\logs" | Out-Null; 'log' | Set-Content "$isDir\logs\app.log"
+Remove-Existing
+Check 'uninstall: {InstallDir}\logs, registry key, Start menu group and Run value removed' {
+    -not (Test-Path "$isDir\logs") -and -not (Test-Path $vendorKey) -and -not (Test-Path $group) -and $null -eq (Get-ItemProperty $runKey).'FluentSetupE2E-Managed' }
+# A scripted first install does not do what "Enable now" offers (quietDefault false); NSIS-style /S /UPDATE relaunches.
+$code = Run-Setup $migrate @('/quiet', '/dir', "`"$isDir`"") 'quiet-first'
+Check 'quietDefault: unattended first install skips the "Enable now" action' { $code -eq 0 -and -not (Test-Path "$isDir\version-check.txt") }
+$p = Start-Process $migrate -ArgumentList '/S', '/UPDATE' -Wait -PassThru
+Start-Sleep -Seconds 2
+Check 'NSIS-style /S /UPDATE starts the app again with relaunchArguments' { $p.ExitCode -eq 0 -and (Test-Path "$isDir\version-check.txt") }
+Remove-Existing
+Remove-ItemProperty $runKey -Name 'FluentSetupE2E-Managed' -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force $isDir, $group, $isKey, $vendorKey -ErrorAction SilentlyContinue
 
 Write-Host '==> A language the installer does not ship, supplied by the package' -ForegroundColor Cyan
 Remove-Existing

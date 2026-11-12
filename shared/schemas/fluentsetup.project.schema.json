@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fluentsetup.dev/schemas/fluentsetup.project.schema.json",
+  "$id": "https://raw.githubusercontent.com/TIANLI0/FluentSetup/main/shared/schemas/fluentsetup.project.schema.json",
   "title": "FluentSetup project (fluentsetup.json)",
   "description": "Describes a Windows installer built by FluentSetup. Mirrors src/Builder.Core/Model/ProjectModel.cs and the checks in ProjectValidator.cs / ExtensionValidator.cs. Property names are camelCase (matched case-insensitively by the builder); // comments and trailing commas are accepted by the builder. Unknown properties are not rejected: at the root and in app, files, install, ui, output and signing they are kept on save, elsewhere they are ignored. Relative file paths are resolved against the folder that contains the project file.",
   "type": "object",
@@ -14,7 +14,7 @@
         "string",
         "null"
       ],
-      "description": "Optional reference to this schema for editors. Ignored by the builder. New projects get \"https://fluentsetup.dev/schemas/fluentsetup.project.schema.json\"."
+      "description": "Optional reference to this schema for editors. Ignored by the builder. New projects get \"https://raw.githubusercontent.com/TIANLI0/FluentSetup/main/shared/schemas/fluentsetup.project.schema.json\"."
     },
     "schemaVersion": {
       "type": "integer",

@@ -44,7 +44,7 @@ Requirements for building: Windows 10 1809+ (Windows 11 recommended), Visual Stu
 
 ```powershell
 git clone <this repository>
-cd WinuiSetup
+cd FluentSetup
 .\scripts\build.ps1                      # native runtime, WinUI front end, CLI, Builder GUI, tests
 
 $fs = '.\src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe'
@@ -59,7 +59,7 @@ A minimal project file:
 
 ```json
 {
-  "$schema": "https://fluentsetup.dev/schemas/fluentsetup.project.schema.json",
+  "$schema": "https://raw.githubusercontent.com/TIANLI0/FluentSetup/main/shared/schemas/fluentsetup.project.schema.json",
   "schemaVersion": 1,
   "app": { "id": "Contoso.MyApp", "name": "My App", "publisher": "Contoso", "version": "1.0.0", "mainExecutable": "MyApp.exe" },
   "files": { "source": "bin", "include": ["**/*"], "exclude": ["**/*.pdb"] },
@@ -77,7 +77,7 @@ The full reference is in [docs/project-file.md](docs/project-file.md), and the J
 ## Setup.exe command line
 
 ```
-Setup.exe [/quiet | /S] [/uninstall] [/dir <path>] [/scope user|machine]
+Setup.exe [/quiet | /S | /passive] [/uninstall] [/dir <path>] [/scope user|machine] [/relaunch]
           [/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no]
           [/log <file>] [/lang en-US|zh-CN|ja-JP|ko-KR] [/ui auto|winui|win32]
 ```

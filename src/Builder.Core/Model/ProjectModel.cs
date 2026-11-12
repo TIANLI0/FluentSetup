@@ -8,7 +8,7 @@ public sealed class SetupProject
     public const int CurrentSchemaVersion = 1;
 
     [JsonPropertyName("$schema")]
-    public string? Schema { get; set; } = "https://fluentsetup.dev/schemas/fluentsetup.project.schema.json";
+    public string? Schema { get; set; } = "https://raw.githubusercontent.com/TIANLI0/FluentSetup/main/shared/schemas/fluentsetup.project.schema.json";
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     /// <summary>

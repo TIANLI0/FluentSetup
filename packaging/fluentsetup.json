@@ -7,7 +7,7 @@
     "publisher": "TIANLI0",
     "version": "1.0.0",
     "description": "Builder for native Windows 11-style installers (Builder app + fluentsetup CLI)",
-    "website": "https://github.com/TIANLI0/WinuiSetup",
+    "website": "https://github.com/TIANLI0/FluentSetup",
     "icon": "../assets/default-app.ico",
     "mainExecutable": "FluentSetup.Builder.exe"
   },

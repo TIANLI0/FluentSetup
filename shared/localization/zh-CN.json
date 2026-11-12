@@ -173,5 +173,5 @@
   "fallback.browse": "浏览(&R)…",
   "fallback.viewLog": "查看日志",
 
-  "usage": "用法：Setup.exe [选项]\n\n/quiet  不显示任何界面进行安装\n/uninstall  卸载已安装的应用\n/dir <路径>  安装位置\n/scope user|machine  为当前用户或所有用户安装\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  打开或关闭安装包定义的选项\n/variant <id>  安装包变体（例如共享运行时或自带运行时）\n/remove-user-data  卸载时同时删除设置和数据\n/relaunch  静默安装完成后启动应用（供应用内更新使用）\n兼容 Inno Setup 和 NSIS 的参数（/VERYSILENT、/SUPPRESSMSGBOXES、/DIR=、/TASKS=、/D= 等）。\n/log <文件>  将日志写入此文件\n/lang en-US|zh-CN|ja-JP|ko-KR  界面语言\n/ui auto|winui|win32  界面技术（诊断用）\n\n退出代码 0 表示成功；其他代码请参阅文档。"
+  "usage": "用法：Setup.exe [选项]\n\n/quiet  不显示任何界面进行安装\n/passive  只显示进度，不询问任何问题\n/uninstall  卸载已安装的应用\n/dir <路径>  安装位置\n/scope user|machine  为当前用户或所有用户安装\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  打开或关闭安装包定义的选项\n/variant <id>  安装包变体（例如共享运行时或自带运行时）\n/remove-user-data  卸载时同时删除设置和数据\n/relaunch  静默安装完成后启动应用（供应用内更新使用）\n兼容 Inno Setup 和 NSIS 的参数（/VERYSILENT、/SUPPRESSMSGBOXES、/DIR=、/TASKS=、/D= 等）。\n/log <文件>  将日志写入此文件\n/lang en-US|zh-CN|ja-JP|ko-KR  界面语言\n/ui auto|winui|win32  界面技术（诊断用）\n\n退出代码 0 表示成功；其他代码请参阅文档。"
 }

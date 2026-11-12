@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-and-test:
     runs-on: windows-2025
@@ -19,6 +23,15 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'src/Setup.WinUI/packages.config', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
 
       - name: Build (native runtime, WinUI front end, Builder.Core, CLI, Builder GUI, tests)
         shell: pwsh
@@ -49,6 +62,10 @@ jobs:
         continue-on-error: true
         run: ./tests/UI/ui-tests.ps1
 
+      - name: Release assets (dry run)
+        shell: pwsh
+        run: ./scripts/package-release.ps1
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -56,9 +73,7 @@ jobs:
           name: fluentsetup-x64
           if-no-files-found: ignore
           path: |
-            out/bin/x64/Release/FluentSetup.Stub.exe
-            out/bin/x64/Release/ui/
-            src/CLI/bin/Release/
+            out/release/
             out/size-report.json
             out/test-results/
             out/e2e/logs/

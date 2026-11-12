@@ -38,7 +38,7 @@ $fs = '.\src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe'
 ## Setup.exe 命令行
 
 ```
-Setup.exe [/quiet | /S] [/uninstall] [/dir <路径>] [/scope user|machine]
+Setup.exe [/quiet | /S | /passive] [/uninstall] [/dir <路径>] [/scope user|machine] [/relaunch]
           [/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no]
           [/log <文件>] [/lang en-US|zh-CN|ja-JP|ko-KR] [/ui auto|winui|win32]
 ```

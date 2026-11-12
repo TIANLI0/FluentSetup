@@ -45,6 +45,7 @@ The installer offers to launch the app at the end, and the output is `dist\Conto
 |---|---|---|---|
 | `$schema` | string | – | Editor hint. Ignored by the builder. |
 | `schemaVersion` | integer | `1` | Format version. Values greater than 1 are rejected. |
+| `variables` | object | `{}` | [Values for `$(Name)` placeholders](#variables). |
 | `app` | object | | [App identity](#app) |
 | `files` | object | | [Files to install](#files) |
 | `install` | object | | [Install location and behaviour](#install) |
@@ -55,6 +56,22 @@ The installer offers to launch the app at the end, and the output is `dist\Conto
 | `ui` | object | | [Installer look and text](#ui) |
 | `output` | object | | [Output file](#output) |
 | `signing` | object | | [Code signing](#signing) |
+
+## variables
+
+Any string in the project can use `$(Name)` placeholders. Their values come from `variables` and, with priority, from
+the command line: `fluentsetup build -D Version=1.4.2 -D Channel=stable` (also `validate`). A release pipeline can
+stamp the version, or the version of a bundled driver, without rewriting the project file.
+
+```json
+"variables": { "Version": "1.4.1", "PawnIOVersion": "2.2.0.0" },
+"app": { "version": "$(Version)" },
+"actions": [{ "run": "drivers/PawnIO_setup.exe", "skipIfInstalled": { "key": "...", "version": "$(PawnIOVersion)" } }]
+```
+
+- Names: letters, digits, `_`, `.` and `-`, starting with a letter or `_` (max 64), matched case-insensitively.
+- An unknown name is error FS1801. `$$(` writes a literal `$(`.
+- The Builder app shows and saves the raw text and validates with the project's own `variables`.
 
 ## app
 
@@ -170,6 +187,7 @@ syntax as above. A preserved file:
 | `allowCustomDir` | bool | `true` | Lets the user (or `/dir`) choose another folder. This is never possible when updating an existing installation. |
 | `desktopShortcut` | offer | `"optionalOff"` | Desktop shortcut to `app.mainExecutable`. |
 | `startMenuShortcut` | offer | `"on"` | Start menu shortcut, named after `app.name`. |
+| `startMenuFolder` | string | `""` | Start menu folder for that shortcut, e.g. `"Contoso"` gives `Programs\Contoso\<App>.lnk` (the "program group" many Inno Setup and NSIS scripts create). Empty means directly in Programs. The folder is removed on uninstall once it is empty. |
 | `launchAfterInstall` | `off` \| `optionalOff` \| `optionalOn` | `"optionalOn"` | "Launch" choice on the finish page. `on` is rejected (FS1206). The app is never launched in quiet mode. |
 | `allowDowngrade` | bool | `false` | Allows installing over a newer installed version. |
 | `minWindowsBuild` | integer | `17763` | 0–100000. On an older build Setup.exe exits with code 5. A value of 0 disables the check. Values from 1 to 17762 give a warning, because FluentSetup itself needs build 17763. |
@@ -182,7 +200,8 @@ syntax as above. A preserved file:
 | `closeCommand` | object \| null | `null` | `{ "run": "App.exe", "arguments": ["--exit"] }`: asks a running copy of the **installed** app to exit cleanly (e.g. a tray app that only hides on WM_CLOSE) before files are replaced or removed; `closeProcesses` then handles anything still running. |
 | `cleanup.removeScheduledTasks` | string[] | `[]` | Leftovers of earlier versions removed **during installation**, after the files are in place and before `afterInstall` actions run (so an action can register its replacement). Task names in the root folder. |
 | `cleanup.removeRunValues` | string[] | `[]` | `...\CurrentVersion\Run` value names (HKCU and HKLM). |
-| `cleanup.removeShortcuts` | string[] | `[]` | Shortcut file names (`.lnk`) deleted from the per-user and all-users Start menu Programs, Desktop and Startup folders. Never list the app's own shortcut names here. |
+| `cleanup.removeShortcuts` | string[] | `[]` | Shortcut file names (`.lnk`) deleted from the per-user and all-users Start menu Programs, Desktop and Startup folders. `"Folder\\Old.lnk"` reaches into a Start menu folder, which is removed once it is empty. Never list the app's own shortcut names here. |
+| `cleanup.removeFiles` | string[] | `[]` | Files in the install folder that no install record knows about, typically the uninstaller of an adopted Inno Setup install (`"unins*.exe"`, `"unins*.dat"`, `"unins*.msg"`). Relative paths; `*` and `?` only in the file name, which needs at least one literal character. Removed after the new files are placed, journaled like every other change (a rollback restores them). Files of the package are never touched. |
 | `cleanup.removeUninstallKeys` | string[] | `[]` | Uninstall entries of other product names, deleted after the install is committed (not this app's id). |
 
 The `cleanup` steps are not undone by a rollback.
@@ -288,7 +307,9 @@ These are checkboxes on the installer's options page. Actions can depend on them
 |---|---|---|---|
 | `id` | string | `""` | **Required.** Unique id: letters, digits, `-` and `_` (max 32). |
 | `label` | object | `{}` | **Required.** Text per language, e.g. `{ "en-US": "Start when I sign in", "zh-CN": "登录时启动" }`. At least one entry is needed and none may be blank. A plain string is not accepted. |
-| `default` | bool | `false` | Initial state. Quiet installs use this value unless `/option id=yes\|no` is given. |
+| `default` | bool | `false` | Initial state on a first install. Quiet and passive installs use it unless `quietDefault` or `/option id=yes\|no` says otherwise. |
+| `quietDefault` | bool \| null | `null` | Value in quiet and passive **first** installs, e.g. `false` for an "Enable now" checkbox that is checked in the UI but must not act in scripted installs (Inno Setup `skipifsilent`). |
+| `detect` | object \| null | `null` | `{ "runValue": "App", "scheduledTask": "App" }`: on an **update** the option starts selected only if that Run value (HKCU or HKLM) or scheduled task exists. Use it when the app itself turns the feature on and off (autostart in the app's settings), so an update keeps the user's current state. An option with `startup` detects its own Run value without this. `/option` and Inno `/TASKS` still win. |
 | `startup` | object \| null | `null` | `{ "name": "App", "arguments": ["--background"] }`: while the option is selected, `app.mainExecutable` starts with Windows (`HKCU\...\Run\<name>`). The value is removed when the option is unselected on an update and on uninstall. |
 | `required` | bool | `false` | A component that is always installed (e.g. a driver the app needs): shown checked and **locked**, so users see it is part of the installation. `/option id=no` cannot turn it off. |
 
@@ -335,17 +356,19 @@ failures are only logged.
 
 | Property | Type | Default | Meaning |
 |---|---|---|---|
-| `removeData` | string[] | `[]` | Folders deleted recursively. Each must be `{CommonAppData}\<path>`, `{LocalAppData}\<path>` or `{AppData}\<path>`, where `<path>` is a valid relative path. Only existing directories that are not links are removed. |
+| `removeData` | string[] | `[]` | Files or folders deleted (folders recursively). Each must be `{CommonAppData}\<path>`, `{LocalAppData}\<path>`, `{AppData}\<path>` or `{InstallDir}\<path>` (something the app writes into its own folder, such as `logs`), where `<path>` is a valid relative path. Nothing reached through a link is removed. |
 | `removeScheduledTasks` | string[] | `[]` | Task names in the Task Scheduler root folder (max 128 characters, no `\/:*?"<>\|`). |
 | `removeRunValues` | string[] | `[]` | Value names deleted from `HKCU` and `HKLM` `Software\Microsoft\Windows\CurrentVersion\Run`. Same name rules as for tasks. |
-| `removeShortcuts` | string[] | `[]` | Shortcut file names (`.lnk`) deleted from the per-user and all-users Start menu Programs, Desktop and Startup folders (for shortcuts the app or older versions created). |
-| `userData.paths` | string[] | `[]` | Settings and data the user decides about (`{LocalAppData}\X` etc., files or folders): a checkbox on the uninstall page. Silent uninstalls keep them unless `/remove-user-data`. |
+| `removeShortcuts` | string[] | `[]` | Shortcut file names (`.lnk`) deleted from the per-user and all-users Start menu Programs, Desktop and Startup folders (for shortcuts the app or older versions created); `"Folder\\App.lnk"` for a Start menu folder. |
+| `removeRegistryKeys` | string[] | `[]` | Per-user registry keys deleted with everything below them, e.g. `"HKCU\\Software\\Contoso\\App"`. `Software\<Vendor>` or deeper; `Microsoft`, `Classes`, `Policies`, `Wow6432Node`, `RegisteredApplications` and `Clients` are refused (FS1653). |
+| `userData.paths` | string[] | `[]` | Settings and data the user decides about (`{LocalAppData}\X`, `{InstallDir}\X` etc., files or folders): a checkbox on the uninstall page. Quiet and passive uninstalls keep them unless `/remove-user-data`. |
 | `userData.default` | bool | `false` | Checkbox pre-selected (delete). |
 | `elevated.ifExists` | string[] | `[]` | Undo changes the app made with administrator rights only if one of these exists (checked before user data is removed; empty = always). |
 | `elevated.traceSessions` | string[] | `[]` | ETW sessions to stop, including their boot-time autologger (`logman ... autosession\<name>`). |
 | `elevated.scheduledTasks` | string[] | `[]` | Scheduled tasks, folders allowed (`"App\\Task"`); an emptied folder is removed. |
 | `elevated.serviceAccess` | object[] | `[]` | `{ "service": "Name", "rights": ["LCRPWP"] }`: removes allow-entries for user accounts (`S-1-5-21-…`) with exactly these SDDL rights from the service's DACL. |
-| `elevated.removeData` | string[] | `[]` | Files or folders removed with administrator rights. |
+| `elevated.removeData` | string[] | `[]` | Files or folders removed with administrator rights (no `{InstallDir}`: this step can run after the install record is gone). |
+| `elevated.removeRegistryKeys` | string[] | `[]` | Registry keys removed with administrator rights, e.g. `"HKLM\\Software\\Contoso\\App"` (same rules as `removeRegistryKeys`). |
 
 `elevated` runs directly in a per-machine (elevated) uninstall. A per-user uninstall asks once for UAC after the
 files are removed (interactive only; silent uninstalls skip it and log a warning).
@@ -430,10 +453,11 @@ fluentsetup build <project.json> [options]
     --sign | --no-sign      Override signing.enabled
     --report <file.json>    Also write a machine-readable build report
     --runtime <dir>         Use another installer runtime folder
+    -D, --define <n>=<v>    Value for $(n) in the project (repeatable, overrides "variables")
     -v, --verbose           Detailed log (also prints info diagnostics)
     --json                  Print the build report as JSON instead of text
     --non-interactive       Accepted for CI scripts (the CLI never prompts)
-fluentsetup validate <project.json> [--json]
+fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
 fluentsetup inspect <Setup.exe> [--verify] [--json]
 fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
 fluentsetup --version | --help
@@ -453,7 +477,8 @@ The installed `uninstall.exe` accepts the same switches.
 
 | Switch | Meaning |
 |---|---|
-| `/quiet`, `/silent`, `/q`, `/s` | No UI at all. Uses the defaults plus the switches below. Per-machine operations need an already elevated process. |
+| `/quiet`, `/verysilent`, `/q`, `/s` | No UI at all. Uses the defaults plus the switches below. A per-machine operation started without administrator rights shows the UAC prompt, as Inno Setup and NSIS do; a declined prompt gives exit code 6. |
+| `/passive`, `/silent` | Progress window only: no questions, starts at once with the defaults and closes itself after a success (a failure stays on screen). This is Inno Setup's `/SILENT`, so in-app updaters written for Inno keep showing progress. |
 | `/uninstall`, `/u` | Remove the installed app instead of installing it. |
 | `/dir <path>`, `/installdir <path>` | Install folder. Honoured only if `allowCustomDir` is true and the app is not yet installed. The engine validates it. |
 | `/scope user\|machine` | Scope. Honoured only if the package allows that scope and the app is not yet installed. |
@@ -461,8 +486,8 @@ The installed `uninstall.exe` accepts the same switches.
 | `/start-menu-shortcut yes\|no` | Start menu shortcut choice. Honoured only for `optionalOff`/`optionalOn`. |
 | `/variant <id>` | Package variant to install (see *Variants*). |
 | `/remove-user-data` | Uninstall: also delete `uninstall.userData`. |
-| `/relaunch` | After a quiet install, start the app with `install.relaunchArguments` (for in-app updaters). |
-| Inno / NSIS switches | `/VERYSILENT`, `/SILENT`, `/DIR=`, `/LOG=`, `/LANG=english`, `/TASKS=`, `/MERGETASKS=`, `/NOICONS`, `/CURRENTUSER`, `/ALLUSERS`, `/RELAUNCH=1`, `/S`, `/D=path` (last, may contain spaces) are understood; `/SUPPRESSMSGBOXES`, `/NORESTART`, `/CLOSEAPPLICATIONS`, `/SP-`, `/NCRC`, `_?=` are accepted and have no effect. Upgrades also pre-fill choices from an adopted Inno install's saved tasks. |
+| `/relaunch`, `/update` | After a quiet or passive install, start the app with `install.relaunchArguments` (for in-app updaters; `/update` is the NSIS-style spelling, `Setup.exe /S /UPDATE`). |
+| Inno / NSIS switches | `/VERYSILENT`, `/SILENT` (passive), `/DIR=`, `/LOG=`, `/LANG=english`, `/TASKS=`, `/MERGETASKS=`, `/NOICONS`, `/CURRENTUSER`, `/ALLUSERS`, `/RELAUNCH=1`, `/S`, `/D=path` (last, may contain spaces) are understood; `/SUPPRESSMSGBOXES`, `/NORESTART`, `/CLOSEAPPLICATIONS`, `/SP-`, `/NCRC`, `_?=` are accepted and have no effect. Upgrades also pre-fill choices from an adopted Inno install's saved tasks. |
 | `/option <id>=yes\|no` | Value of a package option. Can be repeated. Ids the package does not define are ignored. |
 | `/lang en-US\|zh-CN\|ja-JP\|ko-KR` | UI language. Overrides `ui.defaultLanguage`. |
 | `/log <file>` | Write the log to this absolute file path. Default: `%TEMP%\FluentSetup\<appId>-install-<timestamp>.log` (or `-uninstall-`). |
