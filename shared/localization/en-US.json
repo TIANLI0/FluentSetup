@@ -50,6 +50,8 @@
 
   "options.title": "Installation options",
   "options.scope": "Install for",
+  "options.scope.userShort": "Only me",
+  "options.scope.machineShort": "All users",
   "options.scope.user": "Only me (no administrator permission needed)",
   "options.scope.machine": "Everyone who uses this PC (requires administrator permission)",
   "options.location": "Install location",

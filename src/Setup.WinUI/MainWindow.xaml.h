@@ -8,7 +8,7 @@
 
 namespace winrt::FluentSetupUI::implementation {
 
-enum class Page { Welcome, Options, License, Progress, Result };
+enum class Page { Welcome, License, Progress, Result };
 enum class ResultKind { None, Success, Failed, Cancelled };
 
 struct MainWindow : MainWindowT<MainWindow> {
@@ -21,7 +21,6 @@ struct MainWindow : MainWindowT<MainWindow> {
     void OnOpenFolderClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnViewLogClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnScopeChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
-    void OnLocationChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
     void OnLicenseChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
 
 private:
@@ -49,7 +48,7 @@ private:
     void OnDone(const fsetup::json::Value& m);
     void OnPathCheck(const fsetup::json::Value& m);
     void OnPeerLost();
-    void RequestPathCheck();
+    void RequestPathCheck(const std::wstring& path);
     winrt::fire_and_forget RunPreviewProgress();
 
     [[nodiscard]] std::wstring AppName() const;
@@ -65,17 +64,16 @@ private:
     bool retryable_ = true;
     bool pathOk_ = true;
     bool pathDirty_ = false;
-    bool userEditedPath_ = false;
-    bool suppressPathEvents_ = false;
+    bool userPickedPath_ = false;
     bool readySent_ = false;
     bool closing_ = false;
     bool dialogOpen_ = false;
     std::wstring scope_;
     std::wstring logPath_;
     std::wstring installDir_;
+    std::wstring pendingPath_;  // folder whose check is in flight
     uint64_t requiredBytes_ = 0;
     uint64_t freeBytes_ = 0;
-    winrt::Microsoft::UI::Xaml::DispatcherTimer pathTimer_{nullptr};
     winrt::Microsoft::UI::Dispatching::DispatcherQueue dispatcher_{nullptr};
 };
 

@@ -97,15 +97,6 @@ MainWindow::MainWindow() {
     ApplyHello();
     ShowPage(Page::Welcome);
 
-    pathTimer_ = DispatcherTimer();
-    pathTimer_.Interval(std::chrono::milliseconds(350));
-    pathTimer_.Tick([weak = get_weak()](auto&&, auto&&) {
-        if (auto self = weak.get()) {
-            self->pathTimer_.Stop();
-            self->RequestPathCheck();
-        }
-    });
-
     RootGrid().Loaded([weak = get_weak()](auto&&, auto&&) {
         auto self = weak.get();
         if (!self) return;
@@ -207,15 +198,11 @@ std::wstring MainWindow::AppName() const { return Hello()["app"]["name"].asWide(
 bool MainWindow::IsUninstall() const { return Hello()["mode"].asString() == "uninstall"; }
 
 void MainWindow::ApplyStaticText() {
-    BrowseButton().Content(box_value(Str("button.browse")));
     ScopeLabel().Text(Str("options.scope"));
-    ScopeUserRadio().Content(box_value(Str("options.scope.user")));
-    ScopeMachineRadio().Content(box_value(Str("options.scope.machine")));
-    LocationLabel().Text(Str("options.location"));
-    ShortcutLabel().Text(Str("options.shortcuts"));
+    ScopeUserRadio().Content(box_value(Str("options.scope.userShort")));
+    ScopeMachineRadio().Content(box_value(Str("options.scope.machineShort")));
     DesktopCheck().Content(box_value(Str("options.desktop")));
     StartMenuCheck().Content(box_value(Str("options.startMenu")));
-    OptionsHeading().Text(Str("options.title"));
     LicenseHeading().Text(Str("license.title"));
     LicenseSubtitle().Text(Str("license.subtitle"));
     LicenseAccept().Content(box_value(Str("license.accept")));
@@ -225,11 +212,10 @@ void MainWindow::ApplyStaticText() {
     LocationLabelDetail().Text(Str("label.location"));
     SizeLabel().Text(Str("label.size"));
     ChangeLink().Content(box_value(Str("button.change")));
-    Automation::AutomationProperties::SetName(ChangeLink(), Str("options.title"));
+    Automation::AutomationProperties::SetName(ChangeLink(), Str("options.browseTitle"));
     ViewLogLink().Content(box_value(Str("result.viewLog")));
     OpenFolderLink().Content(box_value(Str("result.openFolder")));
     ResultDetails().Header(box_value(Str("result.details")));
-    Automation::AutomationProperties::SetName(LocationBox(), Str("options.location"));
     Automation::AutomationProperties::SetName(LicenseText(), Str("license.title"));
     Automation::AutomationProperties::SetName(ProgressBarControl(), Str("progress.accessibleName"));
     Automation::AutomationProperties::SetName(ScopeRadios(), Str("options.scope"));
@@ -276,26 +262,18 @@ void MainWindow::ApplyHello() {
     if (!pathOk_) {
         WelcomeDirError().Message(opts["dirMessage"].asWide());
         WelcomeDirError().IsOpen(true);
-        LocationError().Message(opts["dirMessage"].asWide());
-        LocationError().IsOpen(true);
     }
 
-    suppressPathEvents_ = true;
-    LocationBox().Text(installDir_);
-    suppressPathEvents_ = false;
-    SetVisible(LocationPanel(), opts["canChangeDir"].asBool());
     SetVisible(ScopePanel(), opts["canChangeScope"].asBool());
     ScopeRadios().SelectedIndex(scope_ == L"machine" ? 1 : 0);
     const Value& desktop = opts["desktopShortcut"];
     const Value& startMenu = opts["startMenuShortcut"];
     SetVisible(DesktopCheck(), desktop["visible"].asBool());
     SetVisible(StartMenuCheck(), startMenu["visible"].asBool());
-    SetVisible(ShortcutPanel(), desktop["visible"].asBool() || startMenu["visible"].asBool());
     DesktopCheck().IsChecked(desktop["value"].asBool());
     StartMenuCheck().IsChecked(startMenu["value"].asBool());
     LaunchCheck().IsChecked(opts["launchAfter"]["value"].asBool());
     // Package-defined options (e.g. "Start when I sign in").
-    ChoicesLabel().Text(Str("options.choices"));
     for (const auto& choice : opts["choices"].array()) {
         CheckBox box;
         box.Content(box_value(choice["label"].asWide()));
@@ -339,7 +317,7 @@ void MainWindow::UpdateInfoLines() {
     // Long paths: keep the drive + first folder and as many trailing folders as fit, collapse the middle (like the
     // shell's path ellipsis), so the app folder - the part users care about - is always visible.
     std::wstring shown = installDir_;
-    constexpr size_t kMaxChars = 72;
+    constexpr size_t kMaxChars = 52;  // one line next to "Change"
     if (shown.size() > kMaxChars) {
         std::vector<std::wstring> parts;
         for (size_t start = 0; start <= shown.size();) {
@@ -357,32 +335,21 @@ void MainWindow::UpdateInfoLines() {
             shown = head + L"\\" + tail;
         }
     }
-    // Zero-width spaces after each separator let what remains break between folders instead of mid-name.
-    std::wstring breakable;
-    for (const wchar_t ch : shown) {
-        breakable.push_back(ch);
-        if (ch == L'\\') breakable.push_back(L'\u200B');
-    }
-    LocationLine().Text(breakable);
+    LocationLine().Text(shown);
     ToolTipService::SetToolTip(LocationLine(), box_value(installDir_));
     row(LocationLabelDetail(), LocationRow(), !installDir_.empty());
-    SetVisible(ChangeLink(), page_ == Page::Welcome && HasOptions() && !h["existing"]["blocked"].asBool());
+    // "Change" only changes the folder, and only when the package allows it (never during an update).
+    SetVisible(ChangeLink(), page_ == Page::Welcome && !IsUninstall() && h["options"]["canChangeDir"].asBool());
 
     SizeLine().Text(fsetup::FormatBytes(requiredBytes_));
     row(SizeLabel(), SizeLine(), !IsUninstall() && requiredBytes_ > 0 && page_ != Page::Result);
 }
-void MainWindow::UpdateSpaceText() {
-    if (freeBytes_ > 0) {
-        LocationSpaceText().Text(Fmt("options.space", {fsetup::FormatBytes(requiredBytes_), fsetup::FormatBytes(freeBytes_)}));
-    } else {
-        LocationSpaceText().Text(Fmt("welcome.space", {fsetup::FormatBytes(requiredBytes_)}));
-    }
-}
+void MainWindow::UpdateSpaceText() { UpdateInfoLines(); }
 
 bool MainWindow::HasOptions() const {
     if (IsUninstall()) return false;
     const Value& o = Hello()["options"];
-    return o["canChangeDir"].asBool() || o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
+    return o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
            o["startMenuShortcut"]["visible"].asBool() || !o["choices"].array().empty();
 }
 
@@ -402,7 +369,7 @@ void MainWindow::ShowPage(Page page) {
     page_ = page;
     const bool summary = page == Page::Welcome || page == Page::Progress || page == Page::Result;
     SetVisible(SummaryPage(), summary);
-    SetVisible(OptionsPage(), page == Page::Options);
+    SetVisible(InlineOptions(), page == Page::Welcome && HasOptions());
     SetVisible(LicensePage(), page == Page::License);
     SetVisible(PageScroller(), page != Page::License);
     SetVisible(ResultExtras(), page == Page::Result);
@@ -443,20 +410,13 @@ void MainWindow::UpdateFooter() {
     const bool blocked = Hello()["existing"]["blocked"].asBool();
     bool secondaryVisible = false, primaryVisible = true, primaryEnabled = true, shield = false;
     std::wstring secondary, primary, cancel = Str("button.cancel");
-    const bool beforeStart = page_ == Page::Welcome || page_ == Page::Options || page_ == Page::License;
+    const bool beforeStart = page_ == Page::Welcome || page_ == Page::License;
 
     switch (page_) {
-        case Page::Welcome:  // options are reached through the "Change" link next to the location
+        case Page::Welcome:  // options are on this page; "Change" picks the folder
             primary = ShowsLicense() ? Str("button.next") : PrimaryVerb();
             shield = !ShowsLicense() && NeedsElevation();
             primaryEnabled = !blocked && pathOk_ && !pathDirty_;
-            break;
-        case Page::Options:
-            secondaryVisible = true;
-            secondary = Str("button.back");
-            primary = ShowsLicense() ? Str("button.next") : PrimaryVerb();
-            shield = !ShowsLicense() && NeedsElevation();
-            primaryEnabled = pathOk_ && !pathDirty_;
             break;
         case Page::License:
             secondaryVisible = true;
@@ -497,7 +457,6 @@ void MainWindow::UpdateFooter() {
 void MainWindow::OnPrimaryClick(IInspectable const&, RoutedEventArgs const&) {
     switch (page_) {
         case Page::Welcome:
-        case Page::Options:
             if (ShowsLicense()) ShowPage(Page::License);
             else StartInstall();
             break;
@@ -515,9 +474,7 @@ void MainWindow::OnPrimaryClick(IInspectable const&, RoutedEventArgs const&) {
 }
 
 void MainWindow::OnSecondaryClick(IInspectable const&, RoutedEventArgs const&) {
-    if (page_ == Page::Welcome) ShowPage(Page::Options);
-    else if (page_ == Page::License) ShowPage(HasOptions() ? Page::Options : Page::Welcome);
-    else ShowPage(Page::Welcome);
+    ShowPage(Page::Welcome);  // only "Back" from the license page
 }
 
 void MainWindow::OnCancelClick(IInspectable const&, RoutedEventArgs const&) { RequestClose(); }
@@ -718,37 +675,37 @@ void MainWindow::OnDone(const Value& m) {
 }
 
 void MainWindow::OnPathCheck(const Value& m) {
-    if (m["path"].asWide() != std::wstring(LocationBox().Text())) return;  // stale reply
+    if (m["path"].asWide() != pendingPath_) return;  // stale reply
     pathDirty_ = false;
     pathOk_ = m["ok"].asBool();
-    installDir_ = m["normalized"].asWide().empty() ? std::wstring(LocationBox().Text()) : m["normalized"].asWide();
+    if (pathOk_) installDir_ = m["normalized"].asWide().empty() ? pendingPath_ : m["normalized"].asWide();
     requiredBytes_ = m["requiredBytes"].asUint(requiredBytes_);
     freeBytes_ = m["freeBytes"].asUint();
-    LocationError().Message(m["message"].asWide());
-    LocationError().IsOpen(!pathOk_);
     WelcomeDirError().Message(m["message"].asWide());
     WelcomeDirError().IsOpen(!pathOk_);
-    UpdateSpaceText();
+    if (!pathOk_) installDir_ = pendingPath_;  // show what was chosen next to the error
     UpdateInfoLines();
     UpdateFooter();
 }
 
-void MainWindow::RequestPathCheck() {
+void MainWindow::RequestPathCheck(const std::wstring& path) {
+    pendingPath_ = path;
+    pathDirty_ = true;
+    UpdateFooter();
     if (fsui::UiChannel::Get().preview()) {
         pathDirty_ = false;
         pathOk_ = true;
-        installDir_ = LocationBox().Text();
+        installDir_ = path;
         UpdateInfoLines();
         UpdateFooter();
         return;
     }
     Value m;
     m.set("t", "checkPath");
-    m.set("path", std::wstring(LocationBox().Text()));
+    m.set("path", path);
     m.set("scope", scope_);
     fsui::UiChannel::Get().Send(m);
 }
-
 void MainWindow::OnPeerLost() {
     if (closing_) return;
     Value done;
@@ -766,27 +723,9 @@ void MainWindow::OnScopeChanged(IInspectable const&, SelectionChangedEventArgs c
     const std::wstring scope = index == 1 ? L"machine" : L"user";
     if (scope == scope_) return;
     scope_ = scope;
-    if (!userEditedPath_) {
-        const std::wstring dir = Hello()["options"][scope == L"machine" ? "machineDir" : "userDir"].asWide();
-        suppressPathEvents_ = true;
-        LocationBox().Text(dir);
-        suppressPathEvents_ = false;
-        installDir_ = dir;
-    }
-    pathDirty_ = true;
-    UpdateFooter();
-    RequestPathCheck();
+    // Follow the scope's default folder unless the user picked one explicitly.
+    RequestPathCheck(userPickedPath_ ? installDir_ : Hello()["options"][scope == L"machine" ? "machineDir" : "userDir"].asWide());
 }
-
-void MainWindow::OnLocationChanged(IInspectable const&, TextChangedEventArgs const&) {
-    if (suppressPathEvents_) return;
-    userEditedPath_ = true;
-    pathDirty_ = true;
-    UpdateFooter();
-    pathTimer_.Stop();
-    pathTimer_.Start();
-}
-
 void MainWindow::OnLicenseChanged(IInspectable const&, RoutedEventArgs const&) { UpdateFooter(); }
 
 void MainWindow::OnBrowseClick(IInspectable const&, RoutedEventArgs const&) {
@@ -810,7 +749,8 @@ void MainWindow::OnBrowseClick(IInspectable const&, RoutedEventArgs const&) {
         if (!chosen.empty() && chosen.back() != L'\\') chosen.push_back(L'\\');
         chosen += leaf;
     }
-    LocationBox().Text(chosen);
+    userPickedPath_ = true;
+    RequestPathCheck(chosen);
 }
 
 void MainWindow::OnOpenFolderClick(IInspectable const&, RoutedEventArgs const&) {

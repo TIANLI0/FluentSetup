@@ -50,6 +50,8 @@
 
   "options.title": "安装选项",
   "options.scope": "安装给",
+  "options.scope.userShort": "仅我自己",
+  "options.scope.machineShort": "所有用户",
   "options.scope.user": "仅我自己（无需管理员权限）",
   "options.scope.machine": "这台电脑的所有用户（需要管理员权限）",
   "options.location": "安装位置",

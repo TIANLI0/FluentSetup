@@ -24,6 +24,9 @@
       <!-- Not KnownDLLs: delay-load them so they are resolved after SetDefaultDllDirectories(SYSTEM32), never from the
            download folder Setup.exe runs in. -->
       <DelayLoadDLLs>comctl32.dll;uxtheme.dll;dwmapi.dll;wintrust.dll;bcrypt.dll;shcore.dll;oleaut32.dll</DelayLoadDLLs>
+      <!-- Linker map: scripts/size-report.ps1 attributes the stub's bytes to its components. -->
+      <GenerateMapFile>true</GenerateMapFile>
+      <MapFileName>$(OutDir)FluentSetup.Stub.map</MapFileName>
     </Link>
     <ResourceCompile>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>

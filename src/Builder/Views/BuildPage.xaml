@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.BuildPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentSetup.Builder.Views"
+    xmlns:vm="using:FluentSetup.Builder.ViewModels"
+    Background="Transparent">
+    <ScrollViewer>
+        <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+            <TextBlock x:Uid="BuildPageTitle" Style="{StaticResource PageTitleStyle}" AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock x:Uid="BuildPageDescription" Style="{StaticResource PageDescriptionStyle}" />
+
+            <!-- Build action + live progress -->
+            <Border Style="{StaticResource RowCardStyle}" Margin="0,16,0,0" Padding="20,16,20,16">
+                <StackPanel Spacing="12">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{x:Bind VM.OutputSummary, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{x:Bind VM.StatusText, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button x:Uid="BuildCancelButton" Command="{x:Bind VM.CancelBuildCommand}" Visibility="{x:Bind VM.IsBuilding, Mode=OneWay}" />
+                            <Button x:Uid="BuildRun" Style="{StaticResource AccentButtonStyle}" Command="{x:Bind VM.BuildCommand}" IsEnabled="{x:Bind VM.CanBuild, Mode=OneWay}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE7B8;" FontSize="16" />
+                                    <TextBlock x:Uid="BuildButtonText" />
+                                </StackPanel>
+                                <Button.KeyboardAccelerators>
+                                    <KeyboardAccelerator Key="F5" />
+                                </Button.KeyboardAccelerators>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                    <StackPanel Spacing="6" Visibility="{x:Bind VM.IsBuilding, Mode=OneWay}">
+                        <ProgressBar Value="{x:Bind VM.BuildProgressValue, Mode=OneWay}" IsIndeterminate="{x:Bind VM.BuildProgressIndeterminate, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind VM.BuildStatus, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" AutomationProperties.LiveSetting="Polite" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Result -->
+            <InfoBar IsOpen="{x:Bind VM.LastBuildSucceeded, Mode=OneWay}" Severity="Success" IsClosable="False" Margin="0,4,0,0"
+                     Title="{x:Bind VM.LastBuildTitle, Mode=OneWay}" Message="{x:Bind VM.LastBuildMessage, Mode=OneWay}">
+                <InfoBar.ActionButton>
+                    <Button x:Uid="BuildOpenFolder" Command="{x:Bind VM.OpenOutputFolderCommand}" />
+                </InfoBar.ActionButton>
+                <InfoBar.Content>
+                    <StackPanel Margin="0,0,0,16" Spacing="12">
+                        <Grid ColumnSpacing="32" RowSpacing="4" HorizontalAlignment="Left">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /></Grid.RowDefinitions>
+                            <TextBlock x:Uid="SizeStubLabel" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Grid.Column="1" Text="{x:Bind VM.SizeStub, Mode=OneWay}" />
+                            <TextBlock Grid.Row="1" x:Uid="SizeWinUILabel" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind VM.SizeWinUI, Mode=OneWay}" />
+                            <TextBlock Grid.Row="2" x:Uid="SizePayloadLabel" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind VM.SizePayload, Mode=OneWay}" />
+                            <TextBlock Grid.Row="3" x:Uid="SizeOverheadLabel" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind VM.SizeOverhead, Mode=OneWay}" />
+                            <TextBlock Grid.Row="4" x:Uid="SizeTotalLabel" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind VM.SizeTotal, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        </Grid>
+                        <HyperlinkButton x:Uid="BuildCopyPath" Command="{x:Bind VM.CopyOutputPathCommand}" Margin="-12,0,0,0" />
+                    </StackPanel>
+                </InfoBar.Content>
+            </InfoBar>
+            <InfoBar IsOpen="{x:Bind VM.LastBuildFailed, Mode=OneWay}" Severity="Error" IsClosable="False" Margin="0,4,0,0"
+                     Title="{x:Bind VM.LastBuildTitle, Mode=OneWay}" Message="{x:Bind VM.LastBuildMessage, Mode=OneWay}" />
+
+            <TextBlock x:Uid="BuildOutputSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE8B7;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="BuildOutputFolderTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBox Text="{x:Bind VM.OutputDirectory, Mode=TwoWay}" Margin="0,8,0,0" IsSpellCheckEnabled="False" x:Uid="BuildOutputFolderBox" />
+                            <TextBlock Text="{x:Bind VM.Errors.OutputDirectory, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.OutputDirectory), Mode=OneWay}" />
+                        </StackPanel>
+                        <Button Grid.Column="2" x:Uid="BuildBrowse" Command="{x:Bind VM.BrowseOutputCommand}" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE950;" Style="{StaticResource RowIconStyle}" />
+                        <TextBlock Grid.Column="1" x:Uid="BuildArchTitle" Style="{StaticResource RowTitleStyle}" VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.ArchitectureIndex, Mode=TwoWay}" x:Uid="BuildArchCombo">
+                            <ComboBoxItem Content="x64" /><ComboBoxItem Content="ARM64" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xF012;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="BuildCompressionTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="BuildCompressionDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.CompressionIndex, Mode=TwoWay}" x:Uid="BuildCompressionCombo">
+                            <ComboBoxItem x:Uid="CompressionFast" /><ComboBoxItem x:Uid="CompressionNormal" /><ComboBoxItem x:Uid="CompressionMax" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE737;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="BuildWinUITitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="BuildWinUIDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.IncludeWinUI, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="BuildWinUIToggle" />
+                    </Grid>
+                </Border>
+                <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <Grid ColumnSpacing="16" Padding="0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xEB95;" Style="{StaticResource RowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Uid="BuildSigningTitle" Style="{StaticResource RowTitleStyle}" />
+                                <TextBlock x:Uid="BuildSigningDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.SigningEnabled, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="BuildSigningToggle" />
+                        </Grid>
+                    </Expander.Header>
+                    <StackPanel Spacing="16" Padding="40,4,0,4">
+                        <TextBox x:Uid="SignThumbprintBox" Text="{x:Bind VM.CertificateThumbprint, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <TextBox x:Uid="SignPfxBox" Text="{x:Bind VM.CertificateFile, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                            <Button Grid.Column="1" x:Uid="BuildBrowse" Command="{x:Bind VM.BrowseCertificateCommand}" VerticalAlignment="Bottom" />
+                        </Grid>
+                        <TextBox x:Uid="SignPasswordEnvBox" Text="{x:Bind VM.PasswordEnvironmentVariable, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="SignTimestampBox" Text="{x:Bind VM.TimestampUrl, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="SignToolBox" Text="{x:Bind VM.SignToolPath, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.Signing, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.Signing), Mode=OneWay}" />
+                    </StackPanel>
+                </Expander>
+            </StackPanel>
+
+            <TextBlock x:Uid="BuildLogSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="0" MinHeight="0">
+                <Grid>
+                    <TextBlock x:Uid="BuildLogEmpty" Style="{StaticResource RowDescriptionStyle}" Margin="16,14" Visibility="{x:Bind LogEmpty}" />
+                    <ListView x:Name="LogList" ItemsSource="{x:Bind VM.BuildLog}" SelectionMode="None" MaxHeight="280" Padding="0,4">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LogRow">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind Time}" FontFamily="Consolas" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Column="1" Text="{x:Bind Message}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

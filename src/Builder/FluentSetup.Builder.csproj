@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- FluentSetup Builder: WinUI 3 desktop app (unpackaged, framework-dependent on the Windows App Runtime). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <RootNamespace>FluentSetup.Builder</RootNamespace>
+    <AssemblyName>FluentSetup.Builder</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64;ARM64</Platforms>
+    <Platform Condition="'$(Platform)' == '' Or '$(Platform)' == 'AnyCPU'">x64</Platform>
+    <RuntimeIdentifier Condition="'$(Platform)' == 'x64'">win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <ApplicationIcon>..\..\assets\default-app.ico</ApplicationIcon>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- XAML/WinRT interop and MVVM source generators trigger analyzer rules that do not apply to UI code. -->
+    <NoWarn>$(NoWarn);CA1001;CA1515;CA2007;CA1822;CA1812;CA1849;CA2201;CA1805;CA1307;CA1310;CA1305;CA1031;MVVMTK0045;MVVMTK0049;CsWinRT1028;CsWinRT1030;CA1416;CA1852;CA1806;CA1508;CA1847;CA1860;CA1825;CA1854;CA2000;CA1859;CA1311;CA1304;CA1062</NoWarn>
+    <FsNativeOut>$(MSBuildThisFileDirectory)..\..\out\bin\</FsNativeOut>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Builder.Core\FluentSetup.Builder.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!-- Installer runtime embedded into every Setup.exe (same layout as the CLI). -->
+  <ItemGroup>
+    <None Include="$(FsNativeOut)x64\Release\FluentSetup.Stub.exe" Link="runtime\x64\FluentSetup.Stub.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(FsNativeOut)x64\Release\FluentSetup.Stub.exe')" />
+    <None Include="$(FsNativeOut)x64\Release\ui\*.exe;$(FsNativeOut)x64\Release\ui\*.dll;$(FsNativeOut)x64\Release\ui\*.pri;$(FsNativeOut)x64\Release\ui\*.xbf" LinkBase="runtime\x64\ui" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(FsNativeOut)ARM64\Release\FluentSetup.Stub.exe" Link="runtime\arm64\FluentSetup.Stub.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(FsNativeOut)ARM64\Release\FluentSetup.Stub.exe')" />
+    <None Include="$(FsNativeOut)ARM64\Release\ui\*.exe;$(FsNativeOut)ARM64\Release\ui\*.dll;$(FsNativeOut)ARM64\Release\ui\*.pri;$(FsNativeOut)ARM64\Release\ui\*.xbf" LinkBase="runtime\arm64\ui" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\shared\localization\*.json" LinkBase="runtime\localization" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\assets\default-app.ico" Link="runtime\default-app.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

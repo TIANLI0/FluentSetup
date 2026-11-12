@@ -1,0 +1,322 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="App_Title" xml:space="preserve"><value>FluentSetup Builder</value></data>
+  <data name="TitleBar.Title" xml:space="preserve"><value>FluentSetup Builder</value></data>
+  <data name="TitleNewButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>新建项目 (Ctrl+N)</value></data>
+  <data name="TitleNewButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>新建项目</value></data>
+  <data name="TitleOpenButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>打开项目 (Ctrl+O)</value></data>
+  <data name="TitleOpenButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>打开项目</value></data>
+  <data name="TitleSaveButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>保存 (Ctrl+S)</value></data>
+  <data name="TitleSaveButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>保存</value></data>
+  <data name="TitleSaveAsButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>另存为 (Ctrl+Shift+S)</value></data>
+  <data name="TitleSaveAsButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>另存为</value></data>
+  <data name="NavOverview.Content" xml:space="preserve"><value>概览</value></data>
+  <data name="NavApp.Content" xml:space="preserve"><value>应用信息</value></data>
+  <data name="NavFiles.Content" xml:space="preserve"><value>安装文件</value></data>
+  <data name="NavInstall.Content" xml:space="preserve"><value>安装选项</value></data>
+  <data name="NavAppearance.Content" xml:space="preserve"><value>界面与外观</value></data>
+  <data name="NavUpgrade.Content" xml:space="preserve"><value>升级与卸载</value></data>
+  <data name="NavBuild.Content" xml:space="preserve"><value>构建</value></data>
+  <data name="NavHistory.Content" xml:space="preserve"><value>构建历史</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>关闭</value></data>
+  <data name="Common_Yes" xml:space="preserve"><value>是</value></data>
+  <data name="Common_No" xml:space="preserve"><value>否</value></data>
+  <data name="Unsaved_Title" xml:space="preserve"><value>保存更改？</value></data>
+  <data name="Unsaved_Body" xml:space="preserve"><value>项目有尚未保存的更改。</value></data>
+  <data name="Unsaved_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="Unsaved_Discard" xml:space="preserve"><value>不保存</value></data>
+  <data name="FileType_Project" xml:space="preserve"><value>FluentSetup 项目</value></data>
+  <data name="Project_Untitled" xml:space="preserve"><value>未命名</value></data>
+  <data name="Error_OpenTitle" xml:space="preserve"><value>无法打开项目</value></data>
+  <data name="Error_SaveTitle" xml:space="preserve"><value>无法保存项目</value></data>
+  <data name="Error_NotFound" xml:space="preserve"><value>{0} 已不存在。</value></data>
+  <data name="Error_UnexpectedTitle" xml:space="preserve"><value>出现问题</value></data>
+  <data name="EmptyTitle.Text" xml:space="preserve"><value>为你的应用创建安装包</value></data>
+  <data name="EmptyBody.Text" xml:space="preserve"><value>选择包含应用文件的文件夹。FluentSetup 会从程序中读取名称、发布者和版本，并为其余设置提供建议——大多数应用几分钟内即可完成构建。</value></data>
+  <data name="EmptyNewButton.Content" xml:space="preserve"><value>新建项目</value></data>
+  <data name="EmptyOpenButton.Content" xml:space="preserve"><value>打开项目</value></data>
+  <data name="EmptyRecent.Text" xml:space="preserve"><value>最近的项目</value></data>
+  <data name="EmptyNoRecent.Text" xml:space="preserve"><value>你打开的项目会显示在这里。</value></data>
+  <data name="NewProject_Title" xml:space="preserve"><value>新建项目</value></data>
+  <data name="NewProject_Create" xml:space="preserve"><value>创建</value></data>
+  <data name="NewProject_Name" xml:space="preserve"><value>应用名称</value></data>
+  <data name="NewProject_Id" xml:space="preserve"><value>应用 ID</value></data>
+  <data name="NewProject_Publisher" xml:space="preserve"><value>发布者</value></data>
+  <data name="NewProject_Version" xml:space="preserve"><value>版本</value></data>
+  <data name="NewProject_MainExe" xml:space="preserve"><value>主程序</value></data>
+  <data name="NewProject_Source" xml:space="preserve"><value>文件来源：{0}</value></data>
+  <data name="NewProject_NameRequired" xml:space="preserve"><value>请输入应用名称。</value></data>
+  <data name="NewProject_IdInvalid" xml:space="preserve"><value>应用 ID 只能包含字母、数字、“.”、“-”和“_”（最多 64 个字符）。</value></data>
+  <data name="NewProject_VersionInvalid" xml:space="preserve"><value>请使用类似 1.0.0 的版本号。</value></data>
+  <data name="OverviewPreviewButton.Content" xml:space="preserve"><value>预览</value></data>
+  <data name="OverviewBuildButton.Text" xml:space="preserve"><value>构建安装包</value></data>
+  <data name="OverviewBuildRun.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>构建安装包</value></data>
+  <data name="BuildRun.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>构建安装包</value></data>
+  <data name="BuildRun.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>构建安装包 (F5)</value></data>
+  <data name="FilesRemoveExtra.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>移除</value></data>
+  <data name="FilesRemoveExtra.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>移除</value></data>
+  <data name="OverviewSummary.Text" xml:space="preserve"><value>摘要</value></data>
+  <data name="OverviewFiles.Text" xml:space="preserve"><value>安装文件</value></data>
+  <data name="OverviewInstall.Text" xml:space="preserve"><value>安装</value></data>
+  <data name="OverviewAppearance.Text" xml:space="preserve"><value>界面与外观</value></data>
+  <data name="OverviewOutput.Text" xml:space="preserve"><value>输出</value></data>
+  <data name="OverviewProblems.Text" xml:space="preserve"><value>问题</value></data>
+  <data name="OverviewNoProblems.Text" xml:space="preserve"><value>未发现问题，项目可以构建。</value></data>
+  <data name="OverviewRecentBuilds.Text" xml:space="preserve"><value>最近的构建</value></data>
+  <data name="OverviewNoBuilds.Text" xml:space="preserve"><value>还没有构建记录。</value></data>
+  <data name="Overview_Version" xml:space="preserve"><value>版本 {0}</value></data>
+  <data name="Overview_StartMenu" xml:space="preserve"><value>“开始”菜单</value></data>
+  <data name="Overview_Desktop" xml:space="preserve"><value>桌面</value></data>
+  <data name="Overview_NoShortcuts" xml:space="preserve"><value>不创建快捷方式</value></data>
+  <data name="Overview_License" xml:space="preserve"><value>许可协议</value></data>
+  <data name="Overview_NeverBuilt" xml:space="preserve"><value>尚未构建</value></data>
+  <data name="Overview_LastBuildOk" xml:space="preserve"><value>上次构建 {0} · {1}</value></data>
+  <data name="Overview_LastBuildFailed" xml:space="preserve"><value>上次构建失败 {0}</value></data>
+  <data name="Status_Ready" xml:space="preserve"><value>可以构建</value></data>
+  <data name="Status_Errors" xml:space="preserve"><value>有 {0} 个问题需要修复</value></data>
+  <data name="Status_Warnings" xml:space="preserve"><value>可以构建 · {0} 个警告</value></data>
+  <data name="Scope_0" xml:space="preserve"><value>当前用户</value></data>
+  <data name="Scope_1" xml:space="preserve"><value>所有用户</value></data>
+  <data name="Scope_2" xml:space="preserve"><value>由用户选择</value></data>
+  <data name="Theme_0" xml:space="preserve"><value>跟随系统</value></data>
+  <data name="Theme_1" xml:space="preserve"><value>浅色</value></data>
+  <data name="Theme_2" xml:space="preserve"><value>深色</value></data>
+  <data name="Backdrop_0" xml:space="preserve"><value>云母</value></data>
+  <data name="Backdrop_1" xml:space="preserve"><value>云母 (Alt)</value></data>
+  <data name="Backdrop_2" xml:space="preserve"><value>纯色</value></data>
+  <data name="AppPageTitle.Text" xml:space="preserve"><value>应用信息</value></data>
+  <data name="AppPageDescription.Text" xml:space="preserve"><value>应用在安装程序和 Windows 设置中的显示方式。</value></data>
+  <data name="AppIdentity.Text" xml:space="preserve"><value>标识</value></data>
+  <data name="AppNameBox.Header" xml:space="preserve"><value>应用名称</value></data>
+  <data name="AppIdBox.Header" xml:space="preserve"><value>应用 ID</value></data>
+  <data name="AppIdBox.PlaceholderText" xml:space="preserve"><value>Publisher.AppName</value></data>
+  <data name="AppPublisherBox.Header" xml:space="preserve"><value>发布者</value></data>
+  <data name="AppVersionBox.Header" xml:space="preserve"><value>版本</value></data>
+  <data name="AppVersionBox.PlaceholderText" xml:space="preserve"><value>1.0.0</value></data>
+  <data name="AppDescriptionBox.Header" xml:space="preserve"><value>描述</value></data>
+  <data name="AppWebsiteBox.Header" xml:space="preserve"><value>官网</value></data>
+  <data name="AppWebsiteBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="AppProgram.Text" xml:space="preserve"><value>程序</value></data>
+  <data name="AppIconTitle.Text" xml:space="preserve"><value>图标</value></data>
+  <data name="AppIcon_Default" xml:space="preserve"><value>默认 FluentSetup 图标（.ico 或不超过 256 × 256 的 .png）</value></data>
+  <data name="AppIconClear.Content" xml:space="preserve"><value>使用默认</value></data>
+  <data name="AppIconBrowse.Content" xml:space="preserve"><value>浏览…</value></data>
+  <data name="AppMainExeTitle.Text" xml:space="preserve"><value>主程序</value></data>
+  <data name="AppMainExeDescription.Text" xml:space="preserve"><value>用于快捷方式和“准备就绪后启动”。</value></data>
+  <data name="AppMainExeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>主程序</value></data>
+  <data name="AppLicenseTitle.Text" xml:space="preserve"><value>许可协议</value></data>
+  <data name="AppLicense_None" xml:space="preserve"><value>无（不显示许可协议页面）</value></data>
+  <data name="AppLicenseClear.Content" xml:space="preserve"><value>移除</value></data>
+  <data name="AppLicenseBrowse.Content" xml:space="preserve"><value>浏览…</value></data>
+  <data name="AppLanguageTitle.Text" xml:space="preserve"><value>安装程序语言</value></data>
+  <data name="AppLanguageDescription.Text" xml:space="preserve"><value>“自动”会跟随用户的 Windows 显示语言。</value></data>
+  <data name="AppLanguageCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>安装程序语言</value></data>
+  <data name="LanguageAuto.Content" xml:space="preserve"><value>自动</value></data>
+  <data name="AppOutputSection.Text" xml:space="preserve"><value>安装包文件</value></data>
+  <data name="AppOutputNameBox.Header" xml:space="preserve"><value>文件名</value></data>
+  <data name="AppOutputNameBox.PlaceholderText" xml:space="preserve"><value>{AppName}-{Version}-Setup.exe</value></data>
+  <data name="FilesPageTitle.Text" xml:space="preserve"><value>安装文件</value></data>
+  <data name="FilesPageDescription.Text" xml:space="preserve"><value>源文件夹中的所有内容都会按原有目录结构安装。不会跟随符号链接。</value></data>
+  <data name="FilesSourceSection.Text" xml:space="preserve"><value>来源</value></data>
+  <data name="FilesSourceTitle.Text" xml:space="preserve"><value>应用文件夹</value></data>
+  <data name="FilesSourceBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>应用文件夹</value></data>
+  <data name="FilesBrowse.Content" xml:space="preserve"><value>浏览…</value></data>
+  <data name="FilesRulesExpander.Header" xml:space="preserve"><value>包含与排除规则</value></data>
+  <data name="FilesIncludeBox.Header" xml:space="preserve"><value>包含（每行一个模式）</value></data>
+  <data name="FilesExcludeBox.Header" xml:space="preserve"><value>排除（每行一个模式）</value></data>
+  <data name="FilesEmptyDirsBox.Header" xml:space="preserve"><value>要创建的空文件夹</value></data>
+  <data name="FilesPatternHelp.Text" xml:space="preserve"><value>* 匹配同一文件夹内的任意字符，** 匹配任意多级文件夹，? 匹配单个字符。不含文件夹的模式（如 *.pdb）会匹配所有文件夹。</value></data>
+  <data name="FilesExtraTitle.Text" xml:space="preserve"><value>附加文件夹</value></data>
+  <data name="FilesAddExtra.Content" xml:space="preserve"><value>添加文件夹…</value></data>
+  <data name="FilesListSection.Text" xml:space="preserve"><value>将要安装的文件</value></data>
+  <data name="FilesRefresh.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>刷新</value></data>
+  <data name="FilesRefresh.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>刷新</value></data>
+  <data name="FilesColumnPath.Text" xml:space="preserve"><value>路径</value></data>
+  <data name="FilesColumnSize.Text" xml:space="preserve"><value>大小</value></data>
+  <data name="Files_None" xml:space="preserve"><value>没有文件</value></data>
+  <data name="Files_Summary" xml:space="preserve"><value>{0:N0} 个文件 · {1}</value></data>
+  <data name="Files_Truncated" xml:space="preserve"><value>（仅显示前 {0:N0} 个）</value></data>
+  <data name="InstallPageTitle.Text" xml:space="preserve"><value>安装选项</value></data>
+  <data name="InstallPageDescription.Text" xml:space="preserve"><value>应用安装的位置以及安装程序创建的内容。默认设置适合大多数桌面应用。</value></data>
+  <data name="InstallScopeSection.Text" xml:space="preserve"><value>安装给谁</value></data>
+  <data name="InstallScopeTitle.Text" xml:space="preserve"><value>安装范围</value></data>
+  <data name="InstallScopeDescription.Text" xml:space="preserve"><value>仅为当前用户安装时不需要管理员权限。</value></data>
+  <data name="InstallScopeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>安装范围</value></data>
+  <data name="ScopeUser.Content" xml:space="preserve"><value>仅当前用户</value></data>
+  <data name="ScopeMachine.Content" xml:space="preserve"><value>所有用户（需要管理员）</value></data>
+  <data name="ScopeEither.Content" xml:space="preserve"><value>由用户选择</value></data>
+  <data name="InstallDefaultScopeTitle.Text" xml:space="preserve"><value>默认选项</value></data>
+  <data name="InstallDefaultScopeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>默认选项</value></data>
+  <data name="InstallFolderSection.Text" xml:space="preserve"><value>安装文件夹</value></data>
+  <data name="InstallUserDirBox.Header" xml:space="preserve"><value>当前用户</value></data>
+  <data name="InstallMachineDirBox.Header" xml:space="preserve"><value>所有用户</value></data>
+  <data name="InstallTokensHelp.Text" xml:space="preserve"><value>可用占位符：{LocalAppData} {UserProgramFiles} {AppData} {ProgramFiles} {ProgramData} {AppName} {Publisher} {AppId}</value></data>
+  <data name="InstallAllowCustomDir.Header" xml:space="preserve"><value>允许用户选择其他文件夹</value></data>
+  <data name="InstallShortcutsSection.Text" xml:space="preserve"><value>快捷方式与启动</value></data>
+  <data name="InstallStartMenuTitle.Text" xml:space="preserve"><value>“开始”菜单快捷方式</value></data>
+  <data name="InstallStartMenuCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>“开始”菜单快捷方式</value></data>
+  <data name="InstallDesktopTitle.Text" xml:space="preserve"><value>桌面快捷方式</value></data>
+  <data name="InstallDesktopCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>桌面快捷方式</value></data>
+  <data name="InstallLaunchTitle.Text" xml:space="preserve"><value>准备就绪后启动</value></data>
+  <data name="InstallLaunchDescription.Text" xml:space="preserve"><value>安装完成后询问是否启动应用。</value></data>
+  <data name="InstallLaunchCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>准备就绪后启动</value></data>
+  <data name="OfferOff.Content" xml:space="preserve"><value>不创建</value></data>
+  <data name="OfferOn.Content" xml:space="preserve"><value>始终创建</value></data>
+  <data name="OfferOptionalOff.Content" xml:space="preserve"><value>可选，默认关闭</value></data>
+  <data name="OfferOptionalOn.Content" xml:space="preserve"><value>可选，默认开启</value></data>
+  <data name="LaunchOff.Content" xml:space="preserve"><value>不提供</value></data>
+  <data name="LaunchOnDisabled.Content" xml:space="preserve"><value>总是（不支持）</value></data>
+  <data name="InstallRequirementsSection.Text" xml:space="preserve"><value>系统要求</value></data>
+  <data name="InstallMinBuildTitle.Text" xml:space="preserve"><value>最低 Windows 版本号</value></data>
+  <data name="InstallMinBuildDescription.Text" xml:space="preserve"><value>17763 = Windows 10 1809，22000 = Windows 11。</value></data>
+  <data name="InstallMinBuildBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>最低 Windows 版本号</value></data>
+  <data name="AppearancePageTitle.Text" xml:space="preserve"><value>界面与外观</value></data>
+  <data name="AppearancePageDescription.Text" xml:space="preserve"><value>安装程序的外观。它会自动遵循 Windows 11 Fluent Design。</value></data>
+  <data name="PreviewTitle.Text" xml:space="preserve"><value>预览安装程序</value></data>
+  <data name="PreviewDescription.Text" xml:space="preserve"><value>使用当前项目设置打开真实的安装窗口，不会安装任何内容。</value></data>
+  <data name="PreviewButton.Content" xml:space="preserve"><value>预览</value></data>
+  <data name="PreviewMore.Content" xml:space="preserve"><value>更多</value></data>
+  <data name="PreviewMore.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>更多预览场景</value></data>
+  <data name="PreviewUpgrade.Text" xml:space="preserve"><value>预览更新</value></data>
+  <data name="PreviewUninstall.Text" xml:space="preserve"><value>预览卸载</value></data>
+  <data name="Preview_ErrorTitle" xml:space="preserve"><value>无法打开预览</value></data>
+  <data name="Preview_MissingRuntime" xml:space="preserve"><value>未在 Builder 旁边找到安装界面程序。</value></data>
+  <data name="AppearanceStyleSection.Text" xml:space="preserve"><value>样式</value></data>
+  <data name="AppearanceThemeTitle.Text" xml:space="preserve"><value>主题</value></data>
+  <data name="AppearanceThemeDescription.Text" xml:space="preserve"><value>“跟随系统”会使用用户的浅色或深色模式。</value></data>
+  <data name="AppearanceThemeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>主题</value></data>
+  <data name="ThemeSystem.Content" xml:space="preserve"><value>跟随系统</value></data>
+  <data name="ThemeLight.Content" xml:space="preserve"><value>浅色</value></data>
+  <data name="ThemeDark.Content" xml:space="preserve"><value>深色</value></data>
+  <data name="AppearanceBackdropTitle.Text" xml:space="preserve"><value>窗口材质</value></data>
+  <data name="AppearanceBackdropDescription.Text" xml:space="preserve"><value>云母会根据桌面壁纸为窗口着色（Windows 11）。</value></data>
+  <data name="AppearanceBackdropCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>窗口材质</value></data>
+  <data name="BackdropMica.Content" xml:space="preserve"><value>云母</value></data>
+  <data name="BackdropMicaAlt.Content" xml:space="preserve"><value>云母 (Alt)</value></data>
+  <data name="BackdropNone.Content" xml:space="preserve"><value>纯色</value></data>
+  <data name="AppearanceAccentTitle.Text" xml:space="preserve"><value>使用 Windows 强调色</value></data>
+  <data name="AppearanceAccentDescription.Text" xml:space="preserve"><value>关闭后可为按钮使用品牌颜色。</value></data>
+  <data name="AppearanceAccentToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>使用 Windows 强调色</value></data>
+  <data name="AppearanceAccentBox.Header" xml:space="preserve"><value>强调色</value></data>
+  <data name="AppearanceAccentBox.PlaceholderText" xml:space="preserve"><value>#0067C0</value></data>
+  <data name="AppearanceTextSection.Text" xml:space="preserve"><value>文字</value></data>
+  <data name="AppearanceTitleBox.Header" xml:space="preserve"><value>窗口标题（可选）</value></data>
+  <data name="AppearanceTitleBox.PlaceholderText" xml:space="preserve"><value>留空时为“{AppName} 安装程序”</value></data>
+  <data name="AppearanceWelcomeBox.Header" xml:space="preserve"><value>欢迎说明（可选）</value></data>
+  <data name="AppearanceFinishBox.Header" xml:space="preserve"><value>完成说明（可选）</value></data>
+  <data name="AppearanceFallbackInfo.Title" xml:space="preserve"><value>经典回退界面</value></data>
+  <data name="AppearanceFallbackInfo.Message" xml:space="preserve"><value>在没有 Windows App Runtime 的电脑上，安装程序会自动使用页面和设置都相同的经典 Win32 窗口，确保始终可以离线安装。</value></data>
+  <data name="UpgradePageTitle.Text" xml:space="preserve"><value>升级与卸载</value></data>
+  <data name="UpgradePageDescription.Text" xml:space="preserve"><value>安装新版本以及用户卸载应用时会发生什么。</value></data>
+  <data name="UpgradeSection.Text" xml:space="preserve"><value>更新</value></data>
+  <data name="UpgradeHowTitle.Text" xml:space="preserve"><value>更新会就地替换已安装的版本</value></data>
+  <data name="UpgradeHowDescription.Text" xml:space="preserve"><value>已更改的文件会被替换，新版本不再包含的文件会被删除；如果更新失败，所有更改都会回滚。</value></data>
+  <data name="UpgradeDowngradeTitle.Text" xml:space="preserve"><value>允许安装旧版本</value></data>
+  <data name="UpgradeDowngradeDescription.Text" xml:space="preserve"><value>关闭时，安装程序不会替换已安装的较新版本。</value></data>
+  <data name="UpgradeDowngradeToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>允许安装旧版本</value></data>
+  <data name="UpgradeDataSection.Text" xml:space="preserve"><value>用户数据</value></data>
+  <data name="UpgradePreserveDescription.Text" xml:space="preserve"><value>与这些模式匹配的文件仅在不存在时安装，更新时不会被覆盖，卸载时会被保留。</value></data>
+  <data name="UpgradePreserveBox.Header" xml:space="preserve"><value>保留的文件（每行一个模式）</value></data>
+  <data name="UninstallSection.Text" xml:space="preserve"><value>卸载</value></data>
+  <data name="UninstallRemovesTitle.Text" xml:space="preserve"><value>会删除</value></data>
+  <data name="UninstallRemoves.Text" xml:space="preserve"><value>安装程序安装的所有文件、快捷方式、创建的空文件夹以及 Windows 设置中的条目。</value></data>
+  <data name="UninstallKeepsTitle.Text" xml:space="preserve"><value>会保留</value></data>
+  <data name="UninstallKeeps.Text" xml:space="preserve"><value>保留的用户数据以及应用在安装后创建的文件（日志、设置、文档）。卸载不会整体删除文件夹。</value></data>
+  <data name="BuildPageTitle.Text" xml:space="preserve"><value>构建</value></data>
+  <data name="BuildPageDescription.Text" xml:space="preserve"><value>生成一个可在 Windows 10 1809 及更高版本上离线安装的 Setup.exe。</value></data>
+  <data name="BuildButtonText.Text" xml:space="preserve"><value>构建安装包</value></data>
+  <data name="BuildCancelButton.Content" xml:space="preserve"><value>取消</value></data>
+  <data name="Build_Starting" xml:space="preserve"><value>正在开始…</value></data>
+  <data name="Build_Done" xml:space="preserve"><value>完成</value></data>
+  <data name="Build_Cancelled" xml:space="preserve"><value>构建已取消。</value></data>
+  <data name="Build_SucceededTitle" xml:space="preserve"><value>Setup.exe 已就绪</value></data>
+  <data name="Build_SucceededMessage" xml:space="preserve"><value>{0} · {1} · {2} 秒</value></data>
+  <data name="Build_FailedTitle" xml:space="preserve"><value>构建失败</value></data>
+  <data name="Build_NotIncluded" xml:space="preserve"><value>未包含</value></data>
+  <data name="BuildOpenFolder.Content" xml:space="preserve"><value>在文件夹中显示</value></data>
+  <data name="BuildCopyPath.Content" xml:space="preserve"><value>复制路径</value></data>
+  <data name="SizeStubLabel.Text" xml:space="preserve"><value>安装引擎</value></data>
+  <data name="SizeWinUILabel.Text" xml:space="preserve"><value>WinUI 界面</value></data>
+  <data name="SizePayloadLabel.Text" xml:space="preserve"><value>应用文件</value></data>
+  <data name="SizeOverheadLabel.Text" xml:space="preserve"><value>安装器额外开销</value></data>
+  <data name="SizeTotalLabel.Text" xml:space="preserve"><value>Setup.exe</value></data>
+  <data name="BuildOutputSection.Text" xml:space="preserve"><value>输出</value></data>
+  <data name="BuildOutputFolderTitle.Text" xml:space="preserve"><value>输出文件夹</value></data>
+  <data name="BuildOutputFolderBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>输出文件夹</value></data>
+  <data name="BuildBrowse.Content" xml:space="preserve"><value>浏览…</value></data>
+  <data name="BuildArchTitle.Text" xml:space="preserve"><value>架构</value></data>
+  <data name="BuildArchCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>架构</value></data>
+  <data name="BuildCompressionTitle.Text" xml:space="preserve"><value>压缩</value></data>
+  <data name="BuildCompressionDescription.Text" xml:space="preserve"><value>压缩率越高构建越慢；安装速度几乎不受影响。</value></data>
+  <data name="BuildCompressionCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>压缩</value></data>
+  <data name="CompressionFast.Content" xml:space="preserve"><value>快速</value></data>
+  <data name="CompressionNormal.Content" xml:space="preserve"><value>均衡</value></data>
+  <data name="CompressionMax.Content" xml:space="preserve"><value>最小</value></data>
+  <data name="BuildWinUITitle.Text" xml:space="preserve"><value>包含 WinUI 界面</value></data>
+  <data name="BuildWinUIDescription.Text" xml:space="preserve"><value>约 330 KB。不包含时始终使用经典界面。</value></data>
+  <data name="BuildWinUIToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>包含 WinUI 界面</value></data>
+  <data name="BuildSigningTitle.Text" xml:space="preserve"><value>代码签名</value></data>
+  <data name="BuildSigningDescription.Text" xml:space="preserve"><value>使用 Authenticode 为 Setup.exe 签名（需要 Windows SDK 中的 signtool）。</value></data>
+  <data name="BuildSigningToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>代码签名</value></data>
+  <data name="SignThumbprintBox.Header" xml:space="preserve"><value>证书指纹（证书存储）</value></data>
+  <data name="SignPfxBox.Header" xml:space="preserve"><value>或 .pfx 文件</value></data>
+  <data name="SignPasswordEnvBox.Header" xml:space="preserve"><value>保存 .pfx 密码的环境变量</value></data>
+  <data name="SignTimestampBox.Header" xml:space="preserve"><value>时间戳服务器</value></data>
+  <data name="SignToolBox.Header" xml:space="preserve"><value>signtool.exe（可选）</value></data>
+  <data name="BuildLogSection.Text" xml:space="preserve"><value>日志</value></data>
+  <data name="BuildLogEmpty.Text" xml:space="preserve"><value>构建日志会显示在这里。</value></data>
+  <data name="HistoryPageTitle.Text" xml:space="preserve"><value>构建历史</value></data>
+  <data name="HistoryPageDescription.Text" xml:space="preserve"><value>此应用在这台电脑上的所有构建。</value></data>
+  <data name="HistoryEmpty.Text" xml:space="preserve"><value>还没有构建记录。</value></data>
+  <data name="HistoryInspect.Content" xml:space="preserve"><value>检查</value></data>
+  <data name="HistoryOpenFolder.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>在文件夹中显示</value></data>
+  <data name="HistoryOpenFolder.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>在文件夹中显示</value></data>
+  <data name="History_Succeeded" xml:space="preserve"><value>成功</value></data>
+  <data name="History_Failed" xml:space="preserve"><value>失败</value></data>
+  <data name="Inspect_Title" xml:space="preserve"><value>安装包详情</value></data>
+  <data name="Inspect_Size" xml:space="preserve"><value>大小：{0}</value></data>
+  <data name="Inspect_Stub" xml:space="preserve"><value>安装引擎：{0}</value></data>
+  <data name="Inspect_Frontend" xml:space="preserve"><value>WinUI 界面：{0} 个文件，{1}</value></data>
+  <data name="Inspect_Payload" xml:space="preserve"><value>应用文件：{0:N0} 个文件，{1} → {2}</value></data>
+  <data name="Inspect_Signed" xml:space="preserve"><value>已签名：{0}</value></data>
+  <data name="Inspect_Ok" xml:space="preserve"><value>所有校验和均已验证。</value></data>
+  <data name="Inspect_Problems" xml:space="preserve"><value>问题：</value></data>
+  <data name="SettingsPageTitle.Text" xml:space="preserve"><value>设置</value></data>
+  <data name="SettingsAppearanceSection.Text" xml:space="preserve"><value>外观</value></data>
+  <data name="SettingsThemeTitle.Text" xml:space="preserve"><value>Builder 主题</value></data>
+  <data name="SettingsThemeDescription.Text" xml:space="preserve"><value>仅更改此应用。</value></data>
+  <data name="SettingsThemeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Builder 主题</value></data>
+  <data name="SettingsRuntimeSection.Text" xml:space="preserve"><value>安装器运行时</value></data>
+  <data name="SettingsRuntimeTitle.Text" xml:space="preserve"><value>会嵌入每个 Setup.exe</value></data>
+  <data name="Settings_RuntimeFull" xml:space="preserve"><value>安装引擎和 WinUI 界面可用</value></data>
+  <data name="Settings_RuntimeNoUi" xml:space="preserve"><value>安装引擎可用，缺少 WinUI 界面</value></data>
+  <data name="Settings_RuntimeMissing" xml:space="preserve"><value>缺失——请先构建原生项目</value></data>
+  <data name="SettingsAboutSection.Text" xml:space="preserve"><value>关于</value></data>
+  <data name="SettingsAboutTitle.Text" xml:space="preserve"><value>FluentSetup Builder</value></data>
+  <data name="SettingsOpenData.Content" xml:space="preserve"><value>打开数据文件夹</value></data>
+  <data name="SettingsLicensesTitle.Text" xml:space="preserve"><value>开源组件</value></data>
+  <data name="SettingsLicenses.Text" xml:space="preserve"><value>Zstandard (BSD)、ZstdSharp (MIT)、Windows App SDK (MIT)、CommunityToolkit.Mvvm (MIT)。</value></data>
+</root>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.UpgradePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="Transparent">
+    <ScrollViewer>
+        <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+            <TextBlock x:Uid="UpgradePageTitle" Style="{StaticResource PageTitleStyle}" AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock x:Uid="UpgradePageDescription" Style="{StaticResource PageDescriptionStyle}" />
+
+            <TextBlock x:Uid="UpgradeSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE895;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="UpgradeHowTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="UpgradeHowDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE72B;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="UpgradeDowngradeTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="UpgradeDowngradeDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.AllowDowngrade, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="UpgradeDowngradeToggle" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <TextBlock x:Uid="UpgradeDataSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <StackPanel Spacing="12">
+                    <TextBlock x:Uid="UpgradePreserveDescription" Style="{StaticResource RowDescriptionStyle}" />
+                    <TextBox x:Uid="UpgradePreserveBox" Text="{x:Bind VM.PreserveText, Mode=TwoWay}" AcceptsReturn="True" MinHeight="96" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                </StackPanel>
+            </Border>
+
+            <TextBlock x:Uid="UninstallSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE74D;" Style="{StaticResource RowIconStyle}" VerticalAlignment="Top" Margin="4,2,20,0" />
+                    <StackPanel Grid.Column="1" Spacing="8">
+                        <TextBlock x:Uid="UninstallRemovesTitle" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock x:Uid="UninstallRemoves" Style="{StaticResource RowDescriptionStyle}" />
+                        <TextBlock x:Uid="UninstallKeepsTitle" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,4,0,0" />
+                        <TextBlock x:Uid="UninstallKeeps" Style="{StaticResource RowDescriptionStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

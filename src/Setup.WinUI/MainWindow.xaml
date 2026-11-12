@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
   Installer window, laid out like the Windows App Installer / Android-app (APK) install dialog:
   one Mica surface, a question as the title, publisher/version lines, the app icon large at the top right,
@@ -102,17 +102,37 @@
                             <TextBlock x:Name="VersionLabel" Grid.Row="1" Style="{StaticResource DetailLabelStyle}" />
                             <TextBlock x:Name="VersionLine" Grid.Row="1" Grid.Column="1" Style="{StaticResource InfoLineStyle}" />
                             <TextBlock x:Name="LocationLabelDetail" Grid.Row="2" Style="{StaticResource DetailLabelStyle}" />
-                            <!-- Long paths wrap at "\" (max two lines); "Change" sits on its own line so it is never pushed out. -->
-                            <StackPanel x:Name="LocationRow" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
-                                <TextBlock x:Name="LocationLine" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" MaxLines="2"
-                                           TextTrimming="CharacterEllipsis" />
-                                <HyperlinkButton x:Name="ChangeLink" Padding="4,2" Margin="-4,2,0,0" Click="OnSecondaryClick" />
-                            </StackPanel>
+                            <!-- One line: the path (middle-shortened to fit) followed by "Change", which only picks a folder. -->
+                            <Grid x:Name="LocationRow" Grid.Row="2" Grid.Column="1" ColumnSpacing="8" Margin="0,0,0,8" HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="LocationLine" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="NoWrap" MaxWidth="400"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                <HyperlinkButton x:Name="ChangeLink" Grid.Column="1" Padding="4,0" Margin="0,-3,0,-3" VerticalAlignment="Center"
+                                                 Click="OnBrowseClick" />
+                            </Grid>
                             <TextBlock x:Name="SizeLabel" Grid.Row="3" Style="{StaticResource DetailLabelStyle}" />
                             <TextBlock x:Name="SizeLine" Grid.Row="3" Grid.Column="1" Style="{StaticResource InfoLineStyle}" />
                         </Grid>
                             </StackPanel>
                         </Grid>
+
+                        <!-- Options live on the main page: scope (only if the package allows both), shortcuts and the
+                             package's own switches such as "Start when I sign in". -->
+                        <StackPanel x:Name="InlineOptions" Margin="0,8,0,0" Spacing="2" Visibility="Collapsed">
+                            <StackPanel x:Name="ScopePanel" Orientation="Horizontal" Spacing="16" Margin="0,0,0,4">
+                                <TextBlock x:Name="ScopeLabel" Style="{StaticResource DetailLabelStyle}" VerticalAlignment="Center" Margin="0,6,0,0" />
+                                <RadioButtons x:Name="ScopeRadios" SelectionChanged="OnScopeChanged" MaxColumns="2">
+                                    <RadioButton x:Name="ScopeUserRadio" />
+                                    <RadioButton x:Name="ScopeMachineRadio" />
+                                </RadioButtons>
+                            </StackPanel>
+                            <CheckBox x:Name="DesktopCheck" />
+                            <CheckBox x:Name="StartMenuCheck" />
+                            <StackPanel x:Name="ChoicesPanel" />
+                        </StackPanel>
                         <InfoBar x:Name="WelcomeInfo" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
                         <InfoBar x:Name="RunningInfo" Severity="Warning" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
                         <InfoBar x:Name="WelcomeDirError" Severity="Error" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
@@ -128,39 +148,6 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Options -->
-                    <StackPanel x:Name="OptionsPage" Spacing="20" Visibility="Collapsed">
-                        <TextBlock x:Name="OptionsHeading" Style="{StaticResource PageHeadingStyle}" AutomationProperties.HeadingLevel="Level1" />
-                        <StackPanel x:Name="ScopePanel">
-                            <TextBlock x:Name="ScopeLabel" Style="{StaticResource FieldLabelStyle}" />
-                            <RadioButtons x:Name="ScopeRadios" SelectionChanged="OnScopeChanged" MaxColumns="1">
-                                <RadioButton x:Name="ScopeUserRadio" />
-                                <RadioButton x:Name="ScopeMachineRadio" />
-                            </RadioButtons>
-                        </StackPanel>
-                        <StackPanel x:Name="LocationPanel">
-                            <TextBlock x:Name="LocationLabel" Style="{StaticResource FieldLabelStyle}" />
-                            <Grid ColumnSpacing="8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="LocationBox" TextChanged="OnLocationChanged" IsSpellCheckEnabled="False" />
-                                <Button x:Name="BrowseButton" Grid.Column="1" Click="OnBrowseClick" />
-                            </Grid>
-                            <TextBlock x:Name="LocationSpaceText" Style="{StaticResource SecondaryTextStyle}" Margin="0,6,0,0" />
-                            <InfoBar x:Name="LocationError" Severity="Error" IsClosable="False" IsOpen="False" Margin="0,8,0,0" />
-                        </StackPanel>
-                        <StackPanel x:Name="ShortcutPanel">
-                            <TextBlock x:Name="ShortcutLabel" Style="{StaticResource FieldLabelStyle}" />
-                            <CheckBox x:Name="DesktopCheck" />
-                            <CheckBox x:Name="StartMenuCheck" />
-                        </StackPanel>
-                        <!-- Package-defined switches (e.g. "Start when I sign in"), filled from the hello message. -->
-                        <StackPanel x:Name="ChoicesPanel" Visibility="Collapsed">
-                            <TextBlock x:Name="ChoicesLabel" Style="{StaticResource FieldLabelStyle}" />
-                        </StackPanel>
-                    </StackPanel>
             </Grid>
         </ScrollViewer>
 

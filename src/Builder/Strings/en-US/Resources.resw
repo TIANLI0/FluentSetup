@@ -1,0 +1,322 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="App_Title" xml:space="preserve"><value>FluentSetup Builder</value></data>
+  <data name="TitleBar.Title" xml:space="preserve"><value>FluentSetup Builder</value></data>
+  <data name="TitleNewButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>New project (Ctrl+N)</value></data>
+  <data name="TitleNewButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>New project</value></data>
+  <data name="TitleOpenButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Open project (Ctrl+O)</value></data>
+  <data name="TitleOpenButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Open project</value></data>
+  <data name="TitleSaveButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Save (Ctrl+S)</value></data>
+  <data name="TitleSaveButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Save</value></data>
+  <data name="TitleSaveAsButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Save as (Ctrl+Shift+S)</value></data>
+  <data name="TitleSaveAsButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Save as</value></data>
+  <data name="NavOverview.Content" xml:space="preserve"><value>Overview</value></data>
+  <data name="NavApp.Content" xml:space="preserve"><value>App info</value></data>
+  <data name="NavFiles.Content" xml:space="preserve"><value>Files</value></data>
+  <data name="NavInstall.Content" xml:space="preserve"><value>Install options</value></data>
+  <data name="NavAppearance.Content" xml:space="preserve"><value>Appearance</value></data>
+  <data name="NavUpgrade.Content" xml:space="preserve"><value>Upgrade &amp; uninstall</value></data>
+  <data name="NavBuild.Content" xml:space="preserve"><value>Build</value></data>
+  <data name="NavHistory.Content" xml:space="preserve"><value>Build history</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Common_Yes" xml:space="preserve"><value>Yes</value></data>
+  <data name="Common_No" xml:space="preserve"><value>No</value></data>
+  <data name="Unsaved_Title" xml:space="preserve"><value>Save changes?</value></data>
+  <data name="Unsaved_Body" xml:space="preserve"><value>The project has unsaved changes.</value></data>
+  <data name="Unsaved_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Unsaved_Discard" xml:space="preserve"><value>Don&apos;t save</value></data>
+  <data name="FileType_Project" xml:space="preserve"><value>FluentSetup project</value></data>
+  <data name="Project_Untitled" xml:space="preserve"><value>Untitled</value></data>
+  <data name="Error_OpenTitle" xml:space="preserve"><value>Couldn&apos;t open the project</value></data>
+  <data name="Error_SaveTitle" xml:space="preserve"><value>Couldn&apos;t save the project</value></data>
+  <data name="Error_NotFound" xml:space="preserve"><value>{0} no longer exists.</value></data>
+  <data name="Error_UnexpectedTitle" xml:space="preserve"><value>Something went wrong</value></data>
+  <data name="EmptyTitle.Text" xml:space="preserve"><value>Create an installer for your app</value></data>
+  <data name="EmptyBody.Text" xml:space="preserve"><value>Pick the folder with your app&apos;s files. FluentSetup reads the name, publisher and version from your program and suggests everything else — most apps are ready to build in a few minutes.</value></data>
+  <data name="EmptyNewButton.Content" xml:space="preserve"><value>New project</value></data>
+  <data name="EmptyOpenButton.Content" xml:space="preserve"><value>Open project</value></data>
+  <data name="EmptyRecent.Text" xml:space="preserve"><value>Recent projects</value></data>
+  <data name="EmptyNoRecent.Text" xml:space="preserve"><value>Projects you open will appear here.</value></data>
+  <data name="NewProject_Title" xml:space="preserve"><value>New project</value></data>
+  <data name="NewProject_Create" xml:space="preserve"><value>Create</value></data>
+  <data name="NewProject_Name" xml:space="preserve"><value>App name</value></data>
+  <data name="NewProject_Id" xml:space="preserve"><value>App ID</value></data>
+  <data name="NewProject_Publisher" xml:space="preserve"><value>Publisher</value></data>
+  <data name="NewProject_Version" xml:space="preserve"><value>Version</value></data>
+  <data name="NewProject_MainExe" xml:space="preserve"><value>Main program</value></data>
+  <data name="NewProject_Source" xml:space="preserve"><value>Files from {0}</value></data>
+  <data name="NewProject_NameRequired" xml:space="preserve"><value>Enter the app name.</value></data>
+  <data name="NewProject_IdInvalid" xml:space="preserve"><value>The app ID may contain letters, digits, &apos;.&apos;, &apos;-&apos; and &apos;_&apos; (up to 64).</value></data>
+  <data name="NewProject_VersionInvalid" xml:space="preserve"><value>Use a version like 1.0.0.</value></data>
+  <data name="OverviewPreviewButton.Content" xml:space="preserve"><value>Preview</value></data>
+  <data name="OverviewBuildButton.Text" xml:space="preserve"><value>Build installer</value></data>
+  <data name="OverviewBuildRun.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Build installer</value></data>
+  <data name="BuildRun.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Build installer</value></data>
+  <data name="BuildRun.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Build installer (F5)</value></data>
+  <data name="FilesRemoveExtra.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Remove</value></data>
+  <data name="FilesRemoveExtra.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Remove</value></data>
+  <data name="OverviewSummary.Text" xml:space="preserve"><value>Summary</value></data>
+  <data name="OverviewFiles.Text" xml:space="preserve"><value>Files</value></data>
+  <data name="OverviewInstall.Text" xml:space="preserve"><value>Installation</value></data>
+  <data name="OverviewAppearance.Text" xml:space="preserve"><value>Appearance</value></data>
+  <data name="OverviewOutput.Text" xml:space="preserve"><value>Output</value></data>
+  <data name="OverviewProblems.Text" xml:space="preserve"><value>Problems</value></data>
+  <data name="OverviewNoProblems.Text" xml:space="preserve"><value>No problems found. The project is ready to build.</value></data>
+  <data name="OverviewRecentBuilds.Text" xml:space="preserve"><value>Recent builds</value></data>
+  <data name="OverviewNoBuilds.Text" xml:space="preserve"><value>No builds yet.</value></data>
+  <data name="Overview_Version" xml:space="preserve"><value>Version {0}</value></data>
+  <data name="Overview_StartMenu" xml:space="preserve"><value>Start menu</value></data>
+  <data name="Overview_Desktop" xml:space="preserve"><value>Desktop</value></data>
+  <data name="Overview_NoShortcuts" xml:space="preserve"><value>No shortcuts</value></data>
+  <data name="Overview_License" xml:space="preserve"><value>License agreement</value></data>
+  <data name="Overview_NeverBuilt" xml:space="preserve"><value>Not built yet</value></data>
+  <data name="Overview_LastBuildOk" xml:space="preserve"><value>Last build {0} · {1}</value></data>
+  <data name="Overview_LastBuildFailed" xml:space="preserve"><value>Last build failed {0}</value></data>
+  <data name="Status_Ready" xml:space="preserve"><value>Ready to build</value></data>
+  <data name="Status_Errors" xml:space="preserve"><value>{0} problem(s) to fix</value></data>
+  <data name="Status_Warnings" xml:space="preserve"><value>Ready to build · {0} warning(s)</value></data>
+  <data name="Scope_0" xml:space="preserve"><value>Current user</value></data>
+  <data name="Scope_1" xml:space="preserve"><value>All users</value></data>
+  <data name="Scope_2" xml:space="preserve"><value>User chooses</value></data>
+  <data name="Theme_0" xml:space="preserve"><value>System theme</value></data>
+  <data name="Theme_1" xml:space="preserve"><value>Light</value></data>
+  <data name="Theme_2" xml:space="preserve"><value>Dark</value></data>
+  <data name="Backdrop_0" xml:space="preserve"><value>Mica</value></data>
+  <data name="Backdrop_1" xml:space="preserve"><value>Mica Alt</value></data>
+  <data name="Backdrop_2" xml:space="preserve"><value>Solid</value></data>
+  <data name="AppPageTitle.Text" xml:space="preserve"><value>App info</value></data>
+  <data name="AppPageDescription.Text" xml:space="preserve"><value>How your app is identified in the installer and in Windows Settings.</value></data>
+  <data name="AppIdentity.Text" xml:space="preserve"><value>Identity</value></data>
+  <data name="AppNameBox.Header" xml:space="preserve"><value>App name</value></data>
+  <data name="AppIdBox.Header" xml:space="preserve"><value>App ID</value></data>
+  <data name="AppIdBox.PlaceholderText" xml:space="preserve"><value>Publisher.AppName</value></data>
+  <data name="AppPublisherBox.Header" xml:space="preserve"><value>Publisher</value></data>
+  <data name="AppVersionBox.Header" xml:space="preserve"><value>Version</value></data>
+  <data name="AppVersionBox.PlaceholderText" xml:space="preserve"><value>1.0.0</value></data>
+  <data name="AppDescriptionBox.Header" xml:space="preserve"><value>Description</value></data>
+  <data name="AppWebsiteBox.Header" xml:space="preserve"><value>Website</value></data>
+  <data name="AppWebsiteBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="AppProgram.Text" xml:space="preserve"><value>Program</value></data>
+  <data name="AppIconTitle.Text" xml:space="preserve"><value>Icon</value></data>
+  <data name="AppIcon_Default" xml:space="preserve"><value>Default FluentSetup icon (.ico or .png up to 256 × 256)</value></data>
+  <data name="AppIconClear.Content" xml:space="preserve"><value>Use default</value></data>
+  <data name="AppIconBrowse.Content" xml:space="preserve"><value>Browse…</value></data>
+  <data name="AppMainExeTitle.Text" xml:space="preserve"><value>Main program</value></data>
+  <data name="AppMainExeDescription.Text" xml:space="preserve"><value>Used for shortcuts and &quot;Launch when ready&quot;.</value></data>
+  <data name="AppMainExeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Main program</value></data>
+  <data name="AppLicenseTitle.Text" xml:space="preserve"><value>License agreement</value></data>
+  <data name="AppLicense_None" xml:space="preserve"><value>None — no license page</value></data>
+  <data name="AppLicenseClear.Content" xml:space="preserve"><value>Remove</value></data>
+  <data name="AppLicenseBrowse.Content" xml:space="preserve"><value>Browse…</value></data>
+  <data name="AppLanguageTitle.Text" xml:space="preserve"><value>Installer language</value></data>
+  <data name="AppLanguageDescription.Text" xml:space="preserve"><value>Automatic follows the user&apos;s Windows display language.</value></data>
+  <data name="AppLanguageCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Installer language</value></data>
+  <data name="LanguageAuto.Content" xml:space="preserve"><value>Automatic</value></data>
+  <data name="AppOutputSection.Text" xml:space="preserve"><value>Setup file</value></data>
+  <data name="AppOutputNameBox.Header" xml:space="preserve"><value>File name</value></data>
+  <data name="AppOutputNameBox.PlaceholderText" xml:space="preserve"><value>{AppName}-{Version}-Setup.exe</value></data>
+  <data name="FilesPageTitle.Text" xml:space="preserve"><value>Files</value></data>
+  <data name="FilesPageDescription.Text" xml:space="preserve"><value>Everything in the source folder is installed, keeping its folder structure. Links are never followed.</value></data>
+  <data name="FilesSourceSection.Text" xml:space="preserve"><value>Source</value></data>
+  <data name="FilesSourceTitle.Text" xml:space="preserve"><value>App folder</value></data>
+  <data name="FilesSourceBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>App folder</value></data>
+  <data name="FilesBrowse.Content" xml:space="preserve"><value>Browse…</value></data>
+  <data name="FilesRulesExpander.Header" xml:space="preserve"><value>Include and exclude rules</value></data>
+  <data name="FilesIncludeBox.Header" xml:space="preserve"><value>Include (one pattern per line)</value></data>
+  <data name="FilesExcludeBox.Header" xml:space="preserve"><value>Exclude (one pattern per line)</value></data>
+  <data name="FilesEmptyDirsBox.Header" xml:space="preserve"><value>Empty folders to create</value></data>
+  <data name="FilesPatternHelp.Text" xml:space="preserve"><value>* matches within a folder, ** matches any number of folders, ? matches one character. A pattern without a folder (*.pdb) matches in every folder.</value></data>
+  <data name="FilesExtraTitle.Text" xml:space="preserve"><value>Additional folders</value></data>
+  <data name="FilesAddExtra.Content" xml:space="preserve"><value>Add folder…</value></data>
+  <data name="FilesListSection.Text" xml:space="preserve"><value>Files to install</value></data>
+  <data name="FilesRefresh.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Refresh</value></data>
+  <data name="FilesRefresh.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Refresh</value></data>
+  <data name="FilesColumnPath.Text" xml:space="preserve"><value>Path</value></data>
+  <data name="FilesColumnSize.Text" xml:space="preserve"><value>Size</value></data>
+  <data name="Files_None" xml:space="preserve"><value>No files</value></data>
+  <data name="Files_Summary" xml:space="preserve"><value>{0:N0} files · {1}</value></data>
+  <data name="Files_Truncated" xml:space="preserve"><value>(showing the first {0:N0})</value></data>
+  <data name="InstallPageTitle.Text" xml:space="preserve"><value>Install options</value></data>
+  <data name="InstallPageDescription.Text" xml:space="preserve"><value>Where the app goes and what setup creates. The defaults suit most desktop apps.</value></data>
+  <data name="InstallScopeSection.Text" xml:space="preserve"><value>Who gets the app</value></data>
+  <data name="InstallScopeTitle.Text" xml:space="preserve"><value>Install for</value></data>
+  <data name="InstallScopeDescription.Text" xml:space="preserve"><value>Current-user installs never ask for administrator permission.</value></data>
+  <data name="InstallScopeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Install for</value></data>
+  <data name="ScopeUser.Content" xml:space="preserve"><value>Current user only</value></data>
+  <data name="ScopeMachine.Content" xml:space="preserve"><value>All users (administrator)</value></data>
+  <data name="ScopeEither.Content" xml:space="preserve"><value>Let the user choose</value></data>
+  <data name="InstallDefaultScopeTitle.Text" xml:space="preserve"><value>Default choice</value></data>
+  <data name="InstallDefaultScopeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Default choice</value></data>
+  <data name="InstallFolderSection.Text" xml:space="preserve"><value>Install folder</value></data>
+  <data name="InstallUserDirBox.Header" xml:space="preserve"><value>For the current user</value></data>
+  <data name="InstallMachineDirBox.Header" xml:space="preserve"><value>For all users</value></data>
+  <data name="InstallTokensHelp.Text" xml:space="preserve"><value>Placeholders: {LocalAppData} {UserProgramFiles} {AppData} {ProgramFiles} {ProgramData} {AppName} {Publisher} {AppId}</value></data>
+  <data name="InstallAllowCustomDir.Header" xml:space="preserve"><value>Users can choose another folder</value></data>
+  <data name="InstallShortcutsSection.Text" xml:space="preserve"><value>Shortcuts and launch</value></data>
+  <data name="InstallStartMenuTitle.Text" xml:space="preserve"><value>Start menu shortcut</value></data>
+  <data name="InstallStartMenuCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Start menu shortcut</value></data>
+  <data name="InstallDesktopTitle.Text" xml:space="preserve"><value>Desktop shortcut</value></data>
+  <data name="InstallDesktopCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Desktop shortcut</value></data>
+  <data name="InstallLaunchTitle.Text" xml:space="preserve"><value>Launch when ready</value></data>
+  <data name="InstallLaunchDescription.Text" xml:space="preserve"><value>Offers to start the app when installation finishes.</value></data>
+  <data name="InstallLaunchCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Launch when ready</value></data>
+  <data name="OfferOff.Content" xml:space="preserve"><value>Never</value></data>
+  <data name="OfferOn.Content" xml:space="preserve"><value>Always</value></data>
+  <data name="OfferOptionalOff.Content" xml:space="preserve"><value>Optional, off by default</value></data>
+  <data name="OfferOptionalOn.Content" xml:space="preserve"><value>Optional, on by default</value></data>
+  <data name="LaunchOff.Content" xml:space="preserve"><value>Don&apos;t offer</value></data>
+  <data name="LaunchOnDisabled.Content" xml:space="preserve"><value>Always (not supported)</value></data>
+  <data name="InstallRequirementsSection.Text" xml:space="preserve"><value>Requirements</value></data>
+  <data name="InstallMinBuildTitle.Text" xml:space="preserve"><value>Minimum Windows build</value></data>
+  <data name="InstallMinBuildDescription.Text" xml:space="preserve"><value>17763 = Windows 10 1809, 22000 = Windows 11.</value></data>
+  <data name="InstallMinBuildBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Minimum Windows build</value></data>
+  <data name="AppearancePageTitle.Text" xml:space="preserve"><value>Appearance</value></data>
+  <data name="AppearancePageDescription.Text" xml:space="preserve"><value>How the installer looks. It follows Windows 11 Fluent Design automatically.</value></data>
+  <data name="PreviewTitle.Text" xml:space="preserve"><value>Preview the installer</value></data>
+  <data name="PreviewDescription.Text" xml:space="preserve"><value>Opens the real installer window with this project&apos;s settings. Nothing is installed.</value></data>
+  <data name="PreviewButton.Content" xml:space="preserve"><value>Preview</value></data>
+  <data name="PreviewMore.Content" xml:space="preserve"><value>More</value></data>
+  <data name="PreviewMore.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>More preview scenarios</value></data>
+  <data name="PreviewUpgrade.Text" xml:space="preserve"><value>Preview an update</value></data>
+  <data name="PreviewUninstall.Text" xml:space="preserve"><value>Preview uninstall</value></data>
+  <data name="Preview_ErrorTitle" xml:space="preserve"><value>Couldn&apos;t open the preview</value></data>
+  <data name="Preview_MissingRuntime" xml:space="preserve"><value>The installer front end was not found next to the Builder.</value></data>
+  <data name="AppearanceStyleSection.Text" xml:space="preserve"><value>Style</value></data>
+  <data name="AppearanceThemeTitle.Text" xml:space="preserve"><value>Theme</value></data>
+  <data name="AppearanceThemeDescription.Text" xml:space="preserve"><value>System follows the user&apos;s light or dark mode.</value></data>
+  <data name="AppearanceThemeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Theme</value></data>
+  <data name="ThemeSystem.Content" xml:space="preserve"><value>Use system setting</value></data>
+  <data name="ThemeLight.Content" xml:space="preserve"><value>Light</value></data>
+  <data name="ThemeDark.Content" xml:space="preserve"><value>Dark</value></data>
+  <data name="AppearanceBackdropTitle.Text" xml:space="preserve"><value>Window material</value></data>
+  <data name="AppearanceBackdropDescription.Text" xml:space="preserve"><value>Mica tints the window with the desktop wallpaper (Windows 11).</value></data>
+  <data name="AppearanceBackdropCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Window material</value></data>
+  <data name="BackdropMica.Content" xml:space="preserve"><value>Mica</value></data>
+  <data name="BackdropMicaAlt.Content" xml:space="preserve"><value>Mica Alt</value></data>
+  <data name="BackdropNone.Content" xml:space="preserve"><value>Solid</value></data>
+  <data name="AppearanceAccentTitle.Text" xml:space="preserve"><value>Use the Windows accent color</value></data>
+  <data name="AppearanceAccentDescription.Text" xml:space="preserve"><value>Turn off to use your brand color for buttons.</value></data>
+  <data name="AppearanceAccentToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Use the Windows accent color</value></data>
+  <data name="AppearanceAccentBox.Header" xml:space="preserve"><value>Accent color</value></data>
+  <data name="AppearanceAccentBox.PlaceholderText" xml:space="preserve"><value>#0067C0</value></data>
+  <data name="AppearanceTextSection.Text" xml:space="preserve"><value>Text</value></data>
+  <data name="AppearanceTitleBox.Header" xml:space="preserve"><value>Window title (optional)</value></data>
+  <data name="AppearanceTitleBox.PlaceholderText" xml:space="preserve"><value>&quot;{AppName} Setup&quot; when empty</value></data>
+  <data name="AppearanceWelcomeBox.Header" xml:space="preserve"><value>Welcome text (optional)</value></data>
+  <data name="AppearanceFinishBox.Header" xml:space="preserve"><value>Completion text (optional)</value></data>
+  <data name="AppearanceFallbackInfo.Title" xml:space="preserve"><value>Classic fallback</value></data>
+  <data name="AppearanceFallbackInfo.Message" xml:space="preserve"><value>On PCs without the Windows App Runtime the installer automatically uses a classic Win32 window with the same pages and settings, so installation always works offline.</value></data>
+  <data name="UpgradePageTitle.Text" xml:space="preserve"><value>Upgrade &amp; uninstall</value></data>
+  <data name="UpgradePageDescription.Text" xml:space="preserve"><value>What happens when a newer version is installed and when users remove the app.</value></data>
+  <data name="UpgradeSection.Text" xml:space="preserve"><value>Updates</value></data>
+  <data name="UpgradeHowTitle.Text" xml:space="preserve"><value>Updates replace the installed version in place</value></data>
+  <data name="UpgradeHowDescription.Text" xml:space="preserve"><value>Changed files are replaced, files the new version no longer ships are removed, and everything is rolled back if the update fails.</value></data>
+  <data name="UpgradeDowngradeTitle.Text" xml:space="preserve"><value>Allow installing an older version</value></data>
+  <data name="UpgradeDowngradeDescription.Text" xml:space="preserve"><value>When off, setup refuses to replace a newer installed version.</value></data>
+  <data name="UpgradeDowngradeToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Allow installing an older version</value></data>
+  <data name="UpgradeDataSection.Text" xml:space="preserve"><value>User data</value></data>
+  <data name="UpgradePreserveDescription.Text" xml:space="preserve"><value>Files matching these patterns are installed only if missing, are never overwritten by updates and are kept on uninstall.</value></data>
+  <data name="UpgradePreserveBox.Header" xml:space="preserve"><value>Preserved files (one pattern per line)</value></data>
+  <data name="UninstallSection.Text" xml:space="preserve"><value>Uninstall</value></data>
+  <data name="UninstallRemovesTitle.Text" xml:space="preserve"><value>Removed</value></data>
+  <data name="UninstallRemoves.Text" xml:space="preserve"><value>Every file setup installed, its shortcuts, empty folders it created and the Windows Settings entry.</value></data>
+  <data name="UninstallKeepsTitle.Text" xml:space="preserve"><value>Kept</value></data>
+  <data name="UninstallKeeps.Text" xml:space="preserve"><value>Preserved user data and any file the app created after installation (logs, settings, documents). Uninstall never deletes a folder wholesale.</value></data>
+  <data name="BuildPageTitle.Text" xml:space="preserve"><value>Build</value></data>
+  <data name="BuildPageDescription.Text" xml:space="preserve"><value>Creates a single Setup.exe that installs offline on Windows 10 1809 and later.</value></data>
+  <data name="BuildButtonText.Text" xml:space="preserve"><value>Build installer</value></data>
+  <data name="BuildCancelButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Build_Starting" xml:space="preserve"><value>Starting…</value></data>
+  <data name="Build_Done" xml:space="preserve"><value>Done</value></data>
+  <data name="Build_Cancelled" xml:space="preserve"><value>The build was cancelled.</value></data>
+  <data name="Build_SucceededTitle" xml:space="preserve"><value>Setup.exe is ready</value></data>
+  <data name="Build_SucceededMessage" xml:space="preserve"><value>{0} · {1} · {2} s</value></data>
+  <data name="Build_FailedTitle" xml:space="preserve"><value>The build failed</value></data>
+  <data name="Build_NotIncluded" xml:space="preserve"><value>Not included</value></data>
+  <data name="BuildOpenFolder.Content" xml:space="preserve"><value>Show in folder</value></data>
+  <data name="BuildCopyPath.Content" xml:space="preserve"><value>Copy path</value></data>
+  <data name="SizeStubLabel.Text" xml:space="preserve"><value>Installer engine</value></data>
+  <data name="SizeWinUILabel.Text" xml:space="preserve"><value>WinUI interface</value></data>
+  <data name="SizePayloadLabel.Text" xml:space="preserve"><value>App files</value></data>
+  <data name="SizeOverheadLabel.Text" xml:space="preserve"><value>Installer overhead</value></data>
+  <data name="SizeTotalLabel.Text" xml:space="preserve"><value>Setup.exe</value></data>
+  <data name="BuildOutputSection.Text" xml:space="preserve"><value>Output</value></data>
+  <data name="BuildOutputFolderTitle.Text" xml:space="preserve"><value>Output folder</value></data>
+  <data name="BuildOutputFolderBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Output folder</value></data>
+  <data name="BuildBrowse.Content" xml:space="preserve"><value>Browse…</value></data>
+  <data name="BuildArchTitle.Text" xml:space="preserve"><value>Architecture</value></data>
+  <data name="BuildArchCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Architecture</value></data>
+  <data name="BuildCompressionTitle.Text" xml:space="preserve"><value>Compression</value></data>
+  <data name="BuildCompressionDescription.Text" xml:space="preserve"><value>Smaller files take longer to build; installing is fast either way.</value></data>
+  <data name="BuildCompressionCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Compression</value></data>
+  <data name="CompressionFast.Content" xml:space="preserve"><value>Fast</value></data>
+  <data name="CompressionNormal.Content" xml:space="preserve"><value>Balanced</value></data>
+  <data name="CompressionMax.Content" xml:space="preserve"><value>Smallest</value></data>
+  <data name="BuildWinUITitle.Text" xml:space="preserve"><value>Include the WinUI interface</value></data>
+  <data name="BuildWinUIDescription.Text" xml:space="preserve"><value>About 330 KB. Without it the classic interface is always used.</value></data>
+  <data name="BuildWinUIToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Include the WinUI interface</value></data>
+  <data name="BuildSigningTitle.Text" xml:space="preserve"><value>Code signing</value></data>
+  <data name="BuildSigningDescription.Text" xml:space="preserve"><value>Sign Setup.exe with Authenticode (needs the Windows SDK&apos;s signtool).</value></data>
+  <data name="BuildSigningToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Code signing</value></data>
+  <data name="SignThumbprintBox.Header" xml:space="preserve"><value>Certificate thumbprint (certificate store)</value></data>
+  <data name="SignPfxBox.Header" xml:space="preserve"><value>Or a .pfx file</value></data>
+  <data name="SignPasswordEnvBox.Header" xml:space="preserve"><value>Environment variable with the .pfx password</value></data>
+  <data name="SignTimestampBox.Header" xml:space="preserve"><value>Timestamp server</value></data>
+  <data name="SignToolBox.Header" xml:space="preserve"><value>signtool.exe (optional)</value></data>
+  <data name="BuildLogSection.Text" xml:space="preserve"><value>Log</value></data>
+  <data name="BuildLogEmpty.Text" xml:space="preserve"><value>The build log appears here.</value></data>
+  <data name="HistoryPageTitle.Text" xml:space="preserve"><value>Build history</value></data>
+  <data name="HistoryPageDescription.Text" xml:space="preserve"><value>Every build of this app on this PC.</value></data>
+  <data name="HistoryEmpty.Text" xml:space="preserve"><value>No builds yet.</value></data>
+  <data name="HistoryInspect.Content" xml:space="preserve"><value>Inspect</value></data>
+  <data name="HistoryOpenFolder.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Show in folder</value></data>
+  <data name="HistoryOpenFolder.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Show in folder</value></data>
+  <data name="History_Succeeded" xml:space="preserve"><value>Succeeded</value></data>
+  <data name="History_Failed" xml:space="preserve"><value>Failed</value></data>
+  <data name="Inspect_Title" xml:space="preserve"><value>Package details</value></data>
+  <data name="Inspect_Size" xml:space="preserve"><value>Size: {0}</value></data>
+  <data name="Inspect_Stub" xml:space="preserve"><value>Installer engine: {0}</value></data>
+  <data name="Inspect_Frontend" xml:space="preserve"><value>WinUI interface: {0} files, {1}</value></data>
+  <data name="Inspect_Payload" xml:space="preserve"><value>App files: {0:N0} files, {1} → {2}</value></data>
+  <data name="Inspect_Signed" xml:space="preserve"><value>Signed: {0}</value></data>
+  <data name="Inspect_Ok" xml:space="preserve"><value>All checksums verified.</value></data>
+  <data name="Inspect_Problems" xml:space="preserve"><value>Problems:</value></data>
+  <data name="SettingsPageTitle.Text" xml:space="preserve"><value>Settings</value></data>
+  <data name="SettingsAppearanceSection.Text" xml:space="preserve"><value>Appearance</value></data>
+  <data name="SettingsThemeTitle.Text" xml:space="preserve"><value>Builder theme</value></data>
+  <data name="SettingsThemeDescription.Text" xml:space="preserve"><value>Changes only this app.</value></data>
+  <data name="SettingsThemeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Builder theme</value></data>
+  <data name="SettingsRuntimeSection.Text" xml:space="preserve"><value>Installer runtime</value></data>
+  <data name="SettingsRuntimeTitle.Text" xml:space="preserve"><value>Embedded into every Setup.exe</value></data>
+  <data name="Settings_RuntimeFull" xml:space="preserve"><value>engine and WinUI interface available</value></data>
+  <data name="Settings_RuntimeNoUi" xml:space="preserve"><value>engine available, WinUI interface missing</value></data>
+  <data name="Settings_RuntimeMissing" xml:space="preserve"><value>missing — build the native projects</value></data>
+  <data name="SettingsAboutSection.Text" xml:space="preserve"><value>About</value></data>
+  <data name="SettingsAboutTitle.Text" xml:space="preserve"><value>FluentSetup Builder</value></data>
+  <data name="SettingsOpenData.Content" xml:space="preserve"><value>Open data folder</value></data>
+  <data name="SettingsLicensesTitle.Text" xml:space="preserve"><value>Open-source components</value></data>
+  <data name="SettingsLicenses.Text" xml:space="preserve"><value>Zstandard (BSD), ZstdSharp (MIT), Windows App SDK (MIT), CommunityToolkit.Mvvm (MIT).</value></data>
+</root>

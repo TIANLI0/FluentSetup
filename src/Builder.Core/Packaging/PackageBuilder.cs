@@ -312,7 +312,11 @@ public sealed class PackageBuilder
         {
             if (workers > 1) zstd.SetParameter(ZSTD_cParameter.ZSTD_c_nbWorkers, workers);
             // The decoder caps the window at 2^27; never produce frames that need more.
-            if (longWindow) zstd.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, 27);
+            if (longWindow)
+            {
+                zstd.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, 27);
+                zstd.SetParameter(ZSTD_cParameter.ZSTD_c_enableLongDistanceMatching, 1);
+            }
             zstd.SetPledgedSrcSize((ulong)files.Sum(f => f.Size));
             var buffer = new byte[1 << 20];
             foreach (var f in files)

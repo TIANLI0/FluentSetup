@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="FluentSetup.Builder.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TitleBar x:Name="AppTitleBar" x:Uid="TitleBar" Subtitle="{x:Bind VM.WindowSubtitle, Mode=OneWay}"
+                  IsBackButtonVisible="False" IsPaneToggleButtonVisible="True" PaneToggleRequested="OnPaneToggleRequested">
+            <TitleBar.IconSource>
+                <ImageIconSource ImageSource="ms-appx:///Assets/AppIcon.png" />
+            </TitleBar.IconSource>
+            <TitleBar.RightHeader>
+                <StackPanel Orientation="Horizontal" Spacing="2" Margin="0,0,8,0">
+                    <Button x:Uid="TitleNewButton" Command="{x:Bind VM.NewProjectCommand}" Style="{StaticResource TitleBarButtonStyle}">
+                        <FontIcon Glyph="&#xE8A5;" FontSize="16" />
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="N" />
+                        </Button.KeyboardAccelerators>
+                    </Button>
+                    <Button x:Uid="TitleOpenButton" Command="{x:Bind VM.OpenProjectCommand}" Style="{StaticResource TitleBarButtonStyle}">
+                        <FontIcon Glyph="&#xE8E5;" FontSize="16" />
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="O" />
+                        </Button.KeyboardAccelerators>
+                    </Button>
+                    <Button x:Uid="TitleSaveButton" Command="{x:Bind VM.SaveCommand}" Visibility="{x:Bind VM.HasProject, Mode=OneWay}"
+                            Style="{StaticResource TitleBarButtonStyle}">
+                        <FontIcon Glyph="&#xE74E;" FontSize="16" />
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="S" />
+                        </Button.KeyboardAccelerators>
+                    </Button>
+                    <Button x:Uid="TitleSaveAsButton" Command="{x:Bind VM.SaveAsCommand}" Visibility="{x:Bind VM.HasProject, Mode=OneWay}"
+                            Style="{StaticResource TitleBarButtonStyle}">
+                        <FontIcon Glyph="&#xE792;" FontSize="16" />
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control,Shift" Key="S" />
+                        </Button.KeyboardAccelerators>
+                    </Button>
+                </StackPanel>
+            </TitleBar.RightHeader>
+        </TitleBar>
+
+        <NavigationView x:Name="Nav" Grid.Row="1" IsBackButtonVisible="Collapsed" IsPaneToggleButtonVisible="False"
+                        PaneDisplayMode="Left" OpenPaneLength="260" IsSettingsVisible="True"
+                        SelectionChanged="OnNavSelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem x:Uid="NavOverview" Tag="overview">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE80F;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Uid="NavApp" Tag="app" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE946;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Uid="NavFiles" Tag="files" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8B7;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Uid="NavInstall" Tag="install" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE896;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Uid="NavAppearance" Tag="appearance" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE790;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Uid="NavUpgrade" Tag="upgrade" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE895;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItemSeparator />
+                <NavigationViewItem x:Uid="NavBuild" Tag="build" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE7B8;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Uid="NavHistory" Tag="history" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE81C;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
+</Window>

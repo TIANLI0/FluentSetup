@@ -28,7 +28,6 @@ using json::Value;
 
 constexpr UINT WM_APP_PROGRESS = WM_APP + 1;
 constexpr UINT WM_APP_DONE = WM_APP + 2;
-constexpr UINT_PTR kPathTimer = 1;
 constexpr int kClientWidth = 720;   // DIP (same window size as the WinUI front end)
 constexpr int kClientHeight = 508;  // DIP
 constexpr int kMargin = 32;
@@ -38,15 +37,14 @@ enum Id : int {
     kStatus = 100, kTitle, kDescription, kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
     kLblSize, kSize, kInfo, kDirError,
     kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog,
-    kOHeading = 300, kOScopeLabel, kOScopeUser, kOScopeMachine, kOLocLabel, kOLoc, kOBrowse, kOSpace, kOError,
-    kOShortLabel, kODesktop, kOStartMenu, kOChoicesLabel,
+    kOScopeLabel = 300, kOScopeUser, kOScopeMachine, kODesktop, kOStartMenu,
     kLHeading = 400, kLSub, kLText, kLAccept,
     kLaunch = 500, kPStage, kPPercent, kPBar, kPDetail,
     kSecondary = 700,
     kChoiceBase = 900,  // package-defined option checkboxes: kChoiceBase + index
 };
 
-enum class Page { Welcome, Options, License, Progress, Result };
+enum class Page { Welcome, License, Progress, Result };
 enum class ResultKind { None, Success, Failed, Cancelled };
 
 class Window : public boot::IListener {
@@ -76,6 +74,7 @@ private:
     bool Visible(int id) const { return (::GetWindowLongW(Ctl(id), GWL_STYLE) & WS_VISIBLE) != 0; }
     bool Checked(int id) const { return Button_GetCheck(Ctl(id)) == BST_CHECKED; }
     int TextHeight(int id, int width) const;
+    int TextWidth(int id) const;
 
     void Create();
     void ApplyFonts();
@@ -104,10 +103,9 @@ private:
     void StartInstall();
     void OnProgressMsg(const install::Progress& p);
     void OnDoneMsg(const Value& m);
-    void CheckPathNow();
+    void CheckPath(const std::wstring& path);
     void OnScopeChanged();
     void Browse();
-    void UpdateSpace();
 
     Controller& c_;
     Value hello_;
@@ -120,7 +118,7 @@ private:
     ResultKind result_ = ResultKind::None;
     std::wstring scope_, installDir_, logPath_;
     uint64_t requiredBytes_ = 0, freeBytes_ = 0;
-    bool pathOk_ = true, pathDirty_ = false, userEditedPath_ = false, suppress_ = false;
+    bool pathOk_ = true, userPickedPath_ = false;
     bool cancellable_ = true, cancelRequested_ = false, retryable_ = true, canLaunch_ = false;
     std::wstring statusGlyph_;
     COLORREF statusColor_ = 0;
@@ -150,6 +148,18 @@ int Window::TextHeight(int id, int width) const {
     ::SelectObject(dc, old);
     ::ReleaseDC(h, dc);
     return r.bottom - r.top;
+}
+
+int Window::TextWidth(int id) const {
+    HWND h = Ctl(id);
+    const std::wstring text = GetText(id);
+    HDC dc = ::GetDC(h);
+    HGDIOBJ old = ::SelectObject(dc, reinterpret_cast<HFONT>(::SendMessageW(h, WM_GETFONT, 0, 0)));
+    RECT r{};
+    ::DrawTextW(dc, text.c_str(), -1, &r, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
+    ::SelectObject(dc, old);
+    ::ReleaseDC(h, dc);
+    return r.right - r.left;
 }
 
 void Window::Run() {
@@ -241,19 +251,12 @@ void Window::Create() {
     Make(WC_BUTTONW, kOpenFolder, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, kViewLog, BS_PUSHBUTTON | WS_TABSTOP);
 
-    Make(WC_STATICW, kOHeading, text);
+    // Install options sit inline on the first page; "Change" next to the location only picks a folder.
     Make(WC_STATICW, kOScopeLabel, text);
     Make(WC_BUTTONW, kOScopeUser, BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, kOScopeMachine, BS_AUTORADIOBUTTON);
-    Make(WC_STATICW, kOLocLabel, text);
-    Make(WC_EDITW, kOLoc, WS_TABSTOP | WS_GROUP | ES_AUTOHSCROLL, WS_EX_CLIENTEDGE);
-    Make(WC_BUTTONW, kOBrowse, BS_PUSHBUTTON | WS_TABSTOP);
-    Make(WC_STATICW, kOSpace, text);
-    Make(WC_STATICW, kOError, text);
-    Make(WC_STATICW, kOShortLabel, text);
     Make(WC_BUTTONW, kODesktop, BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, kOStartMenu, BS_AUTOCHECKBOX | WS_TABSTOP);
-    Make(WC_STATICW, kOChoicesLabel, text);
     for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) {
         Make(WC_BUTTONW, kChoiceBase + static_cast<int>(i), BS_AUTOCHECKBOX | WS_TABSTOP | (i == 0 ? WS_GROUP : 0));
     }
@@ -274,14 +277,9 @@ void Window::Create() {
     Make(WC_BUTTONW, IDCANCEL, BS_PUSHBUTTON | WS_TABSTOP);
 
     ::SendMessageW(Ctl(kPBar), PBM_SETRANGE32, 0, 1000);
-    ::SendMessageW(Ctl(kOLoc), EM_SETLIMITTEXT, 240, 0);
-    SetText(kOHeading, S("options.title"));
     SetText(kOScopeLabel, S("options.scope"));
-    SetText(kOScopeUser, S("options.scope.user"));
-    SetText(kOScopeMachine, S("options.scope.machine"));
-    SetText(kOLocLabel, S("options.location"));
-    SetText(kOBrowse, S("fallback.browse"));
-    SetText(kOShortLabel, S("options.shortcuts"));
+    SetText(kOScopeUser, S("options.scope.userShort"));
+    SetText(kOScopeMachine, S("options.scope.machineShort"));
     SetText(kODesktop, S("fallback.desktop"));
     SetText(kOStartMenu, S("fallback.startMenu"));
     SetText(kLHeading, S("license.title"));
@@ -301,14 +299,13 @@ void Window::ApplyFonts() {
     theme_.CreateFonts(dpi_);
     const auto set = [&](int id, HFONT f) { ::SendMessageW(Ctl(id), WM_SETFONT, reinterpret_cast<WPARAM>(f), FALSE); };
     set(kTitle, theme_.title);
-    for (int id : {kOHeading, kLHeading}) set(id, theme_.subtitle);
-    for (int id : {kOScopeLabel, kOLocLabel, kOShortLabel, kOChoicesLabel}) set(id, theme_.bodyStrong);
+    set(kLHeading, theme_.subtitle);
     for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) set(kChoiceBase + static_cast<int>(i), theme_.body);
-    for (int id : {kOSpace, kPDetail, kResultCode}) set(id, theme_.caption);
+    for (int id : {kPDetail, kResultCode}) set(id, theme_.caption);
     for (int id : std::initializer_list<int>{kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
                                              kLblSize, kSize, kDescription, kInfo, kDirError,
-                                             kResultBody, kResultDetail, kOpenFolder, kViewLog, kOScopeUser, kOScopeMachine, kOLoc,
-                                             kOBrowse, kOError, kODesktop, kOStartMenu, kLSub, kLText, kLAccept, kLaunch, kPStage,
+                                             kResultBody, kResultDetail, kOpenFolder, kViewLog, kOScopeLabel, kOScopeUser,
+                                             kOScopeMachine, kODesktop, kOStartMenu, kLSub, kLText, kLAccept, kLaunch, kPStage,
                                              kPPercent, kSecondary, static_cast<int>(IDOK), static_cast<int>(IDCANCEL)}) {
         set(id, theme_.body);
     }
@@ -359,15 +356,10 @@ void Window::ApplyHello() {
     freeBytes_ = hello_["freeBytes"].asUint();
     pathOk_ = opts["dirOk"].asBool(true);
     SetText(kDirError, opts["dirMessage"].asWide());
-    SetText(kOError, opts["dirMessage"].asWide());
-    suppress_ = true;
-    SetText(kOLoc, installDir_);
-    suppress_ = false;
     Button_SetCheck(Ctl(scope_ == L"machine" ? kOScopeMachine : kOScopeUser), BST_CHECKED);
     Button_SetCheck(Ctl(kODesktop), opts["desktopShortcut"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(Ctl(kOStartMenu), opts["startMenuShortcut"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(Ctl(kLaunch), opts["launchAfter"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
-    SetText(kOChoicesLabel, S("options.choices"));
     const auto& choices = opts["choices"].array();
     for (size_t i = 0; i < choices.size(); ++i) {
         SetText(kChoiceBase + static_cast<int>(i), choices[i]["label"].asWide());
@@ -383,7 +375,7 @@ void Window::ApplyHello() {
         crlf.push_back(license[i]);
     }
     SetText(kLText, crlf);
-    UpdateSpace();
+    UpdateInfoLines();
 }
 
 void Window::UpdateInfoLines() {
@@ -400,16 +392,11 @@ void Window::UpdateInfoLines() {
     SetText(kLocation, installDir_);
     SetText(kSize, IsUninstall() || requiredBytes_ == 0 || page_ == Page::Result ? std::wstring() : FormatBytes(requiredBytes_));
 }
-void Window::UpdateSpace() {
-    SetText(kOSpace, freeBytes_ ? F("options.space", {FormatBytes(requiredBytes_), FormatBytes(freeBytes_)})
-                                : F("welcome.space", {FormatBytes(requiredBytes_)}));
-    UpdateInfoLines();
-}
 
 bool Window::HasOptions() const {
     if (IsUninstall()) return false;
     const Value& o = hello_["options"];
-    return o["canChangeDir"].asBool() || o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
+    return o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
            o["startMenuShortcut"]["visible"].asBool() || !o["choices"].array().empty();
 }
 
@@ -425,7 +412,7 @@ void Window::ShowPage(Page p) {
     page_ = p;
     const Value& o = hello_["options"];
     const bool summary = p == Page::Welcome || p == Page::Progress || p == Page::Result;
-    const bool welcome = p == Page::Welcome, options = p == Page::Options, license = p == Page::License, result = p == Page::Result;
+    const bool welcome = p == Page::Welcome, license = p == Page::License, result = p == Page::Result;
 
     if (welcome) {
         const std::string relation = hello_["existing"]["relation"].asString();
@@ -443,7 +430,8 @@ void Window::ShowPage(Page p) {
         Show(label, has);
         Show(value, has);
     }
-    Show(kChange, welcome && HasOptions() && !hello_["existing"]["blocked"].asBool());
+    const bool editable = welcome && !IsUninstall() && !hello_["existing"]["blocked"].asBool();
+    Show(kChange, editable && o["canChangeDir"].asBool());
     Show(kDescription, welcome && ::GetWindowTextLengthW(Ctl(kDescription)) > 0);
     Show(kInfo, welcome && ::GetWindowTextLengthW(Ctl(kInfo)) > 0);
     Show(kDirError, welcome && !pathOk_);
@@ -451,43 +439,27 @@ void Window::ShowPage(Page p) {
         for (int id : {kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog}) Show(id, false);
     }
 
-    Show(kOHeading, options);
-    for (int id : {kOScopeLabel, kOScopeUser, kOScopeMachine}) Show(id, options && o["canChangeScope"].asBool());
-    for (int id : {kOLocLabel, kOLoc, kOBrowse, kOSpace}) Show(id, options && o["canChangeDir"].asBool());
-    Show(kOError, options && !pathOk_);
-    const bool desktop = o["desktopShortcut"]["visible"].asBool(), start = o["startMenuShortcut"]["visible"].asBool();
-    Show(kOShortLabel, options && (desktop || start));
-    Show(kODesktop, options && desktop);
-    Show(kOStartMenu, options && start);
-    const size_t choiceCount = o["choices"].array().size();
-    Show(kOChoicesLabel, options && choiceCount > 0);
-    for (size_t i = 0; i < choiceCount; ++i) Show(kChoiceBase + static_cast<int>(i), options);
+    for (int id : {kOScopeLabel, kOScopeUser, kOScopeMachine}) Show(id, editable && o["canChangeScope"].asBool());
+    Show(kODesktop, editable && o["desktopShortcut"]["visible"].asBool());
+    Show(kOStartMenu, editable && o["startMenuShortcut"]["visible"].asBool());
+    for (size_t i = 0; i < o["choices"].array().size(); ++i) Show(kChoiceBase + static_cast<int>(i), editable);
     for (int id : {kLHeading, kLSub, kLText, kLAccept}) Show(id, license);
 
     UpdateFooter();
     ::InvalidateRect(hwnd_, nullptr, TRUE);
-    HWND focus = Visible(IDOK) && ::IsWindowEnabled(Ctl(IDOK)) ? Ctl(IDOK) : Ctl(IDCANCEL);
-    if (options && o["canChangeDir"].asBool()) focus = Ctl(kOLoc);
-    ::SetFocus(focus);
+    ::SetFocus(Visible(IDOK) && ::IsWindowEnabled(Ctl(IDOK)) ? Ctl(IDOK) : Ctl(IDCANCEL));
 }
 
 void Window::UpdateFooter() {
     const bool blocked = hello_["existing"]["blocked"].asBool();
-    const bool beforeStart = page_ == Page::Welcome || page_ == Page::Options || page_ == Page::License;
+    const bool beforeStart = page_ == Page::Welcome || page_ == Page::License;
     bool secondary = false, primary = true, primaryEnabled = true, shield = false;
     std::wstring secondaryText, primaryText, cancelText = S("button.cancel");
     switch (page_) {
-        case Page::Welcome:  // options are reached through the "Change" button next to the location
+        case Page::Welcome:
             primaryText = ShowsLicense() ? S("button.next") : PrimaryVerb();
             shield = !ShowsLicense() && NeedsElevation();
-            primaryEnabled = !blocked && pathOk_ && !pathDirty_;
-            break;
-        case Page::Options:
-            secondary = true;
-            secondaryText = S("button.back");
-            primaryText = ShowsLicense() ? S("button.next") : PrimaryVerb();
-            shield = !ShowsLicense() && NeedsElevation();
-            primaryEnabled = pathOk_ && !pathDirty_;
+            primaryEnabled = !blocked && pathOk_;
             break;
         case Page::License:
             secondary = true;
@@ -570,18 +542,42 @@ void Window::Layout() {
                 if (!Visible(value)) continue;
                 const int h = TextHeight(label, labelW + Px(4));
                 place(label, left, y, labelW + Px(4), h);
-                const int valueW = textRight - valueX;
-                place(value, valueX, y, valueW, h);  // the location static uses SS_PATHELLIPSIS: C:\Users\...\App
-                y += h + Px(8);
+                int valueW = textRight - valueX;
                 if (value == kLocation && Visible(kChange)) {
+                    // "Change" stays on the path's line: the path gives way (SS_PATHELLIPSIS: C:\Users\...\App).
                     SIZE ideal{};
                     Button_GetIdealSize(Ctl(kChange), &ideal);
-                    const int bw = std::max(Px(72), static_cast<int>(ideal.cx) + Px(16));
-                    place(kChange, valueX, y - Px(2), bw, Px(28));
-                    y += Px(28) + Px(8);
+                    const int bw = std::max(Px(64), static_cast<int>(ideal.cx) + Px(12)), bh = Px(26);
+                    const int avail = right - valueX - bw - Px(8);
+                    valueW = std::min(avail, TextWidth(kLocation) + Px(2));
+                    place(kChange, valueX + valueW + Px(8), y + (h - bh) / 2, bw, bh);
                 }
+                place(value, valueX, y, valueW, h);
+                y += h + Px(8);
             }
-            y += Px(4);
+            // Install options, inline (no separate page).
+            if (Visible(kOScopeUser)) {
+                y += Px(6);
+                const int lw = TextWidth(kOScopeLabel), rowH = Px(24);
+                place(kOScopeLabel, left, y + (rowH - TextHeight(kOScopeLabel, lw + Px(4))) / 2, lw + Px(4), TextHeight(kOScopeLabel, lw + Px(4)));
+                int rx = left + std::max(lw + Px(16), valueX - left);
+                for (int id : {static_cast<int>(kOScopeUser), static_cast<int>(kOScopeMachine)}) {
+                    const int w = TextWidth(id) + Px(32);
+                    place(id, rx, y, w, rowH);
+                    rx += w + Px(16);
+                }
+                y += rowH + Px(4);
+            }
+            if (Visible(kODesktop) || Visible(kOStartMenu) || Visible(kChoiceBase)) y += Px(6);
+            const auto checkRow = [&](int id) {
+                if (!Visible(id)) return;
+                place(id, left, y, std::min(right - left, TextWidth(id) + Px(32)), Px(24));
+                y += Px(24) + Px(2);
+            };
+            checkRow(kODesktop);
+            checkRow(kOStartMenu);
+            for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) checkRow(kChoiceBase + static_cast<int>(i));
+            y += Px(8);
             if (Visible(kInfo)) {
                 const int pad = Px(14);
                 const int width = right - left;
@@ -595,30 +591,6 @@ void Window::Layout() {
             stack(kResultCode, Px(8), right - left);
             stack(kResultDetail, Px(8), right - left, Px(56));
 
-            break;
-        }
-        case Page::Options: {
-            const int width = right - left;
-            stack(kOHeading, Px(16), width);
-            stack(kOScopeLabel, Px(6), width);
-            stack(kOScopeUser, Px(4), width, Px(22));
-            stack(kOScopeMachine, Px(16), width, Px(22));
-            stack(kOLocLabel, Px(6), width);
-            if (Visible(kOLoc)) {
-                const int browseW = Px(104), h = Px(32);
-                place(kOLoc, left, y, width - browseW - Px(8), h);
-                place(kOBrowse, right - browseW, y, browseW, h);
-                y += h + Px(6);
-            }
-            stack(kOSpace, Px(6), width);
-            stack(kOError, Px(10), width);
-            if (Visible(kOShortLabel)) y += Px(6);
-            stack(kOShortLabel, Px(6), width);
-            stack(kODesktop, Px(4), width, Px(22));
-            stack(kOStartMenu, Px(10), width, Px(22));
-            if (Visible(kOChoicesLabel)) y += Px(6);
-            stack(kOChoicesLabel, Px(6), width);
-            for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) stack(kChoiceBase + static_cast<int>(i), Px(4), width, Px(22));
             break;
         }
         case Page::License: {
@@ -675,7 +647,7 @@ void Window::Paint(HDC dc) {
     RECT client{};
     ::GetClientRect(hwnd_, &client);
     ::FillRect(dc, &client, theme_.baseBrush());
-    if (iconLarge_ && page_ != Page::Options && page_ != Page::License) {
+    if (iconLarge_ && page_ != Page::License) {
         ::DrawIconEx(dc, client.right - Px(kMargin) - Px(kIconSize), Px(20), iconLarge_, Px(kIconSize), Px(kIconSize), 0, nullptr, DI_NORMAL);
     }
     if (page_ == Page::Welcome && Visible(kInfo)) {
@@ -754,7 +726,6 @@ void Window::DrawStatus(const DRAWITEMSTRUCT* di) {
 void Window::OnPrimary() {
     switch (page_) {
         case Page::Welcome:
-        case Page::Options:
             if (ShowsLicense()) ShowPage(Page::License);
             else StartInstall();
             break;
@@ -772,9 +743,7 @@ void Window::OnPrimary() {
 }
 
 void Window::OnSecondary() {
-    if (page_ == Page::Welcome) ShowPage(Page::Options);
-    else if (page_ == Page::License) ShowPage(HasOptions() ? Page::Options : Page::Welcome);
-    else ShowPage(Page::Welcome);
+    ShowPage(Page::Welcome);  // "Back" from the license
 }
 
 void Window::Finish(bool launch) {
@@ -829,8 +798,8 @@ void Window::StartInstall() {
         v.set("choices", choices);
         if (!c_.SanitizeOptions(v, o)) {
             pathOk_ = false;
-            SetText(kOError, S("error.InvalidArguments"));
-            ShowPage(Page::Options);
+            SetText(kDirError, S("error.InvalidArguments"));
+            ShowPage(Page::Welcome);
             return;
         }
     }
@@ -923,32 +892,25 @@ void Window::OnDoneMsg(const Value& m) {
     ::InvalidateRect(Ctl(kStatus), nullptr, TRUE);
 }
 
-void Window::CheckPathNow() {
-    const std::wstring text = GetText(kOLoc);
-    const Value r = c_.CheckPath(text, scope_ == L"machine" ? install::Scope::Machine : install::Scope::User);
-    pathDirty_ = false;
+void Window::CheckPath(const std::wstring& path) {
+    const Value r = c_.CheckPath(path, scope_ == L"machine" ? install::Scope::Machine : install::Scope::User);
     pathOk_ = r["ok"].asBool();
-    installDir_ = r["normalized"].asWide().empty() ? text : r["normalized"].asWide();
+    installDir_ = r["normalized"].asWide().empty() ? path : r["normalized"].asWide();
     requiredBytes_ = r["requiredBytes"].asUint(requiredBytes_);
     freeBytes_ = r["freeBytes"].asUint();
-    SetText(kOError, r["message"].asWide());
     SetText(kDirError, r["message"].asWide());
-    Show(kOError, page_ == Page::Options && !pathOk_);
-    UpdateSpace();
+    UpdateInfoLines();
+    Show(kDirError, page_ == Page::Welcome && !pathOk_);
     UpdateFooter();
-    ::InvalidateRect(hwnd_, nullptr, FALSE);
+    ::InvalidateRect(hwnd_, nullptr, TRUE);
 }
 
 void Window::OnScopeChanged() {
     const std::wstring scope = Checked(kOScopeMachine) ? L"machine" : L"user";
     if (scope == scope_) return;
     scope_ = scope;
-    if (!userEditedPath_) {
-        suppress_ = true;
-        SetText(kOLoc, hello_["options"][scope == L"machine" ? "machineDir" : "userDir"].asWide());
-        suppress_ = false;
-    }
-    CheckPathNow();
+    // Follow the scope's default folder unless the user picked one explicitly.
+    CheckPath(userPickedPath_ ? installDir_ : hello_["options"][scope == L"machine" ? "machineDir" : "userDir"].asWide());
 }
 
 void Window::Browse() {
@@ -968,8 +930,9 @@ void Window::Browse() {
             if (dir.back() != L'\\') dir.push_back(L'\\');
             dir += leaf;
         }
-        SetText(kOLoc, dir);  // EN_CHANGE -> validation
         ::CoTaskMemFree(chosen);
+        userPickedPath_ = true;
+        CheckPath(dir);
     }
     if (item) item->Release();
     dialog->Release();
@@ -1006,9 +969,9 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             HBRUSH brush = theme_.baseBrush();
             COLORREF bg = c.base, fg = c.text;
             if (id == kInfo) brush = theme_.infoBrush(), bg = c.infoFill;
-            if (id == kOLoc || id == kLText || id == kResultDetail) brush = theme_.editBrush(), bg = c.editFill;
-            if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kDescription || id == kOSpace || id == kPDetail || id == kPPercent || id == kResultCode) fg = c.textSecondary;
-            if (id == kOError || id == kDirError) fg = c.critical;
+            if (id == kLText || id == kResultDetail) brush = theme_.editBrush(), bg = c.editFill;
+            if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kOScopeLabel || id == kDescription || id == kPDetail || id == kPPercent || id == kResultCode) fg = c.textSecondary;
+            if (id == kDirError) fg = c.critical;
             ::SetTextColor(dc, fg);
             ::SetBkColor(dc, bg);
             return reinterpret_cast<LRESULT>(brush);
@@ -1028,28 +991,17 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             const int id = LOWORD(w), code = HIWORD(w);
             if (id == IDOK && Visible(IDOK) && ::IsWindowEnabled(Ctl(IDOK))) OnPrimary();
             else if (id == IDCANCEL) RequestClose();
-            else if (id == kSecondary || id == kChange) OnSecondary();
-            else if (id == kOBrowse) Browse();
+            else if (id == kSecondary) OnSecondary();
+            else if (id == kChange) Browse();
             else if ((id == kOScopeUser || id == kOScopeMachine) && code == BN_CLICKED) OnScopeChanged();
             else if (id == kLAccept && code == BN_CLICKED) UpdateFooter();
-            else if (id == kOLoc && code == EN_CHANGE && !suppress_) {
-                userEditedPath_ = true;
-                pathDirty_ = true;
-                UpdateFooter();
-                ::SetTimer(hwnd_, kPathTimer, 350, nullptr);
-            } else if (id == kViewLog && !logPath_.empty()) {
+            else if (id == kViewLog && !logPath_.empty()) {
                 ::ShellExecuteW(hwnd_, L"open", L"notepad.exe", (L"\"" + logPath_ + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
             } else if (id == kOpenFolder && !installDir_.empty()) {
                 ::ShellExecuteW(hwnd_, L"open", installDir_.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             }
             return 0;
         }
-        case WM_TIMER:
-            if (w == kPathTimer) {
-                ::KillTimer(hwnd_, kPathTimer);
-                CheckPathNow();
-            }
-            return 0;
         case WM_APP_PROGRESS: {
             std::unique_ptr<install::Progress> p(reinterpret_cast<install::Progress*>(l));
             if (page_ == Page::Progress || c_.Running()) OnProgressMsg(*p);

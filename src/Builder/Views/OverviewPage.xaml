@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.OverviewPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:FluentSetup.Builder.ViewModels"
+    Background="Transparent">
+
+    <Grid>
+        <!-- Empty state: no project open. -->
+        <ScrollViewer Visibility="{x:Bind VM.NoProject, Mode=OneWay}">
+            <StackPanel MaxWidth="560" Padding="36,56,36,36" Spacing="12" HorizontalAlignment="Center">
+                <Image Source="ms-appx:///Assets/AppIcon.png" Width="64" Height="64" HorizontalAlignment="Left" Margin="0,0,0,8"
+                       AutomationProperties.AccessibilityView="Raw" />
+                <TextBlock x:Uid="EmptyTitle" Style="{StaticResource TitleTextBlockStyle}" TextWrapping="Wrap" AutomationProperties.HeadingLevel="Level1" />
+                <TextBlock x:Uid="EmptyBody" Style="{StaticResource PageDescriptionStyle}" />
+                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                    <Button x:Uid="EmptyNewButton" Style="{StaticResource AccentButtonStyle}" Command="{x:Bind VM.NewProjectCommand}" />
+                    <Button x:Uid="EmptyOpenButton" Command="{x:Bind VM.OpenProjectCommand}" />
+                </StackPanel>
+                <TextBlock x:Uid="EmptyRecent" Style="{StaticResource SectionHeaderStyle}" />
+                <ListView ItemsSource="{x:Bind VM.RecentProjects}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnRecentClick"
+                          Margin="-12,0,0,0">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <StackPanel Orientation="Horizontal" Spacing="12" Padding="0,8">
+                                <FontIcon Glyph="&#xE8A5;" FontSize="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Bind}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                <TextBlock x:Uid="EmptyNoRecent" Style="{StaticResource RowDescriptionStyle}" Visibility="{x:Bind NoRecent}" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Project overview. -->
+        <ScrollViewer Visibility="{x:Bind VM.HasProject, Mode=OneWay}">
+            <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+                <Grid Margin="0,24,0,8" ColumnSpacing="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Image Source="{x:Bind VM.IconImage, Mode=OneWay}" Width="64" Height="64" VerticalAlignment="Center"
+                           AutomationProperties.AccessibilityView="Raw" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{x:Bind VM.DisplayName, Mode=OneWay}" Style="{StaticResource TitleTextBlockStyle}" TextTrimming="CharacterEllipsis"
+                                   AutomationProperties.HeadingLevel="Level1" />
+                        <TextBlock Text="{x:Bind VM.DisplayMeta, Mode=OneWay}" Style="{StaticResource BodyTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                            <FontIcon Glyph="{x:Bind VM.StatusGlyph, Mode=OneWay}" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Text="{x:Bind VM.StatusText, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button x:Uid="OverviewPreviewButton" Command="{x:Bind VM.PreviewCommand}" CommandParameter="install" />
+                        <Button x:Uid="OverviewBuildRun" Style="{StaticResource AccentButtonStyle}" Click="OnBuildClick" IsEnabled="{x:Bind VM.CanBuild, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE7B8;" FontSize="16" />
+                                <TextBlock x:Uid="OverviewBuildButton" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock x:Uid="OverviewSummary" Style="{StaticResource SectionHeaderStyle}" />
+                <StackPanel Spacing="4">
+                    <Button Style="{StaticResource RowButtonStyle}" Click="OnRowClick" Tag="files">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE8B7;" Style="{StaticResource RowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Uid="OverviewFiles" Style="{StaticResource RowTitleStyle}" />
+                                <TextBlock Text="{x:Bind VM.FilesSummary, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                            </StackPanel>
+                            <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="12" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                    <Button Style="{StaticResource RowButtonStyle}" Click="OnRowClick" Tag="install">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE896;" Style="{StaticResource RowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Uid="OverviewInstall" Style="{StaticResource RowTitleStyle}" />
+                                <TextBlock Text="{x:Bind VM.InstallSummary, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                <TextBlock Text="{x:Bind VM.ShortcutSummary, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                            </StackPanel>
+                            <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="12" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                    <Button Style="{StaticResource RowButtonStyle}" Click="OnRowClick" Tag="appearance">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE790;" Style="{StaticResource RowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Uid="OverviewAppearance" Style="{StaticResource RowTitleStyle}" />
+                                <TextBlock Text="{x:Bind VM.AppearanceSummary, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                            </StackPanel>
+                            <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="12" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                    <Button Style="{StaticResource RowButtonStyle}" Click="OnRowClick" Tag="build">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE7B8;" Style="{StaticResource RowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Uid="OverviewOutput" Style="{StaticResource RowTitleStyle}" />
+                                <TextBlock Text="{x:Bind VM.OutputSummary, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                                <TextBlock Text="{x:Bind VM.LastBuildSummary, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                            </StackPanel>
+                            <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="12" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                </StackPanel>
+
+                <TextBlock x:Uid="OverviewProblems" Style="{StaticResource SectionHeaderStyle}" />
+                <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoProblems, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE73E;" Style="{StaticResource RowIconStyle}" Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
+                        <TextBlock x:Uid="OverviewNoProblems" Style="{StaticResource RowTitleStyle}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <ItemsRepeater ItemsSource="{x:Bind VM.Problems}" Visibility="{x:Bind VM.HasProblems, Mode=OneWay}">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="4" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ProblemRow">
+                            <Button Style="{StaticResource RowButtonStyle}" Click="OnProblemClick" Tag="{x:Bind Page}" MinHeight="52">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="{x:Bind Glyph}" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Message}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind Code}" Style="{StaticResource RowDescriptionStyle}" />
+                                    </StackPanel>
+                                    <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="12" VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+
+                <TextBlock x:Uid="OverviewRecentBuilds" Style="{StaticResource SectionHeaderStyle}" />
+                <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoHistory, Mode=OneWay}">
+                    <TextBlock x:Uid="OverviewNoBuilds" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+                </Border>
+                <ItemsRepeater ItemsSource="{x:Bind RecentBuilds}" Visibility="{x:Bind VM.HasHistory, Mode=OneWay}">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="4" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:HistoryRow">
+                            <Border Style="{StaticResource RowCardStyle}" MinHeight="52">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="{x:Bind Glyph}" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource RowTitleStyle}">
+                                            <Run Text="{x:Bind Version}" /><Run Text="  ·  " /><Run Text="{x:Bind Result}" />
+                                        </TextBlock>
+                                        <TextBlock Text="{x:Bind Detail}" Style="{StaticResource RowDescriptionStyle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                        <TextBlock Text="{x:Bind Size}" Style="{StaticResource BodyTextBlockStyle}" HorizontalAlignment="Right" />
+                                        <TextBlock Text="{x:Bind When}" Style="{StaticResource RowDescriptionStyle}" HorizontalAlignment="Right" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

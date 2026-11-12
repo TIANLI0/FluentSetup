@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.AppInfoPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentSetup.Builder.Views"
+    Background="Transparent">
+    <ScrollViewer>
+        <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+            <TextBlock x:Uid="AppPageTitle" Style="{StaticResource PageTitleStyle}" AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock x:Uid="AppPageDescription" Style="{StaticResource PageDescriptionStyle}" />
+
+            <TextBlock x:Uid="AppIdentity" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <Grid ColumnSpacing="24" RowSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel>
+                        <TextBox x:Uid="AppNameBox" Text="{x:Bind VM.AppName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="{x:Bind VM.Errors.AppName, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppName), Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBox x:Uid="AppIdBox" Text="{x:Bind VM.AppId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.AppId, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppId), Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1">
+                        <TextBox x:Uid="AppPublisherBox" Text="{x:Bind VM.Publisher, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="{x:Bind VM.Errors.AppPublisher, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppPublisher), Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1">
+                        <TextBox x:Uid="AppVersionBox" Text="{x:Bind VM.Version, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.AppVersion, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppVersion), Mode=OneWay}" />
+                    </StackPanel>
+                    <TextBox x:Uid="AppDescriptionBox" Grid.Row="2" Grid.ColumnSpan="2" Text="{x:Bind VM.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" />
+                    <StackPanel Grid.Row="3" Grid.ColumnSpan="2">
+                        <TextBox x:Uid="AppWebsiteBox" Text="{x:Bind VM.Website, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.AppWebsite, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppWebsite), Mode=OneWay}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <TextBlock x:Uid="AppProgram" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <Image Source="{x:Bind VM.IconImage, Mode=OneWay}" Width="28" Height="28" VerticalAlignment="Center" Margin="0,0,0,0"
+                               AutomationProperties.AccessibilityView="Raw" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppIconTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock Text="{x:Bind IconDescription}" Style="{StaticResource RowDescriptionStyle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                            <TextBlock Text="{x:Bind VM.Errors.AppIcon, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppIcon), Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button x:Uid="AppIconClear" Click="OnClearIcon" />
+                            <Button x:Uid="AppIconBrowse" Command="{x:Bind VM.BrowseIconCommand}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE756;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppMainExeTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="AppMainExeDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            <TextBlock Text="{x:Bind VM.Errors.AppMainExecutable, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppMainExecutable), Mode=OneWay}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" ItemsSource="{x:Bind VM.ExecutableChoices}" MinWidth="260" VerticalAlignment="Center"
+                                  SelectedItem="{x:Bind VM.MainExecutableItem, Mode=TwoWay}" x:Uid="AppMainExeCombo" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE8A5;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppLicenseTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock Text="{x:Bind LicenseDescription}" Style="{StaticResource RowDescriptionStyle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                            <TextBlock Text="{x:Bind VM.Errors.UiLicense, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UiLicense), Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button x:Uid="AppLicenseClear" Click="OnClearLicense" />
+                            <Button x:Uid="AppLicenseBrowse" Command="{x:Bind VM.BrowseLicenseCommand}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xF2B7;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppLanguageTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="AppLanguageDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.LanguageIndex, Mode=TwoWay}" x:Uid="AppLanguageCombo">
+                            <ComboBoxItem x:Uid="LanguageAuto" />
+                            <ComboBoxItem Content="English (en-US)" />
+                            <ComboBoxItem Content="简体中文 (zh-CN)" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <TextBlock x:Uid="AppOutputSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <StackPanel>
+                    <TextBox x:Uid="AppOutputNameBox" Text="{x:Bind VM.OutputFileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                    <TextBlock Text="{x:Bind VM.Errors.OutputFileName, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.OutputFileName), Mode=OneWay}" />
+                    <TextBlock Text="{x:Bind VM.OutputSummary, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

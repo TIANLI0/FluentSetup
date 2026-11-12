@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.InstallPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentSetup.Builder.Views"
+    Background="Transparent">
+    <ScrollViewer>
+        <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+            <TextBlock x:Uid="InstallPageTitle" Style="{StaticResource PageTitleStyle}" AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock x:Uid="InstallPageDescription" Style="{StaticResource PageDescriptionStyle}" />
+
+            <TextBlock x:Uid="InstallScopeSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE716;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="InstallScopeTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="InstallScopeDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.ScopeIndex, Mode=TwoWay}" x:Uid="InstallScopeCombo">
+                            <ComboBoxItem x:Uid="ScopeUser" />
+                            <ComboBoxItem x:Uid="ScopeMachine" />
+                            <ComboBoxItem x:Uid="ScopeEither" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind IsEither}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE8F4;" Style="{StaticResource RowIconStyle}" />
+                        <TextBlock Grid.Column="1" x:Uid="InstallDefaultScopeTitle" Style="{StaticResource RowTitleStyle}" VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.DefaultScopeIndex, Mode=TwoWay}" x:Uid="InstallDefaultScopeCombo">
+                            <ComboBoxItem x:Uid="ScopeUser" />
+                            <ComboBoxItem x:Uid="ScopeMachine" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <TextBlock x:Uid="InstallFolderSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <StackPanel Spacing="16">
+                    <StackPanel Visibility="{x:Bind ShowUserDir}">
+                        <TextBox x:Uid="InstallUserDirBox" Text="{x:Bind VM.UserDir, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.InstallUserDir, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallUserDir), Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Visibility="{x:Bind ShowMachineDir}">
+                        <TextBox x:Uid="InstallMachineDirBox" Text="{x:Bind VM.MachineDir, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.InstallMachineDir, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallMachineDir), Mode=OneWay}" />
+                    </StackPanel>
+                    <TextBlock x:Uid="InstallTokensHelp" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />
+                    <ToggleSwitch x:Uid="InstallAllowCustomDir" IsOn="{x:Bind VM.AllowCustomDir, Mode=TwoWay}" />
+                </StackPanel>
+            </Border>
+
+            <TextBlock x:Uid="InstallShortcutsSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE8FC;" Style="{StaticResource RowIconStyle}" />
+                        <TextBlock Grid.Column="1" x:Uid="InstallStartMenuTitle" Style="{StaticResource RowTitleStyle}" VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.StartMenuShortcutIndex, Mode=TwoWay}" x:Uid="InstallStartMenuCombo">
+                            <ComboBoxItem x:Uid="OfferOff" /><ComboBoxItem x:Uid="OfferOn" /><ComboBoxItem x:Uid="OfferOptionalOff" /><ComboBoxItem x:Uid="OfferOptionalOn" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE7F4;" Style="{StaticResource RowIconStyle}" />
+                        <TextBlock Grid.Column="1" x:Uid="InstallDesktopTitle" Style="{StaticResource RowTitleStyle}" VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.DesktopShortcutIndex, Mode=TwoWay}" x:Uid="InstallDesktopCombo">
+                            <ComboBoxItem x:Uid="OfferOff" /><ComboBoxItem x:Uid="OfferOn" /><ComboBoxItem x:Uid="OfferOptionalOff" /><ComboBoxItem x:Uid="OfferOptionalOn" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE768;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="InstallLaunchTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="InstallLaunchDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.LaunchAfterIndex, Mode=TwoWay}" x:Uid="InstallLaunchCombo">
+                            <ComboBoxItem x:Uid="LaunchOff" /><ComboBoxItem x:Uid="LaunchOnDisabled" IsEnabled="False" /><ComboBoxItem x:Uid="OfferOptionalOff" /><ComboBoxItem x:Uid="OfferOptionalOn" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <TextBlock x:Uid="InstallRequirementsSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE770;" Style="{StaticResource RowIconStyle}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Uid="InstallMinBuildTitle" Style="{StaticResource RowTitleStyle}" />
+                        <TextBlock x:Uid="InstallMinBuildDescription" Style="{StaticResource RowDescriptionStyle}" />
+                    </StackPanel>
+                    <NumberBox Grid.Column="2" Value="{x:Bind VM.MinWindowsBuild, Mode=TwoWay}" Minimum="0" Maximum="99999" SpinButtonPlacementMode="Compact"
+                               MinWidth="160" VerticalAlignment="Center" x:Uid="InstallMinBuildBox" />
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

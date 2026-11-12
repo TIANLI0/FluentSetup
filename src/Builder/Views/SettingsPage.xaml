@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="Transparent">
+    <ScrollViewer>
+        <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+            <TextBlock x:Uid="SettingsPageTitle" Style="{StaticResource PageTitleStyle}" AutomationProperties.HeadingLevel="Level1" />
+
+            <TextBlock x:Uid="SettingsAppearanceSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE793;" Style="{StaticResource RowIconStyle}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Uid="SettingsThemeTitle" Style="{StaticResource RowTitleStyle}" />
+                        <TextBlock x:Uid="SettingsThemeDescription" Style="{StaticResource RowDescriptionStyle}" />
+                    </StackPanel>
+                    <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.BuilderThemeIndex, Mode=TwoWay}" x:Uid="SettingsThemeCombo">
+                        <ComboBoxItem x:Uid="ThemeSystem" /><ComboBoxItem x:Uid="ThemeLight" /><ComboBoxItem x:Uid="ThemeDark" />
+                    </ComboBox>
+                </Grid>
+            </Border>
+
+            <TextBlock x:Uid="SettingsRuntimeSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE7B8;" Style="{StaticResource RowIconStyle}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Uid="SettingsRuntimeTitle" Style="{StaticResource RowTitleStyle}" />
+                        <TextBlock Text="{x:Bind VM.RuntimeStatus}" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <TextBlock x:Uid="SettingsAboutSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <Image Source="ms-appx:///Assets/AppIcon.png" Width="24" Height="24" Margin="2,0,2,0" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="SettingsAboutTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock Text="{x:Bind AboutText}" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <Button Grid.Column="2" x:Uid="SettingsOpenData" Command="{x:Bind VM.OpenSettingsFolderCommand}" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <StackPanel VerticalAlignment="Center" Margin="48,0,0,0">
+                        <TextBlock x:Uid="SettingsLicensesTitle" Style="{StaticResource RowTitleStyle}" />
+                        <TextBlock x:Uid="SettingsLicenses" Style="{StaticResource RowDescriptionStyle}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

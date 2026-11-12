@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.AppearancePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentSetup.Builder.Views"
+    Background="Transparent">
+    <ScrollViewer>
+        <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+            <TextBlock x:Uid="AppearancePageTitle" Style="{StaticResource PageTitleStyle}" AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock x:Uid="AppearancePageDescription" Style="{StaticResource PageDescriptionStyle}" />
+
+            <!-- Preview launches the real WinUI installer front end with this project's settings. -->
+            <Border Style="{StaticResource RowCardStyle}" Margin="0,16,0,0">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE7B3;" Style="{StaticResource RowIconStyle}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Uid="PreviewTitle" Style="{StaticResource RowTitleStyle}" />
+                        <TextBlock x:Uid="PreviewDescription" Style="{StaticResource RowDescriptionStyle}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <DropDownButton x:Uid="PreviewMore">
+                            <DropDownButton.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                    <MenuFlyoutItem x:Uid="PreviewUpgrade" Command="{x:Bind VM.PreviewCommand}" CommandParameter="upgrade" />
+                                    <MenuFlyoutItem x:Uid="PreviewUninstall" Command="{x:Bind VM.PreviewCommand}" CommandParameter="uninstall" />
+                                </MenuFlyout>
+                            </DropDownButton.Flyout>
+                        </DropDownButton>
+                        <Button x:Uid="PreviewButton" Style="{StaticResource AccentButtonStyle}" Command="{x:Bind VM.PreviewCommand}" CommandParameter="install" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <TextBlock x:Uid="AppearanceStyleSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE793;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppearanceThemeTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="AppearanceThemeDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.ThemeIndex, Mode=TwoWay}" x:Uid="AppearanceThemeCombo">
+                            <ComboBoxItem x:Uid="ThemeSystem" /><ComboBoxItem x:Uid="ThemeLight" /><ComboBoxItem x:Uid="ThemeDark" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xF4A5;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppearanceBackdropTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="AppearanceBackdropDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.BackdropIndex, Mode=TwoWay}" x:Uid="AppearanceBackdropCombo">
+                            <ComboBoxItem x:Uid="BackdropMica" /><ComboBoxItem x:Uid="BackdropMicaAlt" /><ComboBoxItem x:Uid="BackdropNone" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE790;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppearanceAccentTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="AppearanceAccentDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            <StackPanel Visibility="{x:Bind VM.ShowAccentColor, Mode=OneWay}" Margin="0,8,0,0">
+                                <TextBox x:Uid="AppearanceAccentBox" Text="{x:Bind VM.AccentColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MaxWidth="200"
+                                         HorizontalAlignment="Left" IsSpellCheckEnabled="False" />
+                                <TextBlock Text="{x:Bind VM.Errors.UiAccentColor, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UiAccentColor), Mode=OneWay}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.UseSystemAccent, Mode=TwoWay}" VerticalAlignment="Top" MinWidth="0" x:Uid="AppearanceAccentToggle" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <TextBlock x:Uid="AppearanceTextSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <StackPanel Spacing="16">
+                    <TextBox x:Uid="AppearanceTitleBox" Text="{x:Bind VM.UiTitle, Mode=TwoWay}" />
+                    <TextBox x:Uid="AppearanceWelcomeBox" Text="{x:Bind VM.WelcomeText, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" />
+                    <TextBox x:Uid="AppearanceFinishBox" Text="{x:Bind VM.FinishText, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" />
+                </StackPanel>
+            </Border>
+
+            <InfoBar x:Uid="AppearanceFallbackInfo" IsOpen="True" IsClosable="False" Severity="Informational" Margin="0,28,0,0" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>
