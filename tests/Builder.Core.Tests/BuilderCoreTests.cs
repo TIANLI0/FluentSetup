@@ -77,6 +77,9 @@ public class GlobTests
     [InlineData("config/user-settings.json", "Config\\User-Settings.JSON", true)]
     [InlineData("a?.txt", "ab.txt", true)]
     [InlineData("a?.txt", "a/.txt", false)]
+    [InlineData("App.exe", "old/App.exe", true)]    // no separator: any folder
+    [InlineData("./App.exe", "App.exe", true)]       // leading ./: top level only
+    [InlineData("./App.exe", "old/App.exe", false)]
     public void Matches(string pattern, string path, bool expected) => Assert.Equal(expected, new Glob(pattern).IsMatch(path));
 }
 

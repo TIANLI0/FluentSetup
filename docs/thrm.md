@@ -56,5 +56,6 @@ with a timeout. Prerequisite downloads (not used by THRM) are https-only and ver
 - **`%TEMP%\THRM`** is not removed (temporary files; the elevated uninstaller would see the administrator's `%TEMP%`).
 - **Config backup/restore** (`config.json`, `settings.ini` in the install folder) is not needed: FluentSetup only
   replaces files it ships and never deletes files it did not install.
-- **Package size.** The FluentSetup package is about 28 MB, the NSIS one about 21 MB. LZMA with NSIS's BCJ filter
-  compresses x86/x64 code better than zstd without a filter. See [size-report.md](size-report.md).
+- **Size.** The FluentSetup package is 19.7 MB (NSIS: 21.7 MB). Installed, FluentSetup keeps two files NSIS does not:
+  the WebView2 bootstrapper under `redist\` (1.7 MB; NSIS runs it from a temporary folder) and a larger
+  `uninstall.exe` (1.4 MB, it carries the WinUI front end). See [size-report.md](size-report.md).

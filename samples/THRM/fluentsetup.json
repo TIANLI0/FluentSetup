@@ -13,7 +13,7 @@
   },
   "files": {
     "source": "D:/develop/BS2PRO-Controller/build/bin",
-    "include": ["THRM.exe", "THRM Core.exe", "bridge/**"],
+    "include": ["./THRM.exe", "./THRM Core.exe", "bridge/**"],
     "exclude": ["**/*.pdb", "**/*.xml"],
     "preserve": [],
     "extra": [

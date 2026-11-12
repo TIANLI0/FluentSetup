@@ -88,10 +88,10 @@ The implementation is in `src/Builder.Core/Packaging/Glob.cs`.
 
 - Matching is case-insensitive. `/` and `\` are both accepted as separators.
 - `*` matches any characters within one folder level. `**` matches any number of levels. `?` matches one character other than a separator. All other characters match literally. There are no `[...]` classes or `{a,b}` alternatives.
-- A pattern **without** a separator matches the file name in any folder: `*.pdb` behaves like `**/*.pdb`, and `THRM.exe` matches `THRM.exe` in every folder.
+- A pattern **without** a separator matches the file name in any folder: `*.pdb` behaves like `**/*.pdb`, and `THRM.exe` matches `THRM.exe` in every folder, including stray copies such as `old/THRM.exe`.
 - A pattern **with** a separator is anchored at `files.source`: `bridge/**` matches everything below `source\bridge`.
 - A pattern ending in `/` matches everything below that folder (`logs/` behaves like `logs/**`).
-- Leading `./` is ignored.
+- A leading `./` anchors the pattern at `files.source`: `./THRM.exe` matches only the top-level `THRM.exe`. Use it in `include` for the app's main files, so copies in subfolders of the build output are not picked up.
 - Patterns must not be blank, rooted (`/x`, `C:x`) or contain `..` (error FS1106).
 
 How the rules are applied (`FileCollector.cs`):

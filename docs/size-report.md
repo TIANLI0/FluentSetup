@@ -38,11 +38,11 @@ the preceding symbol.
 
 | Component | KiB |
 |---|---:|
-| Stub PE incl. THRM's multi-resolution icon and version resources | 988.0 |
-| WinUI 3 front end (compressed) | 353.7 |
-| Package metadata | 7.0 |
-| **Total installer overhead** | **1,348.7** (26.3 % of 5 MiB) |
-| App payload (22 files, 70.0 MB raw) | 28,126.3 |
+| Stub PE incl. THRM's multi-resolution icon and version resources | 1,052.0 |
+| WinUI 3 front end (compressed) | 354.4 |
+| Package metadata | 10.6 |
+| **Total installer overhead** | **1,417.0** (27.7 % of 5 MiB) |
+| App payload (20 files, 40.0 MB raw) | 18,766.1 |
 
 The difference to the DemoApp stub is almost entirely THRM's icon (the stub carries every size of the product icon,
 up to 256 px, so Explorer and the taskbar show it sharply).
@@ -65,7 +65,6 @@ up to 256 px, so Explorer and the taskbar show it sharply).
   dictionary building.
 - The front end is stored once and extracted to a private temp folder only when the WinUI path is taken. A project
   can set `output.includeWinUI: false` to ship only the Win32 front end (about 330 KiB smaller).
-- Payload compression: `fast`, `normal` and `max` map to zstd levels. `max` uses level 19 with long-distance matching
-  (window log 27, 128 MiB). For THRM, the FluentSetup package is 28.8 MB against 21.4 MB for the previous NSIS
-  installer (LZMA with the BCJ x86 filter), because zstd has no executable-code filter. Adding a BCJ-style filter
-  for PE files is the most promising way to close that gap.
+- Payload compression: `fast`, `normal` and `max` map to zstd levels 3, 12 and 19; `max` adds long-distance matching
+  (window log 27, 128 MiB). THRM: 40 MB of files compress to 18.3 MB, and the whole Setup.exe is 19.7 MB against
+  21.7 MB for the previous NSIS installer (LZMA with the BCJ x86 filter).

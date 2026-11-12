@@ -6,7 +6,8 @@ namespace FluentSetup.Builder.Core.Packaging;
 /// <summary>
 /// Case-insensitive glob over relative paths with '/' or '\' separators:
 /// <c>*</c> matches within one segment, <c>**</c> matches any number of segments, <c>?</c> one character.
-/// A pattern without a separator matches the file name in any folder ("*.pdb" == "**/*.pdb").
+/// A pattern without a separator matches the file name in any folder ("*.pdb" == "**/*.pdb"); a leading "./" anchors
+/// it to the source folder ("./App.exe" matches only the top-level App.exe, not "old/App.exe").
 /// </summary>
 public sealed class Glob
 {
@@ -17,8 +18,9 @@ public sealed class Glob
     {
         Pattern = pattern;
         var p = pattern.Replace('\\', '/').Trim();
-        if (p.StartsWith("./", StringComparison.Ordinal)) p = p[2..];
-        if (!p.Contains('/')) p = "**/" + p;
+        var anchored = p.StartsWith("./", StringComparison.Ordinal);
+        if (anchored) p = p[2..];
+        if (!anchored && !p.Contains('/')) p = "**/" + p;
         if (p.EndsWith('/')) p += "**";
         var sb = new StringBuilder("^");
         for (var i = 0; i < p.Length; i++)
