@@ -102,7 +102,7 @@ Run the result to try it, or test it unattended: `Setup.exe /quiet /log setup.lo
 The GitHub Action installs the command-line tool (verified download) on a Windows runner:
 
 ```yaml
-- uses: TIANLI0/FluentSetup@v1.0.0
+- uses: TIANLI0/FluentSetup@v1.0.1
 - run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3
 ```
 

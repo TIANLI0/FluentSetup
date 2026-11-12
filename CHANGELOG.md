@@ -3,6 +3,13 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
+## [1.0.1] - 2026-11-13
+
+### Fixed
+
+- GitHub Action: on PowerShell 7 the download of `SHA256SUMS.txt` was read as bytes, so `uses: TIANLI0/FluentSetup@v1.0.0`
+  stopped with "SHA256SUMS.txt has no entry". CI now runs the action against the latest release.
+
 ## [1.0.0] - 2026-11-13
 
 First public release.

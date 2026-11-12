@@ -8,7 +8,7 @@ branding:
 inputs:
   version:
     description: >-
-      FluentSetup version, e.g. 1.0.0. Default: the version of the action ref (uses: TIANLI0/FluentSetup@v1.0.0),
+      FluentSetup version, e.g. 1.0.0. Default: the version of the action ref (uses: TIANLI0/FluentSetup@v1.0.1),
       else the latest release.
     required: false
     default: ''
@@ -49,8 +49,11 @@ runs:
         $zip = Join-Path $env:RUNNER_TEMP $name
         Write-Host "FluentSetup $version from $base"
         Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'fluentsetup-action' } "$base/$name" -OutFile $zip
-        $sums = (Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'fluentsetup-action' } "$base/SHA256SUMS.txt").Content
-        $expected = ($sums -split "`n" | Where-Object { $_ -match "^([0-9a-fA-F]{64})\s+\*?$([regex]::Escape($name))\s*$" } | ForEach-Object { $Matches[1] }) | Select-Object -First 1
+        # Saved to a file and read as text: GitHub serves release files as application/octet-stream, for which
+        # Invoke-WebRequest returns .Content as bytes on PowerShell 7.
+        $sumsFile = Join-Path $env:RUNNER_TEMP "fluentsetup-$version-SHA256SUMS.txt"
+        Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'fluentsetup-action' } "$base/SHA256SUMS.txt" -OutFile $sumsFile
+        $expected = (Get-Content $sumsFile | Where-Object { $_ -match "^([0-9a-fA-F]{64})\s+\*?$([regex]::Escape($name))\s*$" } | ForEach-Object { $Matches[1] }) | Select-Object -First 1
         if (-not $expected) { throw "SHA256SUMS.txt has no entry for $name" }
         $actual = (Get-FileHash $zip -Algorithm SHA256).Hash
         if ($actual -ne $expected.ToUpperInvariant()) { throw "SHA-256 mismatch for ${name}: $actual, expected $expected" }

@@ -74,7 +74,7 @@ fluentsetup inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
 GitHub Action 会在 Windows 构建机上安装命令行工具（下载后校验 SHA-256）：
 
 ```yaml
-- uses: TIANLI0/FluentSetup@v1.0.0
+- uses: TIANLI0/FluentSetup@v1.0.1
 - run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3
 ```
 

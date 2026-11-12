@@ -78,3 +78,18 @@ jobs:
             out/test-results/
             out/e2e/logs/
             out/ui-tests/logs/
+
+  action:
+    # The GitHub Action (action.yml) the way apps use it: download the latest release, verify it, put it on PATH.
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - id: fluentsetup
+        uses: ./
+      - name: fluentsetup is on PATH
+        shell: pwsh
+        run: |
+          fluentsetup --version
+          if ($LASTEXITCODE -ne 0) { throw 'fluentsetup is not on PATH' }
+          Write-Host "FluentSetup ${{ steps.fluentsetup.outputs.version }} at ${{ steps.fluentsetup.outputs.path }}"
