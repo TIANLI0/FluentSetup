@@ -71,8 +71,17 @@ A minimal project file:
 
 The full reference is in [docs/project-file.md](docs/project-file.md), and the JSON schema is in
 [shared/schemas](shared/schemas/fluentsetup.project.schema.json). [samples/DemoApp](samples/DemoApp) is the test app.
-[samples/THRM](samples/THRM) is a real-world project that uses prerequisites, actions and options
-([write-up](docs/thrm.md)).
+Real-world projects that replaced NSIS and Inno Setup installers with FluentSetup, including updates started from
+their old versions, are described in [docs/thrm.md](docs/thrm.md): [THRM](https://github.com/TIANLI0/THRM),
+[EncoDeck](https://github.com/TIANLI0/EncoDeck), [PinyinFlux](https://github.com/TIANLI0/PinyinFlux) and
+[MediaDuet](https://github.com/TIANLI0/MediaDuet).
+
+### In GitHub Actions
+
+```yaml
+- uses: TIANLI0/FluentSetup@v1.0.0          # fluentsetup CLI + installer runtime on PATH (verified download)
+- run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3   # e.g. from the tag
+```
 
 ## Setup.exe command line
 

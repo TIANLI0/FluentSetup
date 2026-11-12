@@ -33,7 +33,7 @@ $fs = '.\src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe'
 & $fs inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
 ```
 
-项目文件参考见 [docs/project-file.md](docs/project-file.md)，JSON Schema 在 [shared/schemas](shared/schemas/fluentsetup.project.schema.json)。[samples/THRM](samples/THRM) 是一个真实项目示例，用到了前置条件、安装后动作和自定义选项（[说明](docs/thrm.md)）。
+项目文件参考见 [docs/project-file.md](docs/project-file.md)，JSON Schema 在 [shared/schemas](shared/schemas/fluentsetup.project.schema.json)。[THRM](https://github.com/TIANLI0/THRM)、[EncoDeck](https://github.com/TIANLI0/EncoDeck)、[PinyinFlux](https://github.com/TIANLI0/PinyinFlux) 和 [MediaDuet](https://github.com/TIANLI0/MediaDuet) 已从 NSIS / Inno Setup 换用 FluentSetup，旧版本（包括应用内更新）可无缝覆盖升级，做法见 [docs/thrm.md](docs/thrm.md)。在 GitHub Actions 中用 `uses: TIANLI0/FluentSetup@v1.0.0` 获取命令行，`fluentsetup build <项目文件> -D Version=<版本>` 打包。
 
 ## Setup.exe 命令行
 

@@ -1,9 +1,0 @@
-{
-  "options": {
-    "autostart": "Windows の起動時に EncoDeck をバックグラウンドで起動する"
-  },
-  "variants": {
-    "selfContained": { "label": "単体インストール (ランタイムを含む)", "description": ".NET と Windows App Runtime を別途インストールする必要はありませんが、ディスク容量を多く使います。" },
-    "shared": { "label": "共有ランタイム (小さいサイズ)", "description": "システムの .NET 10 と Windows App Runtime 2.5 を使用します。ない場合はダウンロードしてインストールします。" }
-  }
-}

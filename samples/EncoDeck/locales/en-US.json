@@ -1,9 +1,0 @@
-{
-  "options": {
-    "autostart": "Start EncoDeck in the background when Windows starts"
-  },
-  "variants": {
-    "selfContained": { "label": "Self-contained (includes runtimes)", "description": "Needs no separate .NET or Windows App Runtime; uses more disk space." },
-    "shared": { "label": "Shared runtimes (smaller)", "description": "Uses .NET 10 and Windows App Runtime 2.5 from the system; downloads and installs them if missing." }
-  }
-}
