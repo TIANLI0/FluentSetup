@@ -983,9 +983,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         // Leftovers of earlier versions that would otherwise run alongside this one (tasks, Run values, shortcuts),
         // removed before the actions so an action can register its own replacement. Not undone by a rollback.
         const Cleanup& ic = pkg_.ext.installCleanup;
-        for (const auto& t : ic.removeScheduledTasks) {
-            if (DeleteScheduledTask(t)) log::Info(L"Removed scheduled task %s", t.c_str());
-        }
+        for (const auto& t : ic.removeScheduledTasks) DeleteScheduledTask(t);  // logs what it removed
         for (const auto& r : ic.removeRunValues) DeleteRunValue(r);
         for (const auto& s : ic.removeShortcuts) DeleteShortcutsNamed(s);
         // "Start with Windows"-style options: a Run value for the main executable while the option is selected.
@@ -1166,9 +1164,7 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
         journal->Commit();
         journal.reset();
         // Declared cleanup of things the app itself created (scheduled tasks, Run values, caches under AppData).
-        for (const auto& t : pkg_.ext.cleanup.removeScheduledTasks) {
-            if (DeleteScheduledTask(t)) log::Info(L"Removed scheduled task %s", t.c_str());
-        }
+        for (const auto& t : pkg_.ext.cleanup.removeScheduledTasks) DeleteScheduledTask(t);  // logs what it removed
         for (const auto& v : pkg_.ext.cleanup.removeRunValues) DeleteRunValue(v);
         for (const auto& opt : pkg_.ext.options) {
             if (!opt.startupName.empty()) DeleteRunValue(opt.startupName);

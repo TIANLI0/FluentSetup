@@ -85,6 +85,15 @@ public static class FileCollector
         var preserve = project.Files.Preserve.Select(g => new Glob(g)).ToList();
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var outputDir = ProjectValidator.Resolve(projectDirectory, project.Output.Directory);
+        string? outputFile = null;
+        try
+        {
+            outputFile = Path.GetFullPath(Path.Combine(outputDir, ProjectValidator.ExpandFileName(project.Output.FileName, project)));
+        }
+        catch (ArgumentException)
+        {
+            // An invalid file name is reported by the validator.
+        }
 
         void Add(string source, string rel, FileInfo info)
         {
@@ -116,7 +125,10 @@ public static class FileCollector
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var dir = stack.Pop();
-                if (IsSameOrUnder(dir, outputDir)) continue;
+                // A build never packages its own output: an output folder inside the source is skipped. When the
+                // output folder is the source itself (build\bin holding the app and its installer), only the
+                // installer file is left out (below).
+                if (IsSameOrUnder(dir, outputDir) && !IsSameOrUnder(root, outputDir)) continue;
                 IEnumerable<FileSystemInfo> entries;
                 try
                 {
@@ -150,6 +162,7 @@ public static class FileCollector
                         continue;
                     }
                     if (applyFilters && (!Glob.MatchesAny(include, relFromRoot) || Glob.MatchesAny(exclude, relFromRoot))) continue;
+                    if (outputFile is not null && entry.FullName.Equals(outputFile, StringComparison.OrdinalIgnoreCase)) continue;
                     if (result.Files.Count >= MaxFiles)
                     {
                         result.Diagnostics.Error("FS1113", "files", $"More than {MaxFiles:N0} files.");

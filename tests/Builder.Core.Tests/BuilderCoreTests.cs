@@ -353,6 +353,26 @@ public class CollectorTests
     }
 
     [Fact]
+    public void OutputFolderThatIsTheSourceOnlySkipsTheInstaller()
+    {
+        // build\bin holds the app and, after a build, its installer (THRM's layout).
+        using var dir = new TempDir();
+        dir.File("bin/App.exe");
+        dir.File("bin/sub/lib.dll");
+        dir.File("bin/App-installer.exe");
+        var p = new SetupProject
+        {
+            App = new AppInfo { MainExecutable = "App.exe" },
+            Files = new FileSettings { Source = "bin" },
+            Output = new OutputSettings { Directory = "bin", FileName = "App-installer.exe" },
+        };
+        var r = FileCollector.Collect(p, dir.Path);
+        Assert.Contains(r.Files, f => f.RelativePath == "App.exe");
+        Assert.Contains(r.Files, f => f.RelativePath == "sub\\lib.dll");
+        Assert.DoesNotContain(r.Files, f => f.RelativePath.Contains("installer"));
+    }
+
+    [Fact]
     public void DetectsTwoSourcesForOneTarget()
     {
         using var dir = new TempDir();
