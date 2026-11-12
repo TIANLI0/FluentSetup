@@ -68,8 +68,9 @@ int RunWorker(const boot::Args& args, const install::Package& pkg, const archive
         return internal;
     }
     install::InstallOptions options;
-    if (!uninstall && !install::OptionsFromJson(run["options"], options)) {
-        log::Error(L"Worker: malformed install options");
+    // Re-check against the package: the unelevated parent is not trusted to respect allowCustomDir, scopes or option ids.
+    if (!uninstall && (!install::OptionsFromJson(run["options"], options) || !install::Engine(pkg, container).SanitizeOptions(options))) {
+        log::Error(L"Worker: malformed or disallowed install options");
         return static_cast<int>(ErrorCode::InvalidArguments);
     }
 

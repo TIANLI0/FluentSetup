@@ -89,10 +89,10 @@ flowchart LR
 
 The header lists streams (`offset`, `size`, `rawSize`, `sha256` of the stored bytes) and files (`path`, `size`,
 `sha256` of the decoded content, `stream`, `offset` in the decoded stream, attributes, `preserve`), plus the `app`,
-`install`, `ui`, `requirements`, `options`, `actions` and `uninstall` sections. `container.h` refers to
-`docs/package-format.md` and `package.h` to `shared/schemas/package-header.schema.json`; neither file exists in the
-repository at the moment, so the code (`src/Install.Core/package.cpp`, `src/Builder.Core/Packaging/PackageBuilder.cs`)
-is the reference.
+`install`, `ui`, `requirements`, `options`, `actions` and `uninstall` sections. The byte-level format is described in
+[package-format.md](package-format.md); `package.h` still refers to `shared/schemas/package-header.schema.json`, which
+does not exist (only the project-file schema does), so for header fields the code (`src/Install.Core/package.cpp`,
+`src/Builder.Core/Packaging/PackageBuilder.cs`) is the reference.
 
 ## 2. Process model
 
@@ -160,8 +160,8 @@ Public switches: `/quiet|/silent`, `/uninstall`, `/log <file>`, `/dir <path>`, `
    `Controller::SanitizeOptions`; rejected options produce a `done` with `InvalidArguments`), `cancel`, `finish`
    (optionally launches the app), `close`. Messages to the UI: `hello`, `progress`, `pathCheck`, `done`.
 
-The message catalogue is referenced in `protocol.h` as `shared/protocols/ui-protocol.md`, which does not exist yet; the
-list above is taken from `winui_host.cpp`, `controller.cpp` and `src/Setup.WinUI`.
+The full message catalogue is referenced in `protocol.h` as `shared/protocols/ui-protocol.md`; the list above is
+taken from `winui_host.cpp`, `controller.cpp` and `src/Setup.WinUI`.
 
 ### 2.3 Elevated worker (`controller.cpp` `RunElevated`, `src/Install.Worker/worker.cpp`)
 
@@ -199,7 +199,7 @@ uncompressed header with `kind: "uninstaller"` and an empty payload. The ARP ent
   Files that could not be deleted because phase 1 is still running (`uninstall.exe`, then the directory if empty) are
   returned as `deferredDeletes`; after reporting the exit code, phase 2 waits for the phase-1 process (up to 60 s) and
   deletes them. For a per-machine uninstall the elevated worker does the same using `--wait-pid`.
-* The temporary copy in `%TEMP%\FluentSetup-u-...` is **not** removed afterwards (nothing in the code deletes it).
+* A running copy cannot delete itself. Instead, each uninstall first removes the `%TEMP%\FluentSetup-u-...` copies earlier uninstalls left behind (copies still in use and links are skipped).
 
 `Setup.exe /uninstall` (a package of kind `setup`) runs the uninstall directly without relocating.
 
@@ -351,14 +351,18 @@ found (`MddBootstrapInitialize2` returned `ERROR_NO_MATCH`), `0x23` runtime init
   builds the tests but does not run them.
 * NuGet packages for the WinUI front end are the Windows App SDK component packages (Base, Foundation,
   InteractiveExperiences, WinUI, Runtime 2.5.1) plus CppWinRT and the SDK build tools, deliberately not the
-  `Microsoft.WindowsAppSDK` meta-package. A comment in `packages.config` mentions `build/versions.props`, which does not
-  exist.
+  `Microsoft.WindowsAppSDK` meta-package. Their versions have to be kept in sync by hand with the
+  `Microsoft.WindowsAppSDK` version of `src/Builder/FluentSetup.Builder.csproj`.
 
 ## 9. Tests
 
+`scripts/build.ps1` only builds the tests. The GitHub Actions workflow (`.github/workflows/ci.yml`) builds with it and
+then runs the native tests, `dotnet test` for the managed tests, `e2e.ps1`, `scripts/size-report.ps1` (5 MiB overhead
+budget) and `ui-tests.ps1`.
+
 | Location | What it covers | How it runs |
 |---|---|---|
-| `tests/Native` (`FluentSetup.Tests.Native.exe`) | Minimal in-house harness (`test.h`, optional name filter as first argument). `core_tests.cpp`: relative/absolute path rules, containment, name sanitizing, versions, JSON round trip and hostile input, strict arguments and quoting. `security_tests.cpp`: header validation (traversal, reserved names, duplicates, file/dir clash, stream accounting, identity, main executable), hostile install records, shortcut confinement, journal rollback and torn lines, link detection, container validation/damage/stream ranges. | Built by `scripts/build.ps1`, run manually. |
+| `tests/Native` (`FluentSetup.Tests.Native.exe`) | Minimal in-house harness (`test.h`, optional name filter as first argument). `core_tests.cpp`: relative/absolute path rules, containment, name sanitizing, versions, JSON round trip and hostile input, strict arguments and quoting. `security_tests.cpp`: header validation (traversal, reserved names, duplicates, file/dir clash, stream accounting, identity, main executable), hostile install records, shortcut confinement, journal rollback and torn lines, link detection, container validation/damage/stream ranges. | `out/bin/<platform>/<config>/FluentSetup.Tests.Native.exe` (CI or manually). |
 | `tests/Builder.Core.Tests` (xUnit) | `PathRules`, app ids, globs, project validation, versions, file collection (include/exclude/preserve, junctions not followed, output folder skipped, two sources for one target), serializer round trip and schema version, icons, version resource, building and inspecting a package, invalid project, cancellation. | `dotnet test`. |
 | `tests/Integration/e2e.ps1` | Real per-user installs of the DemoApp sample: install, reinstall, upgrade (obsolete files removed, user data kept), downgrade blocked, corrupted package refused, injected failure rolls back (`FLUENTSETUP_TEST_FAULT_AFTER`), uninstall through `QuietUninstallString` after deleting `Setup.exe`, custom path with spaces/CJK, unsafe locations (Windows folder, profile root, junction), unknown argument, many small files, optional 600 MB file (`-Large`). Per-machine scope is not exercised. | PowerShell, after `scripts/build.ps1`. |
-| `tests/UI` | `Uia.psm1`: UI Automation helpers for WinUI and classic Win32 controls. A driver script `tests/UI/ui-tests.ps1` exists in the working tree but is not yet tracked by git. | PowerShell. |
+| `tests/UI` | `ui-tests.ps1` drives a real per-user install through each front end (WinUI when the runtime is present, Win32 always) with UI Automation: first page with version, path and inline options, desktop shortcut on, launch off, license, install, result, then files/shortcut/ARP checks and a silent uninstall. `Uia.psm1` holds the UI Automation helpers (with a window-message fallback for classic Win32 controls). | PowerShell, after `scripts/build.ps1`. |

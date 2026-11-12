@@ -218,7 +218,10 @@ Package ParsePackage(const std::string& headerJson, const std::function<bool(uin
     {
         std::unordered_set<std::wstring> payloadSet;
         for (const auto& f : p.payload.files) payloadSet.insert(ToLower(f.path));
-        p.ext = ParseExtensions(root, [&](const std::wstring& rel) { return payloadSet.count(ToLower(rel)) != 0; });
+        // The uninstaller carries no payload: its action targets refer to the installed files, which RunActions checks
+        // at run time (an existing file strictly inside the install directory, no links on the way).
+        const bool uninstaller = p.IsUninstaller();
+        p.ext = ParseExtensions(root, [&](const std::wstring& rel) { return uninstaller || payloadSet.count(ToLower(rel)) != 0; });
         if (!p.ext.adoptUninstallKey.empty() && !EqualsIgnoreCase(p.ext.adoptUninstallKey, p.appId)) {
             Bad(L"adoptUninstallKey must equal the app id");
         }

@@ -288,6 +288,23 @@ Existing Engine::DetectExisting() const {
     return e;
 }
 
+bool Engine::SanitizeOptions(InstallOptions& o) const {
+    if (!ScopeAllowed(o.scope)) return false;
+    const auto existing = FindExisting();
+    if (existing && existing->scope != o.scope) return false;
+    if ((!pkg_.allowCustomDir || existing) && !EqualsIgnoreCase(o.installDir, DefaultInstallDir(o.scope))) return false;
+    if (!OfferVisible(pkg_.desktopShortcut)) o.desktopShortcut = OfferDefault(pkg_.desktopShortcut);
+    if (!OfferVisible(pkg_.startMenuShortcut)) o.startMenuShortcut = OfferDefault(pkg_.startMenuShortcut);
+    std::map<std::string, bool> choices;
+    for (const auto& opt : pkg_.ext.options) choices[opt.id] = opt.defaultValue;
+    for (const auto& [id, on] : o.choices) {
+        if (!choices.count(id)) return false;  // only options the package defines
+        choices[id] = on;
+    }
+    o.choices = std::move(choices);
+    return true;
+}
+
 std::wstring Engine::DefaultInstallDir(Scope scope) const {
     if (auto p = FindExisting(); p && p->scope == scope && !p->installDir.empty()) return p->installDir;
     const std::wstring expanded = ExpandDirTemplate(scope == Scope::Machine ? pkg_.machineDirTemplate : pkg_.userDirTemplate, pkg_);
@@ -636,13 +653,20 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         SetPending(pkg_.appId, scope, dir);
         pendingSet = true;
         std::vector<std::wstring> created;
+        const bool preexistingEmpty = fs::IsDirectory(dir) && fs::IsDirectoryEmpty(dir);
         fs::CreateDirectories(dir, &created);
-        if (scope == Scope::Machine && !created.empty()) {
-            const std::wstring programFiles = path::KnownFolder(FOLDERID_ProgramFiles);
-            if (!path::IsSameOrUnder(created.front(), programFiles)) {
-                if (const DWORD e = security::ApplyMachineInstallAcl(created.front()); e != 0) {
-                    log::Warn(L"Could not apply the protected ACL to %s (error %lu)", created.front().c_str(), e);
+        if (scope == Scope::Machine && !path::IsSameOrUnder(dir, path::KnownFolder(FOLDERID_ProgramFiles))) {
+            // Outside Program Files the folder inherits whatever its parent allows (often write access for all users),
+            // which would let a standard user replace binaries that admins and elevated actions run. Protect folders we
+            // created and empty folders the user picked; an existing app folder is left alone, because the app may rely
+            // on writing into it (upgrades of apps installed by other installers).
+            const std::wstring target = !created.empty() ? created.front() : preexistingEmpty ? dir : std::wstring();
+            if (!target.empty()) {
+                if (const DWORD e = security::ApplyMachineInstallAcl(target); e != 0) {
+                    log::Warn(L"Could not apply the protected ACL to %s (error %lu)", target.c_str(), e);
                 }
+            } else {
+                log::Warn(L"Per-machine install into the existing folder %s keeps that folder's permissions", dir.c_str());
             }
         }
         {
@@ -763,6 +787,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         for (const auto& f : recordFiles) relFiles.push_back(f.path);
         record.directories = ImpliedDirectories(relFiles, pkg_.payload.directories);
         record.shortcuts = shortcuts;
+        record.choices = options.choices;
         record.createdRoot = std::any_of(created.begin(), created.end(), [&](const std::wstring& c) { return EqualsIgnoreCase(c, dir); }) ||
                              (oldRecord && oldRecord->createdRoot);
         const std::string recordJson = json::Serialize(RecordToJson(record), 2);
@@ -896,7 +921,7 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
         fs::CreateDirectories(trash);
 
         for (const auto& still : CloseProcesses(pkg_.ext.closeProcesses)) log::Warn(L"%s could not be closed", still.c_str());
-        RunActions(Action::When::BeforeUninstall, dir, {}, out);
+        RunActions(Action::When::BeforeUninstall, dir, record.choices, out);
         rep.Set(State::Removing, 0.0);
         size_t i = 0;
         std::unordered_set<std::wstring> safeDirs;

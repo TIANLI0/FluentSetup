@@ -124,7 +124,8 @@
   "error.InvalidArguments": "Setup was started with options it doesn't understand.",
   "error.PackageCorrupt": "This setup file is damaged or incomplete. Download it again and retry.",
   "error.UnsupportedSystem": "This app doesn't support this version of Windows or this type of processor.",
-  "error.ElevationRequired": "Administrator permission is needed to install for everyone on this PC.",
+  "error.Ok": "Completed successfully.",
+  "error.ElevationRequired": "Administrator permission is needed to change an app installed for everyone on this PC.",
   "error.DiskFull": "There isn't enough free space on the drive. Free up some space or choose another location.",
   "error.FileInUse": "A file that needs to be replaced is in use. Close {0} and try again.",
   "error.AccessDenied": "Setup doesn't have permission to write to the install location. Choose another location or install for everyone.",
@@ -161,5 +162,5 @@
   "fallback.browse": "B&rowse…",
   "fallback.viewLog": "View log",
 
-  "usage": "Usage: Setup.exe [options]\n\n/quiet  Install without any user interface\n/uninstall  Remove the installed app\n/dir <path>  Install location\n/scope user|machine  Install for the current user or for all users\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/log <file>  Write the log to this file\n/lang en-US|zh-CN  Interface language\n/ui auto|winui|win32  Interface technology (diagnostics)\n\nExit code 0 means success; see the documentation for the other codes."
+  "usage": "Usage: Setup.exe [options]\n\n/quiet  Install without any user interface\n/uninstall  Remove the installed app\n/dir <path>  Install location\n/scope user|machine  Install for the current user or for all users\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Turn a package-defined option on or off\n/log <file>  Write the log to this file\n/lang en-US|zh-CN  Interface language\n/ui auto|winui|win32  Interface technology (diagnostics)\n\nExit code 0 means success; see the documentation for the other codes."
 }

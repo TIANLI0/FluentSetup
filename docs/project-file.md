@@ -241,7 +241,7 @@ These rules are enforced by the builder and again by the installer engine, which
 - Actions can **only** run an `.exe` that is part of the package's own payload. The path is relative, inside the install folder, and not reached through a link. System tools, scripts, `cmd.exe`, URLs and absolute paths are impossible.
 - Processes are started directly with `CreateProcess`, with no shell. They run hidden, with the program's folder as the working directory, inside a job object so a timeout ends the whole process tree.
 - A step that fails (failed to start, timed out, or exited with a code not in `successExitCodes`) is handled according to `onFailure`. With `fail` after install, setup rolls back its *own* changes. Anything the program itself did, such as installing a driver or registering a task, cannot be undone (info FS1627).
-- `ifOption` is evaluated against the user's choice. In quiet mode it uses the option's `default` or `/option`.
+- `ifOption` is evaluated against the user's choice. In quiet mode it uses the option's `default` or `/option`. The choices are stored in the install record, so `beforeUninstall` actions see what was chosen at install time (records from older versions fall back to the defaults).
 - `skipIfInstalled` is checked right before the step runs.
 
 ## uninstall

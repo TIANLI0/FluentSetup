@@ -124,7 +124,8 @@
   "error.InvalidArguments": "安装程序启动时使用了无法识别的参数。",
   "error.PackageCorrupt": "此安装文件已损坏或不完整。请重新下载后再试。",
   "error.UnsupportedSystem": "此应用不支持当前的 Windows 版本或处理器类型。",
-  "error.ElevationRequired": "为这台电脑的所有用户安装需要管理员权限。",
+  "error.Ok": "已成功完成。",
+  "error.ElevationRequired": "更改为这台电脑所有用户安装的应用需要管理员权限。",
   "error.DiskFull": "磁盘空间不足。请释放一些空间或选择其他位置。",
   "error.FileInUse": "需要替换的文件正在使用中。请关闭 {0} 后重试。",
   "error.AccessDenied": "安装程序没有写入安装位置的权限。请选择其他位置，或为所有用户安装。",
@@ -161,5 +162,5 @@
   "fallback.browse": "浏览(&R)…",
   "fallback.viewLog": "查看日志",
 
-  "usage": "用法：Setup.exe [选项]\n\n/quiet  不显示任何界面进行安装\n/uninstall  卸载已安装的应用\n/dir <路径>  安装位置\n/scope user|machine  为当前用户或所有用户安装\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/log <文件>  将日志写入此文件\n/lang en-US|zh-CN  界面语言\n/ui auto|winui|win32  界面技术（诊断用）\n\n退出代码 0 表示成功；其他代码请参阅文档。"
+  "usage": "用法：Setup.exe [选项]\n\n/quiet  不显示任何界面进行安装\n/uninstall  卸载已安装的应用\n/dir <路径>  安装位置\n/scope user|machine  为当前用户或所有用户安装\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  打开或关闭安装包定义的选项\n/log <文件>  将日志写入此文件\n/lang en-US|zh-CN  界面语言\n/ui auto|winui|win32  界面技术（诊断用）\n\n退出代码 0 表示成功；其他代码请参阅文档。"
 }

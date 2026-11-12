@@ -6,6 +6,7 @@
 #include "Common/json.h"
 #include "Install.Core/package.h"
 
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -32,6 +33,7 @@ struct InstallRecord {
     std::vector<std::wstring> directories;  // relative, every directory setup created or populated
     std::vector<std::wstring> shortcuts;    // absolute .lnk paths
     bool createdRoot = false;
+    std::map<std::string, bool> choices;  // package-defined options as chosen at install time (for beforeUninstall actions)
 };
 
 std::wstring ArpKeyPath(const std::wstring& appId);

@@ -75,7 +75,7 @@ bool Controller::SanitizeOptions(const json::Value& v, install::InstallOptions& 
         choices[id] = on;
     }
     out.choices = std::move(choices);
-    return true;
+    return engine.SanitizeOptions(out);  // the same package rules the elevated worker enforces
 }
 
 json::Value Controller::Hello(const std::wstring& iconPath) const {

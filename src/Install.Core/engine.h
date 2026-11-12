@@ -102,6 +102,9 @@ public:
     // probeWritable: also verify the current (non-elevated) user can create the directory.
     [[nodiscard]] DirCheck CheckInstallDir(const std::wstring& dir, Scope scope, bool probeWritable) const;
     [[nodiscard]] bool ScopeAllowed(Scope s) const noexcept;
+    // Enforces what the package allows (scope, custom folder, visible shortcuts, defined option ids) on options that
+    // came from a less trusted process. Hidden shortcut offers and missing options get the package defaults.
+    [[nodiscard]] bool SanitizeOptions(InstallOptions& o) const;
 
     Outcome Install(const InstallOptions& options, IProgressSink& sink, const std::atomic<bool>& cancel);
     // originDir: directory of the uninstaller that was started (selects the matching installation), may be empty.

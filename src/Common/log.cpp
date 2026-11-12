@@ -1,5 +1,7 @@
 #include "Common/log.h"
 
+#include "Common/fs.h"
+#include "Common/security.h"
 #include "Common/text.h"
 
 #include <cstdarg>
@@ -47,10 +49,35 @@ std::wstring VFormat(const wchar_t* fmt, va_list args) {
 bool Open(const std::wstring& path, std::wstring_view tag) {
     State& s = S();
     std::lock_guard lock(s.mutex);
+    // The log path is chosen by the (possibly unelevated) parent, typically below the user's %TEMP%. An elevated process
+    // must not be redirected through a planted junction/symlink/hard link into creating or appending to another file.
+    const bool elevated = security::IsElevated();
+    if (elevated && fs::HasLinkInPath(path)) return false;
     CreateParents(path);
-    UniqueHandle h(::CreateFileW(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
-                                 FILE_ATTRIBUTE_NORMAL, nullptr));
+    UniqueHandle h(::CreateFileW(path.c_str(), FILE_APPEND_DATA | FILE_READ_ATTRIBUTES | DELETE,
+                                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_ALWAYS,
+                                 FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
     if (!h) return false;
+    const bool created = ::GetLastError() != ERROR_ALREADY_EXISTS;
+    BY_HANDLE_FILE_INFORMATION info{};
+    bool safe = ::GetFileType(h.get()) == FILE_TYPE_DISK && ::GetFileInformationByHandle(h.get(), &info) &&
+                !(info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) && info.nNumberOfLinks == 1;
+    if (safe && elevated) {
+        // A parent swapped for a junction between the check above and CreateFileW shows up in the final path.
+        std::wstring full(32768, L'\0'), longName(32768, L'\0');
+        const DWORD n = ::GetFullPathNameW(path.c_str(), static_cast<DWORD>(full.size()), full.data(), nullptr);
+        full.resize(n < full.size() ? n : 0);
+        const DWORD m = full.empty() ? 0 : ::GetLongPathNameW(full.c_str(), longName.data(), static_cast<DWORD>(longName.size()));
+        longName.resize(m < longName.size() ? m : 0);
+        safe = !longName.empty() && _wcsicmp(fs::FinalPath(h.get()).c_str(), longName.c_str()) == 0;
+    }
+    if (!safe) {
+        if (created) {
+            FILE_DISPOSITION_INFO dispose{TRUE};
+            ::SetFileInformationByHandle(h.get(), FileDispositionInfo, &dispose, sizeof(dispose));
+        }
+        return false;
+    }
     LARGE_INTEGER size{};
     if (::GetFileSizeEx(h.get(), &size) && size.QuadPart == 0) {
         static constexpr unsigned char kBom[] = {0xEF, 0xBB, 0xBF};

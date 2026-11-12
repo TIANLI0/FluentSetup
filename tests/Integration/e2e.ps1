@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   End-to-end test of FluentSetup with the DemoApp sample, using real installs on this machine (per-user scope).
 
@@ -54,7 +54,7 @@ function Installed-Version {
     return $v
 }
 
-function New-Package([string] $version, [scriptblock] $populate, [hashtable] $overrides = @{}) {
+function New-Package([string] $version, [scriptblock] $populate, [hashtable] $overrides = @{}, [hashtable] $rootProps = @{}) {
     $stage = Join-Path $work "stage-$version"
     $bin = Join-Path $work "bin-$version"
     Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
@@ -71,6 +71,7 @@ function New-Package([string] $version, [scriptblock] $populate, [hashtable] $ov
     $project.ui.license = '..\..\samples\DemoApp\LICENSE.txt'
     $project.output.directory = 'dist'
     foreach ($k in $overrides.Keys) { $project.install.$k = $overrides[$k] }
+    foreach ($k in $rootProps.Keys) { $project | Add-Member -NotePropertyName $k -NotePropertyValue $rootProps[$k] -Force }
     $projectPath = Join-Path $work "project-$version.json"
     [IO.File]::WriteAllText($projectPath, ($project | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
     & $cli build $projectPath --report (Join-Path $work "report-$version.json") | Out-Null
@@ -257,6 +258,28 @@ if ($Large) {
     $code = Run-Setup $big @('/quiet') 'large'
     Check ("600 MB file installed and verified (exit 0, {0:N1}s)" -f $sw.Elapsed.TotalSeconds) { $code -eq 0 -and (Get-Item "$installDir\big.bin").Length -eq 600MB }
 }
+
+Write-Host '==> Options and actions (afterInstall / beforeUninstall), uninstall through uninstall.exe' -ForegroundColor Cyan
+Remove-Existing
+$marker = Join-Path $installDir 'version-check.txt'
+$withActions = New-Package '5.0.0' { param($s) } @{} @{
+    options = @(@{ id = 'marker'; label = @{ 'en-US' = 'Write a marker'; 'zh-CN' = 'Write a marker' }; default = $true })
+    actions = @(
+        @{ when = 'afterInstall'; run = 'DemoApp.exe'; arguments = @('--version'); ifOption = 'marker'; onFailure = 'fail' },
+        @{ when = 'beforeUninstall'; run = 'DemoApp.exe'; arguments = @('--version'); ifOption = 'marker'; onFailure = 'fail' })
+}
+$code = Run-Setup $withActions @('/quiet', '/option', 'marker=no') 'actions-off'
+Check 'option off: install exit 0, action skipped' { $code -eq 0 -and -not (Test-Path $marker) }
+Remove-Existing
+$code = Run-Setup $withActions @('/quiet') 'actions-on'
+Check 'option on (default): afterInstall action ran' { $code -eq 0 -and (Test-Path $marker) }
+Remove-Item $marker -ErrorAction SilentlyContinue
+$quiet = (Get-ItemProperty $arpKey).QuietUninstallString
+$code = -1
+if ($quiet -match '^"([^"]+)"\s*(.*)$') { $code = (Start-Process $Matches[1] -ArgumentList $Matches[2] -Wait -PassThru).ExitCode }
+Check 'uninstall.exe of a package with actions runs (exit 0)' { $code -eq 0 }
+Check 'beforeUninstall action honoured the recorded choice' { Test-Path $marker }
+Check 'uninstalled' { -not (Test-Path $arpKey) -and -not (Test-Path (Join-Path $installDir 'DemoApp.exe')) }
 
 Remove-Existing
 Check 'environment restored (no ARP entry)' { -not (Test-Path $arpKey) }

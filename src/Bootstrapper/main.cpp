@@ -54,6 +54,19 @@ void ShowError(const std::wstring& title, const std::wstring& instruction, const
 // The installed uninstall.exe cannot delete itself while running. Phase 1 copies it to a private temp directory,
 // runs the copy (phase 2) and waits for its result, so callers (Settings, scripts) still get the real exit code.
 int RunUninstallPhase1(const std::wstring& self) {
+    // A running copy cannot remove itself, so each uninstall sweeps the copies earlier ones left behind (one still in
+    // use simply fails to delete). Links are skipped; the directories were created private to this user.
+    WIN32_FIND_DATAW fd{};
+    const std::wstring tempRoot = path::TempRoot();
+    UniqueFind find(::FindFirstFileExW(path::Join(tempRoot, L"FluentSetup-u-*").c_str(), FindExInfoBasic, &fd,
+                                       FindExSearchLimitToDirectories, nullptr, 0));
+    for (bool more = find.valid(); more; more = ::FindNextFileW(find.get(), &fd)) {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) continue;
+        const std::wstring stale = path::Join(tempRoot, fd.cFileName);
+        if (::DeleteFileW(path::Join(stale, L"uninstall.exe").c_str()) || ::GetLastError() == ERROR_FILE_NOT_FOUND) {
+            ::RemoveDirectoryW(stale.c_str());
+        }
+    }
     const std::wstring tempDir = path::Join(path::TempRoot(), L"FluentSetup-u-" + RandomToken().substr(0, 16));
     if (security::CreatePrivateDirectory(tempDir) != 0) return static_cast<int>(ErrorCode::IoError);
     const std::wstring copy = path::Join(tempDir, L"uninstall.exe");

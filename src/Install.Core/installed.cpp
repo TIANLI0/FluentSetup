@@ -136,6 +136,9 @@ json::Value RecordToJson(const InstallRecord& r) {
     json::Value links = json::Value::MakeArray();
     for (const auto& s : r.shortcuts) links.push(s);
     v.set("shortcuts", links);
+    json::Value choices = json::Value::MakeObject();
+    for (const auto& [id, on] : r.choices) choices.set(id, on);
+    v.set("choices", choices);
     return v;
 }
 
@@ -176,6 +179,9 @@ InstallRecord RecordFromJson(const json::Value& v) {
         const std::wstring p = s.asWide();
         if (!IsAllowedShortcutPath(p, r.scope)) throw bad(L"shortcut " + p);
         r.shortcuts.push_back(p);
+    }
+    for (const auto& [id, on] : v["choices"].object()) {  // absent in records written before 1.0
+        if (id.size() <= 32 && r.choices.size() < 16) r.choices[id] = on.asBool();
     }
     return r;
 }

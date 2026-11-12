@@ -112,8 +112,8 @@ index and the file's offset inside the **decoded** stream.
 * Smaller files are accumulated into a solid block; a block is closed as soon as its raw size reaches 32 MiB
   (`SolidBlockBytes`). The last partial block becomes the final stream.
 * Blocks are compressed in parallel; each stream is a single zstd frame with the pledged source size set.
-* The WinUI front end (all files of the front-end runtime folder plus `app.ico`, if an icon is available) is one
-  stream, written before the payload streams.
+* The WinUI front end (the `*.exe`, `*.dll`, `*.pri` and `*.xbf` files at the top level of `runtime\<arch>\ui`, plus
+  `app.ico` if an icon is available) is one stream, written before the payload streams.
 
 ### 3.2 zstd parameters
 
@@ -280,9 +280,9 @@ Directory templates expand `{LocalAppData}`, `{UserProgramFiles}`, `{AppData}`, 
 
 | Field | Rules |
 |---|---|
-| `requirements[]` | `type`: `netfx` (needs `minRelease > 0`) or `webview2` (optional `installer`: a payload file, optional `args`). `name` is truncated to 128 chars. Unknown types are rejected. |
+| `requirements[]` | `type`: `netfx` (needs `minRelease > 0`) or `webview2` (optional `installer`: a payload file, except in an uninstaller header, optional `args`). `name` is truncated to 128 chars. Unknown types are rejected. |
 | `options[]` | ≤ 16 entries; `id` 1–32 chars `[A-Za-z0-9_-]`, unique; `label` (string or `{lang: text}`, 256 chars max per text); `default` bool. |
-| `actions[]` | ≤ 32 entries; `when`: `afterInstall` or `beforeUninstall`; `run`: relative path of an `.exe` that is part of the payload; `args`: ≤ 32 strings of ≤ 1024 bytes; `timeoutSeconds` clamped to 1–3600 (default 300); `successExitCodes` (array of numbers); `onFailure`: `warn`, `ignore`, anything else = fail; optional `ifOption` (must name an option); optional `skipIfInstalled {hive: HKLM|HKCU, key ≤ 255 chars not starting with "\", value ≤ 128 chars, version}`; `name` (localized text). |
+| `actions[]` | ≤ 32 entries; `when`: `afterInstall` or `beforeUninstall`; `run`: relative path of an `.exe` that is part of the payload (in an uninstaller header, which has no payload, any safe relative path; it is checked at run time to be an existing file inside the install directory); `args`: ≤ 32 strings of ≤ 1024 bytes; `timeoutSeconds` clamped to 1–3600 (default 300); `successExitCodes` (array of numbers); `onFailure`: `warn`, `ignore`, anything else = fail; optional `ifOption` (must name an option); optional `skipIfInstalled {hive: HKLM|HKCU, key ≤ 255 chars not starting with "\", value ≤ 128 chars, version}`; `name` (localized text). |
 | `uninstall.removeData[]` | Each entry must expand to `{CommonAppData}`, `{LocalAppData}` or `{AppData}` plus a sub-folder. |
 | `uninstall.removeScheduledTasks[]`, `uninstall.removeRunValues[]` | 1–128 chars, no control characters and none of `\ / : * ? " < > |`. |
 
