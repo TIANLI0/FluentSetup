@@ -178,7 +178,7 @@ content and breaks the hash.
 | Range | Area |
 |---|---|
 | FS10xx | `app` |
-| FS11xx | `files` (FS1101 source, FS1106 bad glob, FS1107–FS1109 bad/duplicate target paths, FS1110–FS1115 variants) |
+| FS11xx | `files` (FS1101 source, FS1106 bad glob, FS1107–FS1109 bad/duplicate target paths, FS1110 main executable missing, FS1111–FS1116 variants) |
 | FS12xx | `install` (scope, directory templates, offers, Windows build) |
 | FS13xx | `ui` (FS1304 language, FS1306 license size, FS1311 licenseMode, FS1320–FS1328 localization) |
 | FS14xx | `output` |

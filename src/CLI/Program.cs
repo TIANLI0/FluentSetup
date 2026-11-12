@@ -232,7 +232,7 @@ public static class Program
         var project = LoadProject(projectPath);
         var dir = Path.GetDirectoryName(projectPath)!;
         var bag = ProjectValidator.Validate(project, dir);
-        var files = FileCollector.Collect(project, dir);
+        var files = FileCollector.Collect(project, dir, project.Files.Variants);
         bag.AddRange(files.Diagnostics.Items);
         if (json)
         {

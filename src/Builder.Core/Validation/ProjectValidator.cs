@@ -67,7 +67,7 @@ public static partial class ProjectValidator
             foreach (var (v, i) in p.Files.Variants.Select((v, i) => (v, i)))
             {
                 var field = $"files.variants[{i}]";
-                if (!System.Text.RegularExpressions.Regex.IsMatch(v.Id, "^[A-Za-z0-9_-]{1,32}$")) d.Error("FS1110", field + ".id", "Variant ids use letters, digits, - and _ (max 32).");
+                if (!System.Text.RegularExpressions.Regex.IsMatch(v.Id, "^[A-Za-z0-9_-]{1,32}$")) d.Error("FS1116", field + ".id", "Variant ids use letters, digits, - and _ (max 32).");
                 else if (!variantIds.Add(v.Id)) d.Error("FS1111", field + ".id", $"Duplicate variant id '{v.Id}'.");
                 if (v.Label.Count == 0 && string.IsNullOrEmpty(p.Ui.Localization)) d.Error("FS1112", field + ".label", "Give the variant a label (per language, or in the localization files).");
                 if (string.IsNullOrWhiteSpace(v.Source)) d.Error("FS1101", field + ".source", "Choose the folder with this build.");

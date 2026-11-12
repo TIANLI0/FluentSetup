@@ -452,7 +452,7 @@ public sealed partial class MainViewModel : ObservableObject
         var dir = ProjectDirectory;
         try
         {
-            var result = await Task.Run(() => FileCollector.Collect(model, dir, cts.Token), cts.Token);
+            var result = await Task.Run(() => FileCollector.Collect(model, dir, model.Files.Variants, cts.Token), cts.Token);
             if (cts.IsCancellationRequested) return;
             Files.Clear();
             foreach (var f in result.Files.OrderBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase).Take(5000)) Files.Add(new FileRow(f.RelativePath, PackageBuilder.Format(f.Size), f.Preserve));
