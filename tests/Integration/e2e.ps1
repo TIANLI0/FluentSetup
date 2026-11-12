@@ -284,6 +284,9 @@ Check 'uninstalled' { -not (Test-Path $arpKey) -and -not (Test-Path (Join-Path $
 Write-Host '==> Legacy install adopted, install cleanup, required option, action fallbacks' -ForegroundColor Cyan
 Remove-Existing
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+# A fresh account (CI runner) may not have the Run key yet. Create it only when missing: New-Item -Force would
+# replace an existing key and lose its values.
+if (-not (Test-Path $runKey)) { New-Item $runKey | Out-Null }
 $legacyKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FluentSetup.E2E.Legacy'
 $legacyDir = Join-Path $env:LOCALAPPDATA 'Programs\FluentSetup E2E Legacy'
 $oldLink = Join-Path ([Environment]::GetFolderPath('Programs')) 'FluentSetup E2E Old.lnk'
