@@ -139,7 +139,10 @@ public sealed class PackageBuilder
         report.Diagnostics.Clear();
         report.Diagnostics.AddRange(diagnostics.Items);
         report.Diagnostics.AddRange(collected.Diagnostics.Items);
-        if (collected.Diagnostics.HasErrors) throw new BuildFailedException("Some files cannot be installed.", report.Diagnostics);
+        var fileChecks = new DiagnosticBag();
+        ExtensionValidator.ValidateAgainstFiles(project, collected.Files, fileChecks);
+        report.Diagnostics.AddRange(fileChecks.Items);
+        if (collected.Diagnostics.HasErrors || fileChecks.HasErrors) throw new BuildFailedException("Some files cannot be installed.", report.Diagnostics);
         report.FileCount = collected.Files.Count;
         report.Sizes.PayloadRaw = collected.TotalSize;
         log($"Collected {collected.Files.Count:N0} files, {Format(collected.TotalSize)} in {sw.Elapsed.TotalSeconds:F1}s");
@@ -243,7 +246,8 @@ public sealed class PackageBuilder
             report.Sizes.PayloadCompressed = results.Sum(r => r.CompressedSize);
 
             var license = string.IsNullOrEmpty(project.Ui.License) ? "" : File.ReadAllText(ProjectValidator.Resolve(projectDir, project.Ui.License));
-            var headerJson = HeaderWriter.Write(project, arch, license, payloadRecords, results, collected.Directories, uiRecord, ui);
+            var licenses = project.Ui.Licenses.ToDictionary(kv => kv.Key, kv => File.ReadAllText(ProjectValidator.Resolve(projectDir, kv.Value)));
+            var headerJson = HeaderWriter.Write(project, arch, license, licenses, payloadRecords, results, collected.Directories, uiRecord, ui);
             var headerCompressed = new Compressor(19).Wrap(headerJson).ToArray();
             var headerOffset = output.Position - overlayStart;
             output.Write(headerCompressed);
@@ -406,7 +410,7 @@ public sealed class PackageBuilder
     /// <summary>Package header (see shared/schemas/package-header.schema.json and src/Install.Core/package.cpp).</summary>
     internal static class HeaderWriter
     {
-        public static byte[] Write(SetupProject p, string arch, string license, List<StreamRecord> payload, CompressedStream[] payloadStreams,
+        public static byte[] Write(SetupProject p, string arch, string license, Dictionary<string, string> licenses, List<StreamRecord> payload, CompressedStream[] payloadStreams,
                                    List<string> directories, StreamRecord? uiRecord, CompressedStream? ui)
         {
             using var ms = new MemoryStream();
@@ -437,7 +441,12 @@ public sealed class PackageBuilder
                 w.WriteString("startMenuShortcut", p.Install.StartMenuShortcut);
                 w.WriteString("launchAfterInstall", p.Install.LaunchAfterInstall);
                 w.WriteBoolean("allowDowngrade", p.Install.AllowDowngrade);
+                w.WriteStartArray("closeProcesses");
+                foreach (var n in p.Install.CloseProcesses) w.WriteStringValue(n);
+                w.WriteEndArray();
+                if (p.Install.AdoptExistingInstall) w.WriteString("adoptUninstallKey", p.App.Id);
                 w.WriteEndObject();
+                WriteExtensions(w, p);
 
                 w.WriteStartObject("ui");
                 w.WriteString("title", p.Ui.Title);
@@ -448,6 +457,9 @@ public sealed class PackageBuilder
                 w.WriteBoolean("useSystemAccent", p.Ui.UseSystemAccent);
                 w.WriteString("accentColor", p.Ui.AccentColor);
                 w.WriteString("license", license);
+                w.WriteStartObject("licenses");
+                foreach (var (lang, text) in licenses) w.WriteString(lang, text);
+                w.WriteEndObject();
                 w.WriteString("defaultLanguage", p.Ui.DefaultLanguage);
                 w.WriteStartObject("strings");
                 foreach (var (lang, table) in p.Ui.Strings)
@@ -483,6 +495,90 @@ public sealed class PackageBuilder
                 w.WriteEndObject();
             }
             return ms.ToArray();
+        }
+
+        private static void WriteLocalized(Utf8JsonWriter w, string name, Dictionary<string, string> text)
+        {
+            w.WriteStartObject(name);
+            foreach (var (lang, s) in text) w.WriteString(lang, s);
+            w.WriteEndObject();
+        }
+
+        private static void WriteExtensions(Utf8JsonWriter w, SetupProject p)
+        {
+            w.WriteStartArray("requirements");
+            if (ExtensionValidator.NetFrameworkRelease(p.Requirements.NetFramework) is { } release)
+            {
+                w.WriteStartObject();
+                w.WriteString("type", "netfx");
+                w.WriteNumber("minRelease", release);
+                w.WriteString("name", $".NET Framework {p.Requirements.NetFramework}");
+                w.WriteEndObject();
+            }
+            if (p.Requirements.WebView2.Required)
+            {
+                w.WriteStartObject();
+                w.WriteString("type", "webview2");
+                w.WriteString("name", "Microsoft Edge WebView2 Runtime");
+                if (!string.IsNullOrEmpty(p.Requirements.WebView2.Installer))
+                {
+                    w.WriteString("installer", p.Requirements.WebView2.Installer.Replace('/', '\\'));
+                    w.WriteStartArray("args");
+                    foreach (var a in p.Requirements.WebView2.Arguments) w.WriteStringValue(a);
+                    w.WriteEndArray();
+                }
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
+
+            w.WriteStartArray("options");
+            foreach (var o in p.Options)
+            {
+                w.WriteStartObject();
+                w.WriteString("id", o.Id);
+                WriteLocalized(w, "label", o.Label);
+                w.WriteBoolean("default", o.Default);
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
+
+            w.WriteStartArray("actions");
+            foreach (var a in p.Actions)
+            {
+                w.WriteStartObject();
+                w.WriteString("when", a.When);
+                w.WriteString("run", a.Run.Replace('/', '\\'));
+                w.WriteStartArray("args");
+                foreach (var x in a.Arguments) w.WriteStringValue(x);
+                w.WriteEndArray();
+                w.WriteNumber("timeoutSeconds", a.TimeoutSeconds);
+                w.WriteStartArray("successExitCodes");
+                foreach (var code in a.SuccessExitCodes) w.WriteNumberValue(code);
+                w.WriteEndArray();
+                w.WriteString("onFailure", a.OnFailure);
+                if (!string.IsNullOrEmpty(a.IfOption)) w.WriteString("ifOption", a.IfOption);
+                if (a.SkipIfInstalled is { } c)
+                {
+                    w.WriteStartObject("skipIfInstalled");
+                    w.WriteString("hive", c.Hive);
+                    w.WriteString("key", c.Key);
+                    w.WriteString("value", c.Value);
+                    w.WriteString("version", c.Version);
+                    w.WriteEndObject();
+                }
+                WriteLocalized(w, "name", a.Name);
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
+
+            w.WriteStartObject("uninstall");
+            foreach (var (name, list) in new[] { ("removeData", p.Uninstall.RemoveData), ("removeScheduledTasks", p.Uninstall.RemoveScheduledTasks), ("removeRunValues", p.Uninstall.RemoveRunValues) })
+            {
+                w.WriteStartArray(name);
+                foreach (var s in list) w.WriteStringValue(s);
+                w.WriteEndArray();
+            }
+            w.WriteEndObject();
         }
 
         private static void WriteStreams(Utf8JsonWriter w, List<StreamRecord> streams)

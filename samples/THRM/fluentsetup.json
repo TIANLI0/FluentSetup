@@ -1,0 +1,106 @@
+{
+  "$schema": "../../shared/schemas/fluentsetup.project.schema.json",
+  "schemaVersion": 1,
+  "app": {
+    "id": "THRM",
+    "name": "THRM",
+    "publisher": "TIANLI0",
+    "version": "3.8.0",
+    "description": "THRM 桌面控制中心",
+    "website": "https://github.com/TIANLI0/THRM",
+    "icon": "D:/develop/BS2PRO-Controller/build/windows/icon.ico",
+    "mainExecutable": "THRM.exe"
+  },
+  "files": {
+    "source": "D:/develop/BS2PRO-Controller/build/bin",
+    "include": ["THRM.exe", "THRM Core.exe", "bridge/**"],
+    "exclude": ["**/*.pdb", "**/*.xml"],
+    "preserve": [],
+    "extra": [
+      { "source": "D:/develop/BS2PRO-Controller/build/bin/PawnIO_setup.exe", "target": "drivers/PawnIO" },
+      { "source": "D:/develop/BS2PRO-Controller/build/windows/installer/MicrosoftEdgeWebview2Setup.exe", "target": "redist" }
+    ],
+    "emptyDirectories": []
+  },
+  "install": {
+    "scope": "machine",
+    "defaultScope": "machine",
+    "userDir": "{LocalAppData}\\Programs\\{AppName}",
+    "machineDir": "{ProgramFiles}\\{AppName}",
+    "allowCustomDir": true,
+    "desktopShortcut": "optionalOn",
+    "startMenuShortcut": "on",
+    "launchAfterInstall": "optionalOn",
+    "allowDowngrade": false,
+    "minWindowsBuild": 17763,
+    "closeProcesses": ["THRM.exe", "THRM Core.exe", "THRM TempBridge.exe", "TempBridge.exe"],
+    "adoptExistingInstall": true
+  },
+  "requirements": {
+    "netFramework": "4.7.2",
+    "webView2": {
+      "required": true,
+      "installer": "redist/MicrosoftEdgeWebview2Setup.exe",
+      "arguments": ["/silent", "/install"]
+    }
+  },
+  "options": [
+    {
+      "id": "autostart",
+      "label": { "en-US": "Start THRM automatically when I sign in", "zh-CN": "登录 Windows 时自动启动 THRM" },
+      "default": true
+    }
+  ],
+  "actions": [
+    {
+      "when": "afterInstall",
+      "run": "drivers/PawnIO/PawnIO_setup.exe",
+      "arguments": ["-install", "-silent"],
+      "timeoutSeconds": 60,
+      "successExitCodes": [0, 183],
+      "onFailure": "warn",
+      "skipIfInstalled": {
+        "hive": "HKLM",
+        "key": "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PawnIO",
+        "value": "DisplayVersion",
+        "version": "2.2.0.0"
+      },
+      "name": { "en-US": "PawnIO driver installation", "zh-CN": "PawnIO 驱动安装" }
+    },
+    {
+      "when": "afterInstall",
+      "run": "THRM Core.exe",
+      "arguments": ["--install-autostart"],
+      "timeoutSeconds": 60,
+      "successExitCodes": [0],
+      "onFailure": "warn",
+      "ifOption": "autostart",
+      "name": { "en-US": "Registering THRM to start at sign-in", "zh-CN": "注册登录时自动启动" }
+    }
+  ],
+  "uninstall": {
+    "removeData": ["{AppData}\\THRM.exe", "{CommonAppData}\\THRM.exe", "{CommonAppData}\\THRM"],
+    "removeScheduledTasks": ["THRM"],
+    "removeRunValues": ["THRM"]
+  },
+  "ui": {
+    "theme": "system",
+    "backdrop": "mica",
+    "useSystemAccent": true,
+    "license": "D:/develop/BS2PRO-Controller/build/windows/installer/resources/license_en-US.txt",
+    "licenses": {
+      "en-US": "D:/develop/BS2PRO-Controller/build/windows/installer/resources/license_en-US.txt",
+      "zh-CN": "D:/develop/BS2PRO-Controller/build/windows/installer/resources/license_zh-CN.txt"
+    },
+    "defaultLanguage": "auto",
+    "strings": {}
+  },
+  "output": {
+    "directory": "../../out/thrm",
+    "fileName": "THRM-{Version}-Setup.exe",
+    "architecture": "x64",
+    "compression": "max",
+    "includeWinUI": true
+  },
+  "signing": { "enabled": false }
+}

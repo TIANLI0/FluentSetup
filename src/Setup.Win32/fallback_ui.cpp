@@ -29,8 +29,8 @@ using json::Value;
 constexpr UINT WM_APP_PROGRESS = WM_APP + 1;
 constexpr UINT WM_APP_DONE = WM_APP + 2;
 constexpr UINT_PTR kPathTimer = 1;
-constexpr int kClientWidth = 640;   // DIP (same window size as the WinUI front end)
-constexpr int kClientHeight = 398;  // DIP
+constexpr int kClientWidth = 720;   // DIP (same window size as the WinUI front end)
+constexpr int kClientHeight = 508;  // DIP
 constexpr int kMargin = 32;
 constexpr int kIconSize = 72;
 
@@ -39,10 +39,11 @@ enum Id : int {
     kLblSize, kSize, kInfo, kDirError,
     kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog,
     kOHeading = 300, kOScopeLabel, kOScopeUser, kOScopeMachine, kOLocLabel, kOLoc, kOBrowse, kOSpace, kOError,
-    kOShortLabel, kODesktop, kOStartMenu,
+    kOShortLabel, kODesktop, kOStartMenu, kOChoicesLabel,
     kLHeading = 400, kLSub, kLText, kLAccept,
     kLaunch = 500, kPStage, kPPercent, kPBar, kPDetail,
     kSecondary = 700,
+    kChoiceBase = 900,  // package-defined option checkboxes: kChoiceBase + index
 };
 
 enum class Page { Welcome, Options, License, Progress, Result };
@@ -252,6 +253,10 @@ void Window::Create() {
     Make(WC_STATICW, kOShortLabel, text);
     Make(WC_BUTTONW, kODesktop, BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, kOStartMenu, BS_AUTOCHECKBOX | WS_TABSTOP);
+    Make(WC_STATICW, kOChoicesLabel, text);
+    for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) {
+        Make(WC_BUTTONW, kChoiceBase + static_cast<int>(i), BS_AUTOCHECKBOX | WS_TABSTOP | (i == 0 ? WS_GROUP : 0));
+    }
 
     Make(WC_STATICW, kLHeading, text);
     Make(WC_STATICW, kLSub, text);
@@ -297,7 +302,8 @@ void Window::ApplyFonts() {
     const auto set = [&](int id, HFONT f) { ::SendMessageW(Ctl(id), WM_SETFONT, reinterpret_cast<WPARAM>(f), FALSE); };
     set(kTitle, theme_.title);
     for (int id : {kOHeading, kLHeading}) set(id, theme_.subtitle);
-    for (int id : {kOScopeLabel, kOLocLabel, kOShortLabel}) set(id, theme_.bodyStrong);
+    for (int id : {kOScopeLabel, kOLocLabel, kOShortLabel, kOChoicesLabel}) set(id, theme_.bodyStrong);
+    for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) set(kChoiceBase + static_cast<int>(i), theme_.body);
     for (int id : {kOSpace, kPDetail, kResultCode}) set(id, theme_.caption);
     for (int id : std::initializer_list<int>{kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
                                              kLblSize, kSize, kDescription, kInfo, kDirError,
@@ -361,6 +367,16 @@ void Window::ApplyHello() {
     Button_SetCheck(Ctl(kODesktop), opts["desktopShortcut"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(Ctl(kOStartMenu), opts["startMenuShortcut"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(Ctl(kLaunch), opts["launchAfter"]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
+    SetText(kOChoicesLabel, S("options.choices"));
+    const auto& choices = opts["choices"].array();
+    for (size_t i = 0; i < choices.size(); ++i) {
+        SetText(kChoiceBase + static_cast<int>(i), choices[i]["label"].asWide());
+        Button_SetCheck(Ctl(kChoiceBase + static_cast<int>(i)), choices[i]["value"].asBool() ? BST_CHECKED : BST_UNCHECKED);
+    }
+    if (!IsUninstall() && !hello_["runningApps"].asWide().empty()) {
+        const std::wstring running = F("welcome.running", {hello_["runningApps"].asWide()});
+        SetText(kInfo, info.empty() ? running : info + L"\r\n" + running);
+    }
     std::wstring license = hello_["ui"]["licenseText"].asWide(), crlf;
     for (size_t i = 0; i < license.size(); ++i) {
         if (license[i] == L'\n' && (i == 0 || license[i - 1] != L'\r')) crlf.push_back(L'\r');
@@ -380,7 +396,7 @@ void Window::UpdateInfoLines() {
         else if (relation == "same") versionText = F("version.same", {version});
         else if (relation == "downgrade") versionText = F("version.downgrade", {installed, version});
     }
-    SetText(kVersion, versionText);
+    SetText(kVersion, versionText != version ? versionText : std::wstring());  // the title already shows the plain version
     SetText(kLocation, installDir_);
     SetText(kSize, IsUninstall() || requiredBytes_ == 0 || page_ == Page::Result ? std::wstring() : FormatBytes(requiredBytes_));
 }
@@ -394,7 +410,7 @@ bool Window::HasOptions() const {
     if (IsUninstall()) return false;
     const Value& o = hello_["options"];
     return o["canChangeDir"].asBool() || o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
-           o["startMenuShortcut"]["visible"].asBool();
+           o["startMenuShortcut"]["visible"].asBool() || !o["choices"].array().empty();
 }
 
 std::wstring Window::PrimaryVerb() const {
@@ -414,9 +430,9 @@ void Window::ShowPage(Page p) {
     if (welcome) {
         const std::string relation = hello_["existing"]["relation"].asString();
         const char* key = IsUninstall() ? "ask.uninstall" : relation == "upgrade" ? "ask.update" : relation == "same" ? "ask.reinstall" : "ask.install";
-        SetText(kTitle, F(key, {AppName()}));
+        SetText(kTitle, F(key, {AppName(), hello_["app"]["version"].asWide()}));
     } else if (p == Page::Progress) {
-        SetText(kTitle, F(IsUninstall() ? "progress.uninstalling" : "progress.installing", {AppName()}));
+        SetText(kTitle, F(IsUninstall() ? "progress.uninstalling" : "progress.installing", {AppName(), hello_["app"]["version"].asWide()}));
     }
     UpdateInfoLines();
     Show(kTitle, summary);
@@ -443,6 +459,9 @@ void Window::ShowPage(Page p) {
     Show(kOShortLabel, options && (desktop || start));
     Show(kODesktop, options && desktop);
     Show(kOStartMenu, options && start);
+    const size_t choiceCount = o["choices"].array().size();
+    Show(kOChoicesLabel, options && choiceCount > 0);
+    for (size_t i = 0; i < choiceCount; ++i) Show(kChoiceBase + static_cast<int>(i), options);
     for (int id : {kLHeading, kLSub, kLText, kLAccept}) Show(id, license);
 
     UpdateFooter();
@@ -596,14 +615,19 @@ void Window::Layout() {
             if (Visible(kOShortLabel)) y += Px(6);
             stack(kOShortLabel, Px(6), width);
             stack(kODesktop, Px(4), width, Px(22));
-            stack(kOStartMenu, 0, width, Px(22));
+            stack(kOStartMenu, Px(10), width, Px(22));
+            if (Visible(kOChoicesLabel)) y += Px(6);
+            stack(kOChoicesLabel, Px(6), width);
+            for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) stack(kChoiceBase + static_cast<int>(i), Px(4), width, Px(22));
             break;
         }
         case Page::License: {
             const int width = right - left;
             stack(kLHeading, Px(8), width);
             stack(kLSub, Px(12), width);
-            stack(kLText, Px(12), width, Px(150));
+            // The license takes all the height left above the accept checkbox and the bottom bar.
+            const int footerTop = client.bottom - Px(24) - Px(32) - Px(16);
+            stack(kLText, Px(12), width, std::max(Px(120), footerTop - y - Px(12) - Px(22)));
             stack(kLAccept, 0, width, Px(22));
             break;
         }
@@ -799,6 +823,10 @@ void Window::StartInstall() {
         v.set("scope", scope_);
         v.set("desktopShortcut", Checked(kODesktop));
         v.set("startMenuShortcut", Checked(kOStartMenu));
+        Value choices = Value::MakeObject();
+        const auto& defined = hello_["options"]["choices"].array();
+        for (size_t i = 0; i < defined.size(); ++i) choices.set(defined[i]["id"].asString(), Checked(kChoiceBase + static_cast<int>(i)));
+        v.set("choices", choices);
         if (!c_.SanitizeOptions(v, o)) {
             pathOk_ = false;
             SetText(kOError, S("error.InvalidArguments"));
@@ -864,7 +892,7 @@ void Window::OnDoneMsg(const Value& m) {
         statusGlyph_ = L"";
         statusColor_ = c.success;
         const bool updated = hello_["existing"]["relation"].asString() == "upgrade";
-        SetText(kTitle, F(uninstall ? "done.uninstalled" : updated ? "done.updated" : "done.installed", {name}));
+        SetText(kTitle, F(uninstall ? "done.uninstalled" : updated ? "done.updated" : "done.installed", {name, hello_["app"]["version"].asWide()}));
         body = uninstall ? std::wstring() : hello_["ui"]["finishText"].asWide();
         if (uninstall && m["leftovers"].asBool()) body = F("result.leftovers", {installDir_});
     } else {
@@ -880,6 +908,9 @@ void Window::OnDoneMsg(const Value& m) {
         SetText(kResultCode, F("result.code", {std::to_wstring(m["code"].asInt()), m["codeName"].asWide()}));
         SetText(kResultDetail, m["detail"].asWide());
     }
+    std::wstring warnings;
+    for (const auto& w : m["warnings"].array()) warnings += L"\r\n  " + w.asWide();
+    if (!warnings.empty()) body += (body.empty() ? L"" : L"\r\n\r\n") + S("result.warnings") + warnings;
     SetText(kResultBody, body);
     ShowPage(Page::Result);
     const bool failed = result_ == ResultKind::Failed;

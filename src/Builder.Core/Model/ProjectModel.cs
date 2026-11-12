@@ -17,6 +17,13 @@ public sealed class SetupProject
     public UiSettings Ui { get; set; } = new();
     public OutputSettings Output { get; set; } = new();
     public SigningSettings Signing { get; set; } = new();
+    /// <summary>Windows components the app needs (checked before anything is changed).</summary>
+    public RequirementSettings Requirements { get; set; } = new();
+    /// <summary>User-selectable switches shown on the options page; actions can depend on them.</summary>
+    public List<UserOptionSettings> Options { get; set; } = [];
+    /// <summary>Programs from the app's own files to run after install / before uninstall (no shell, no system tools).</summary>
+    public List<ActionSettings> Actions { get; set; } = [];
+    public UninstallSettings Uninstall { get; set; } = new();
 
     /// <summary>Unknown properties are kept so that newer files survive a round trip through an older tool.</summary>
     [JsonExtensionData]
@@ -73,6 +80,10 @@ public sealed class InstallSettings
     public string LaunchAfterInstall { get; set; } = "optionalOn";
     public bool AllowDowngrade { get; set; }
     public int MinWindowsBuild { get; set; } = 17763;
+    /// <summary>Image names (e.g. "MyApp.exe") closed - politely, then forcibly - before installing or uninstalling.</summary>
+    public List<string> CloseProcesses { get; set; } = [];
+    /// <summary>Take over an installation of this app made by a previous installer (same uninstall key = app id).</summary>
+    public bool AdoptExistingInstall { get; set; }
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
 }
 
@@ -89,6 +100,8 @@ public sealed class UiSettings
     public string AccentColor { get; set; } = "";
     /// <summary>Plain-text license file; when set the user must accept it before installing.</summary>
     public string License { get; set; } = "";
+    /// <summary>Per-language license files (e.g. { "zh-CN": "license_zh.txt" }); falls back to <see cref="License"/>.</summary>
+    public Dictionary<string, string> Licenses { get; set; } = [];
     /// <summary>auto | en-US | zh-CN</summary>
     public string DefaultLanguage { get; set; } = "auto";
     /// <summary>Per-language overrides of installer strings, e.g. { "zh-CN": { "welcome.body": "…" } }.</summary>
@@ -119,4 +132,64 @@ public sealed class SigningSettings
     public string TimestampUrl { get; set; } = "http://timestamp.digicert.com";
     public string SignToolPath { get; set; } = "";
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
+}
+
+public sealed class RequirementSettings
+{
+    /// <summary>Minimum .NET Framework 4.x version, e.g. "4.7.2"; empty = not required.</summary>
+    public string NetFramework { get; set; } = "";
+    public WebView2Settings WebView2 { get; set; } = new();
+}
+
+public sealed class WebView2Settings
+{
+    public bool Required { get; set; }
+    /// <summary>Optional bundled installer (relative path inside the installed files) run when the runtime is missing.</summary>
+    public string Installer { get; set; } = "";
+    public List<string> Arguments { get; set; } = ["/silent", "/install"];
+}
+
+public sealed class UserOptionSettings
+{
+    public string Id { get; set; } = "";
+    /// <summary>Label per language, e.g. { "en-US": "Start when I sign in", "zh-CN": "登录时启动" }.</summary>
+    public Dictionary<string, string> Label { get; set; } = [];
+    public bool Default { get; set; }
+}
+
+public sealed class ActionSettings
+{
+    /// <summary>afterInstall | beforeUninstall</summary>
+    public string When { get; set; } = "afterInstall";
+    /// <summary>Relative path of an .exe inside the installed files.</summary>
+    public string Run { get; set; } = "";
+    public List<string> Arguments { get; set; } = [];
+    public int TimeoutSeconds { get; set; } = 300;
+    public List<int> SuccessExitCodes { get; set; } = [0];
+    /// <summary>fail (roll the installation back) | warn (tell the user) | ignore</summary>
+    public string OnFailure { get; set; } = "fail";
+    /// <summary>Run only when this option is selected.</summary>
+    public string IfOption { get; set; } = "";
+    /// <summary>Skip when this registry value already holds at least this version (e.g. a driver already installed).</summary>
+    public RegistryVersionCondition? SkipIfInstalled { get; set; }
+    public Dictionary<string, string> Name { get; set; } = [];
+}
+
+public sealed class RegistryVersionCondition
+{
+    /// <summary>HKLM | HKCU</summary>
+    public string Hive { get; set; } = "HKLM";
+    public string Key { get; set; } = "";
+    public string Value { get; set; } = "DisplayVersion";
+    public string Version { get; set; } = "";
+}
+
+public sealed class UninstallSettings
+{
+    /// <summary>App-created data folders removed on uninstall: {CommonAppData}\X, {LocalAppData}\X or {AppData}\X only.</summary>
+    public List<string> RemoveData { get; set; } = [];
+    /// <summary>Names of scheduled tasks (root folder) the app registered.</summary>
+    public List<string> RemoveScheduledTasks { get; set; } = [];
+    /// <summary>Names of HKCU/HKLM ...\CurrentVersion\Run values the app registered.</summary>
+    public List<string> RemoveRunValues { get; set; } = [];
 }

@@ -27,8 +27,9 @@ enum class ErrorCode : uint32_t {
     Internal = 14,           // IPC / protocol / unexpected state
     UnsafePath = 15,         // path escapes the install root or crosses a reparse point
     AlreadyRunning = 16,     // another setup/uninstall of the same app is in progress
+    PrerequisiteMissing = 17,  // a required Windows component (.NET Framework, WebView2) is not installed
 };
-inline constexpr uint32_t kLastErrorCode = 16;
+inline constexpr uint32_t kLastErrorCode = 17;
 
 inline const wchar_t* ErrorCodeName(ErrorCode c) noexcept {
     switch (c) {
@@ -49,6 +50,7 @@ inline const wchar_t* ErrorCodeName(ErrorCode c) noexcept {
         case ErrorCode::Internal: return L"Internal";
         case ErrorCode::UnsafePath: return L"UnsafePath";
         case ErrorCode::AlreadyRunning: return L"AlreadyRunning";
+        case ErrorCode::PrerequisiteMissing: return L"PrerequisiteMissing";
     }
     return L"Unknown";
 }

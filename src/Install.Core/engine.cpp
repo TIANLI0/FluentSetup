@@ -65,6 +65,9 @@ json::Value OptionsToJson(const InstallOptions& o) {
     v.set("scope", ScopeName(o.scope));
     v.set("desktopShortcut", o.desktopShortcut);
     v.set("startMenuShortcut", o.startMenuShortcut);
+    json::Value choices = json::Value::MakeObject();
+    for (const auto& [id, on] : o.choices) choices.set(id, on);
+    v.set("choices", choices);
     return v;
 }
 
@@ -77,6 +80,11 @@ bool OptionsFromJson(const json::Value& v, InstallOptions& o) {
     o.scope = scope == "machine" ? Scope::Machine : Scope::User;
     o.desktopShortcut = v["desktopShortcut"].asBool(false);
     o.startMenuShortcut = v["startMenuShortcut"].asBool(true);
+    if (v["choices"].object().size() > 16) return false;
+    for (const auto& [id, on] : v["choices"].object()) {
+        if (id.size() > 32 || !on.isBool()) return false;
+        o.choices[id] = on.asBool();
+    }
     return true;
 }
 
@@ -92,6 +100,9 @@ json::Value OutcomeToJson(const Outcome& o) {
     json::Value d = json::Value::MakeArray();
     for (const auto& p : o.deferredDeletes) d.push(p);
     v.set("deferred", d);
+    json::Value w = json::Value::MakeArray();
+    for (const auto& s : o.warnings) w.push(s);
+    v.set("warnings", w);
     return v;
 }
 
@@ -106,6 +117,7 @@ Outcome OutcomeFromJson(const json::Value& v) {
     o.installDir = v["installDir"].asWide();
     o.mainExecutable = v["mainExecutable"].asWide();
     for (const auto& d : v["deferred"].array()) o.deferredDeletes.push_back(d.asWide());
+    for (const auto& w : v["warnings"].array()) o.warnings.push_back(w.asWide().substr(0, 512));
     return o;
 }
 
@@ -247,9 +259,23 @@ bool Engine::ScopeAllowed(Scope s) const noexcept {
     return false;
 }
 
+std::optional<InstalledProduct> Engine::FindExisting(bool* foreign) const {
+    if (foreign) *foreign = false;
+    if (auto p = FindInstalled(pkg_.appId)) return p;
+    if (pkg_.ext.adoptUninstallKey.empty()) return std::nullopt;
+    for (const Scope s : {Scope::Machine, Scope::User}) {
+        if (!ScopeAllowed(s)) continue;
+        if (auto p = QueryForeign(pkg_.appId, s); p && !p->installDir.empty()) {
+            if (foreign) *foreign = true;
+            return p;
+        }
+    }
+    return std::nullopt;
+}
+
 Existing Engine::DetectExisting() const {
     Existing e;
-    e.product = FindInstalled(pkg_.appId);
+    e.product = FindExisting(&e.foreign);
     if (!e.product) return e;
     Version current, ours;
     if (!Version::Parse(e.product->version, current) || !Version::Parse(pkg_.version, ours)) {
@@ -263,7 +289,7 @@ Existing Engine::DetectExisting() const {
 }
 
 std::wstring Engine::DefaultInstallDir(Scope scope) const {
-    if (auto p = FindInstalled(pkg_.appId); p && p->scope == scope && !p->installDir.empty()) return p->installDir;
+    if (auto p = FindExisting(); p && p->scope == scope && !p->installDir.empty()) return p->installDir;
     const std::wstring expanded = ExpandDirTemplate(scope == Scope::Machine ? pkg_.machineDirTemplate : pkg_.userDirTemplate, pkg_);
     std::wstring normalized;
     return path::ValidateAbsoluteSyntax(expanded, normalized) == path::Problem::None ? normalized : expanded;
@@ -287,7 +313,7 @@ DirCheck Engine::CheckInstallDir(const std::wstring& dir, Scope scope, bool prob
     if (IsProtectedLocation(d)) return r.problem = path::Problem::Protected, r;
     if (fs::HasLinkInPath(d)) return r.problem = path::Problem::Reparse, r;
 
-    const auto existing = FindInstalled(pkg_.appId);
+    const auto existing = FindExisting();
     if (existing && !existing->installDir.empty() && !EqualsIgnoreCase(existing->installDir, d)) {
         return r.problem = path::Problem::Locked, r;
     }
@@ -502,8 +528,44 @@ void Engine::WriteUninstaller(const std::wstring& dest) const {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Install
+// Actions
 
+void Engine::RunActions(Action::When when, const std::wstring& dir, const std::map<std::string, bool>& choices, Outcome& out) const {
+    for (const Action& a : pkg_.ext.actions) {
+        if (a.when != when) continue;
+        if (!a.ifOption.empty()) {
+            bool selected = false;
+            for (const auto& o : pkg_.ext.options) {
+                if (o.id == a.ifOption) selected = o.defaultValue;
+            }
+            if (auto it = choices.find(a.ifOption); it != choices.end()) selected = it->second;
+            if (!selected) continue;
+        }
+        if (a.skipIfInstalled && RegistryVersionAtLeast(*a.skipIfInstalled)) {
+            log::Info(L"Skipping %s: the required version is already installed", a.run.c_str());
+            continue;
+        }
+        const std::wstring exe = path::Join(dir, a.run);
+        if (!path::IsStrictlyUnder(exe, dir) || !fs::Exists(exe) || fs::HasLinkInPath(path::Parent(exe))) {
+            throw Failure(ErrorCode::UnsafePath, L"Action target is not a file inside the install directory: " + a.run);
+        }
+        log::Info(L"Running %s (%zu argument(s))", a.run.c_str(), a.args.size());
+        const ActionResult r = RunProgram(exe, a.args, a.timeoutSeconds);
+        const bool ok = r.ok && std::find(a.successExitCodes.begin(), a.successExitCodes.end(), r.exitCode) != a.successExitCodes.end();
+        if (ok) {
+            log::Info(L"%s finished (exit code %lld)", a.run.c_str(), static_cast<long long>(r.exitCode));
+            continue;
+        }
+        const std::wstring what = a.name.Get(L"en-US", path::FileName(a.run)) +
+                                  (r.ok ? Printf(L" returned exit code %lld", static_cast<long long>(r.exitCode)) : L": " + r.detail);
+        if (a.onFailure == Action::OnFailure::Fail) throw Failure(ErrorCode::Failed, what);
+        log::Warn(L"%s", what.c_str());
+        if (a.onFailure == Action::OnFailure::Warn) out.warnings.push_back(what);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Install
 Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, const std::atomic<bool>& cancel) {
     Outcome out;
     Reporter rep(sink);
@@ -533,10 +595,16 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         if (existing.blocked) {
             throw Failure(ErrorCode::DowngradeBlocked, L"Installed version " + existing.product->version + L" is newer than " + pkg_.version);
         }
-        if (ForeignArpEntryExists(pkg_.appId, scope)) {
+        if (ForeignArpEntryExists(pkg_.appId, scope) && !(existing.foreign && existing.product->scope == scope)) {
             throw Failure(ErrorCode::RegistryError, L"Another product already uses the uninstall key '" + pkg_.appId + L"'");
         }
         RecoverPending(scope);
+        std::vector<const Requirement*> installLater;  // missing prerequisites that ship their own installer
+        for (const auto& req : pkg_.ext.requirements) {
+            if (RequirementSatisfied(req)) continue;
+            if (req.installer.empty()) throw Failure(ErrorCode::PrerequisiteMissing, req.name);
+            installLater.push_back(&req);
+        }
 
         const DirCheck check = CheckInstallDir(options.installDir, scope, scope == Scope::User);
         if (check.problem != path::Problem::None) {
@@ -550,7 +618,10 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         out.installDir = dir;
 
         std::optional<InstallRecord> oldRecord;
-        if (existing.product) {
+        if (existing.foreign) {
+            log::Info(L"Adopting the existing installation of %s %s in %s (installed by another installer)", pkg_.appId.c_str(),
+                      existing.product->version.c_str(), existing.product->installDir.c_str());
+        } else if (existing.product) {
             try {
                 oldRecord = LoadVerifiedRecord(*existing.product);
             } catch (const Failure& f) {
@@ -561,6 +632,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
 
         // ---- Preparing --------------------------------------------------------------------------------------
         rep.Set(State::Preparing, -1);
+        for (const auto& still : CloseProcesses(pkg_.ext.closeProcesses)) log::Warn(L"%s could not be closed", still.c_str());
         SetPending(pkg_.appId, scope, dir);
         pendingSet = true;
         std::vector<std::wstring> created;
@@ -719,6 +791,13 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         arp.versionMinor = v.Minor();
         WriteArp(pkg_.appId, scope, arp);
 
+        // Bundled prerequisite installers, then the package's own post-install steps (payload executables only).
+        for (const Requirement* req : installLater) {
+            const ActionResult r = RunProgram(path::Join(dir, req->installer), req->installerArgs, 600);
+            if (!r.ok || !RequirementSatisfied(*req)) out.warnings.push_back(req->name + L" could not be installed");
+        }
+        RunActions(Action::When::AfterInstall, dir, options.choices, out);
+
         // ---- Finalizing: point of no return -----------------------------------------------------------------
         rep.Set(State::Finalizing, 0.99, {}, false);
         journal->Commit();
@@ -816,6 +895,8 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
         const std::wstring trash = path::Join(workDir, L"t-" + RandomToken().substr(0, 10));
         fs::CreateDirectories(trash);
 
+        for (const auto& still : CloseProcesses(pkg_.ext.closeProcesses)) log::Warn(L"%s could not be closed", still.c_str());
+        RunActions(Action::When::BeforeUninstall, dir, {}, out);
         rep.Set(State::Removing, 0.0);
         size_t i = 0;
         std::unordered_set<std::wstring> safeDirs;
@@ -863,6 +944,17 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
         rep.Set(State::Finalizing, 0.98, {}, false);
         journal->Commit();
         journal.reset();
+        // Declared cleanup of things the app itself created (scheduled tasks, Run values, caches under AppData).
+        for (const auto& t : pkg_.ext.cleanup.removeScheduledTasks) {
+            if (DeleteScheduledTask(t)) log::Info(L"Removed scheduled task %s", t.c_str());
+        }
+        for (const auto& v : pkg_.ext.cleanup.removeRunValues) DeleteRunValue(v);
+        for (const auto& tpl : pkg_.ext.cleanup.removeData) {
+            const std::wstring target = ExpandDataTemplate(tpl);
+            if (!target.empty() && fs::IsDirectory(target) && !fs::IsLinkLike(target)) {
+                if (!fs::DeleteTree(target)) log::Warn(L"Could not fully remove %s", target.c_str());
+            }
+        }
         std::vector<std::wstring> relFiles;
         for (const auto& f : record.files) relFiles.push_back(f.path);
         RemoveEmptyDirectories(dir, ImpliedDirectories(relFiles, record.directories));

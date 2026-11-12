@@ -90,6 +90,25 @@ bool ForeignArpEntryExists(const std::wstring& appId, Scope scope) {
     return ReadDword(key.get(), kMarkerValue) != 1;
 }
 
+std::optional<InstalledProduct> QueryForeign(const std::wstring& appId, Scope scope) {
+    UniqueHkey key;
+    if (::RegOpenKeyExW(RootFor(scope), ArpKeyPath(appId).c_str(), 0, KEY_READ | kView, key.put()) != ERROR_SUCCESS) {
+        return std::nullopt;
+    }
+    if (ReadDword(key.get(), kMarkerValue) == 1) return std::nullopt;
+    InstalledProduct p;
+    p.scope = scope;
+    p.appId = appId;
+    p.name = ReadString(key.get(), L"DisplayName");
+    p.version = ReadString(key.get(), L"DisplayVersion");
+    p.publisher = ReadString(key.get(), L"Publisher");
+    std::wstring normalized;
+    if (path::ValidateAbsoluteSyntax(ReadString(key.get(), L"InstallLocation"), normalized) == path::Problem::None) {
+        p.installDir = normalized;
+    }
+    return p;
+}
+
 json::Value RecordToJson(const InstallRecord& r) {
     json::Value v;
     v.set("format", 1);

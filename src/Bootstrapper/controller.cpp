@@ -51,6 +51,10 @@ install::InstallOptions Controller::DefaultOptions() const {
     o.startMenuShortcut = install::OfferDefault(pkg_.startMenuShortcut);
     if (args_.desktopShortcut && install::OfferVisible(pkg_.desktopShortcut)) o.desktopShortcut = *args_.desktopShortcut;
     if (args_.startMenuShortcut && install::OfferVisible(pkg_.startMenuShortcut)) o.startMenuShortcut = *args_.startMenuShortcut;
+    for (const auto& opt : pkg_.ext.options) {
+        o.choices[opt.id] = opt.defaultValue;
+        if (auto it = args_.choices.find(opt.id); it != args_.choices.end()) o.choices[opt.id] = it->second;
+    }
     return o;
 }
 
@@ -65,6 +69,12 @@ bool Controller::SanitizeOptions(const json::Value& v, install::InstallOptions& 
     }
     if (!install::OfferVisible(pkg_.desktopShortcut)) out.desktopShortcut = defaults.desktopShortcut;
     if (!install::OfferVisible(pkg_.startMenuShortcut)) out.startMenuShortcut = defaults.startMenuShortcut;
+    std::map<std::string, bool> choices = defaults.choices;
+    for (const auto& [id, on] : out.choices) {
+        if (!choices.count(id)) return false;  // only options the package defines
+        choices[id] = on;
+    }
+    out.choices = std::move(choices);
     return true;
 }
 
@@ -95,7 +105,10 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
     ui.set("title", u["title"].asString());
     ui.set("welcomeText", u["welcomeText"].asString());
     ui.set("finishText", u["finishText"].asString());
-    if (mode_ == Mode::Install && !existing_.product) ui.set("licenseText", u["license"].asString());
+    if (mode_ == Mode::Install && !existing_.product) {
+        const json::Value& localized = u["licenses"][WideToUtf8(strings_.Language())];
+        ui.set("licenseText", localized.isString() && !localized.asString().empty() ? localized.asString() : u["license"].asString());
+    }
     h.set("ui", ui);
 
     json::Value opts;
@@ -117,6 +130,17 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
     opts.set("desktopShortcut", offer(pkg_.desktopShortcut, defaults.desktopShortcut));
     opts.set("startMenuShortcut", offer(pkg_.startMenuShortcut, defaults.startMenuShortcut));
     opts.set("launchAfter", offer(pkg_.launchAfterInstall, install::OfferDefault(pkg_.launchAfterInstall)));
+    json::Value choices = json::Value::MakeArray();
+    if (mode_ == Mode::Install) {
+        for (const auto& opt : pkg_.ext.options) {
+            json::Value c;
+            c.set("id", opt.id);
+            c.set("label", opt.label.Get(strings_.Language(), Utf8ToWide(opt.id)));
+            c.set("value", defaults.choices.count(opt.id) ? defaults.choices.at(opt.id) : opt.defaultValue);
+            choices.push(c);
+        }
+    }
+    opts.set("choices", choices);
     if (mode_ == Mode::Install) {
         // Report a problem with the default location up front so the welcome page can route to the options.
         const json::Value check = CheckPath(dir, defaults.scope);
@@ -139,6 +163,10 @@ json::Value Controller::Hello(const std::wstring& iconPath) const {
     ex.set("version", existing_.product ? existing_.product->version : std::wstring());
     ex.set("blocked", mode_ == Mode::Install && existing_.blocked);
     h.set("existing", ex);
+    // Running copies of the app will be closed when the operation starts; tell the user up front.
+    std::wstring running;
+    for (const auto& n : install::RunningProcesses(pkg_.ext.closeProcesses)) running += (running.empty() ? L"" : L", ") + n;
+    h.set("runningApps", running);
     h.set("requiredBytes", engine.RequiredBytes());
     h.set("freeBytes", fs::FreeSpace(dir));
     return h;
@@ -351,7 +379,10 @@ json::Value Controller::DoneMessage(const install::Outcome& o) const {
     m.set("result", o.code == ErrorCode::Ok ? "success" : o.code == ErrorCode::Cancelled ? "cancelled" : "failed");
     m.set("code", static_cast<int64_t>(o.code));
     m.set("codeName", ErrorCodeName(o.code));
-    m.set("message", strings_.Fmt("error." + WideToUtf8(ErrorCodeName(o.code)), {pkg_.name}));
+    m.set("message", strings_.Fmt("error." + WideToUtf8(ErrorCodeName(o.code)), {pkg_.name, o.detail}));
+    json::Value warnings = json::Value::MakeArray();
+    for (const auto& w : o.warnings) warnings.push(w);
+    m.set("warnings", warnings);
     m.set("detail", o.detail);
     m.set("log", logPath_);
     m.set("installDir", o.installDir);

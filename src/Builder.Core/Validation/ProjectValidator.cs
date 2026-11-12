@@ -126,6 +126,13 @@ public static partial class ProjectValidator
             d.Error("FS1403", "output.fileName", "Output file name must be a valid file name ending in .exe.");
         if (string.IsNullOrWhiteSpace(o.Directory)) d.Error("FS1404", "output.directory", "Choose an output folder.");
 
+        foreach (var (lang, file) in ui.Licenses)
+        {
+            if (lang is not ("en-US" or "zh-CN")) d.Warning("FS1309", $"ui.licenses.{lang}", $"License for '{lang}' is ignored: the installer supports en-US and zh-CN.");
+            if (!File.Exists(Resolve(projectDirectory, file))) d.Error("FS1310", $"ui.licenses.{lang}", $"License file not found: {Resolve(projectDirectory, file)}");
+        }
+        ExtensionValidator.Validate(p, d);
+
         // signing
         var s = p.Signing;
         if (s.Enabled)

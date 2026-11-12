@@ -114,6 +114,18 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
             bool b = false;
             if (!value(v) || !ParseYesNo(v, b)) return error = L"/start-menu-shortcut must be yes or no", false;
             out.startMenuShortcut = b;
+        } else if (name == L"option") {
+            if (!value(v)) return false;
+            const size_t eq = v.find(L'=');
+            bool on = false;
+            const std::wstring id = eq == std::wstring::npos ? std::wstring() : v.substr(0, eq);
+            if (id.empty() || id.size() > 32 || !ParseYesNo(std::wstring_view(v).substr(eq + 1), on)) {
+                return error = L"/option must look like name=yes or name=no", false;
+            }
+            for (const wchar_t c : id) {
+                if (!(iswalnum(c) || c == L'_' || c == L'-')) return error = L"invalid /option name", false;
+            }
+            out.choices[WideToUtf8(id)] = on;
         } else if (name == L"lang") {
             if (!value(v)) return false;
             if (!EqualsIgnoreCase(v, L"en-US") && !EqualsIgnoreCase(v, L"zh-CN")) return error = L"/lang must be en-US or zh-CN", false;

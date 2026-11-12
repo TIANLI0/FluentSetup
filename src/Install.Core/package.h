@@ -4,6 +4,7 @@
 
 #include "Common/hash.h"
 #include "Common/json.h"
+#include "Install.Core/extensions.h"
 
 #include <functional>
 #include <string>
@@ -70,6 +71,7 @@ struct Package {
     std::wstring frontendEntry;
     std::wstring iconFile;  // inside the frontend set
 
+    Extensions ext;   // close processes, requirements, options, actions, uninstall cleanup
     json::Value raw;  // the full header, used to derive the uninstaller header
 
     [[nodiscard]] bool IsUninstaller() const noexcept { return kind == L"uninstaller"; }

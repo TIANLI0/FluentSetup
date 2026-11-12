@@ -14,6 +14,7 @@
 #include "Install.Core/package.h"
 
 #include <atomic>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -57,6 +58,7 @@ struct InstallOptions {
     Scope scope = Scope::User;
     bool desktopShortcut = false;
     bool startMenuShortcut = true;
+    std::map<std::string, bool> choices;  // package-defined options (id -> selected); missing ids use the default
 };
 json::Value OptionsToJson(const InstallOptions& o);
 bool OptionsFromJson(const json::Value& v, InstallOptions& o);
@@ -70,6 +72,7 @@ struct Outcome {
     std::wstring installDir;
     std::wstring mainExecutable;  // absolute, empty if none
     std::vector<std::wstring> deferredDeletes;  // uninstall: delete once the original uninstaller process has exited
+    std::vector<std::wstring> warnings;         // non-fatal problems (e.g. an optional step that failed), English
 };
 json::Value OutcomeToJson(const Outcome& o);
 Outcome OutcomeFromJson(const json::Value& v);
@@ -79,6 +82,7 @@ struct Existing {
     Relation relation = Relation::None;
     std::optional<InstalledProduct> product;
     bool blocked = false;
+    bool foreign = false;  // installed by another installer; adopted because the package says so
 };
 
 struct DirCheck {
@@ -111,6 +115,10 @@ private:
     void InstallPayload(const std::wstring& dir, const std::wstring& backup, class Journal& journal, class Reporter& rep,
                         const std::atomic<bool>& cancel, std::vector<RecordFile>& recordFiles);
     void WriteUninstaller(const std::wstring& dest) const;
+    // Runs the package's actions for `when` (payload executables only). Fail-policy errors throw; others become warnings.
+    void RunActions(Action::When when, const std::wstring& dir, const std::map<std::string, bool>& choices, Outcome& out) const;
+    // Our own installation, or (if the package adopts it) one made by a previous installer under the same uninstall key.
+    [[nodiscard]] std::optional<InstalledProduct> FindExisting(bool* foreign = nullptr) const;
 
     const Package& pkg_;
     const archive::Container& container_;

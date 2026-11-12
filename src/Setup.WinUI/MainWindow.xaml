@@ -54,25 +54,24 @@
             </TitleBar.IconSource>
         </TitleBar>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
-            <Grid Padding="32,8,32,12" ColumnSpacing="24">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <Image x:Name="AppIcon" Grid.Column="1" Width="72" Height="72" VerticalAlignment="Top" Margin="0,4,0,0"
-                       AutomationProperties.AccessibilityView="Raw" />
-
-                <Grid>
+        <ScrollViewer x:Name="PageScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
+            <Grid Padding="32,8,32,12">
                     <Grid.ChildrenTransitions>
                         <TransitionCollection>
                             <EntranceThemeTransition FromVerticalOffset="8" IsStaggeringEnabled="False" />
                         </TransitionCollection>
                     </Grid.ChildrenTransitions>
 
-                    <!-- Summary: welcome, progress and result share the question/status title and the info lines. -->
+                    <!-- Summary: welcome, progress and result. Only this header reserves room for the app icon. -->
                     <StackPanel x:Name="SummaryPage" Visibility="Collapsed">
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Image x:Name="AppIcon" Grid.Column="1" Width="72" Height="72" VerticalAlignment="Top" Margin="0,4,0,0"
+                                   AutomationProperties.AccessibilityView="Raw" />
+                            <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -112,12 +111,16 @@
                             <TextBlock x:Name="SizeLabel" Grid.Row="3" Style="{StaticResource DetailLabelStyle}" />
                             <TextBlock x:Name="SizeLine" Grid.Row="3" Grid.Column="1" Style="{StaticResource InfoLineStyle}" />
                         </Grid>
+                            </StackPanel>
+                        </Grid>
                         <InfoBar x:Name="WelcomeInfo" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
+                        <InfoBar x:Name="RunningInfo" Severity="Warning" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
                         <InfoBar x:Name="WelcomeDirError" Severity="Error" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
 
                         <!-- Result extras -->
                         <StackPanel x:Name="ResultExtras" Spacing="8" Margin="0,16,0,0" Visibility="Collapsed">
                             <TextBlock x:Name="ResultBody" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                            <InfoBar x:Name="ResultWarnings" Severity="Warning" IsClosable="False" IsOpen="False" />
                             <TextBlock x:Name="ResultCode" Style="{StaticResource SecondaryTextStyle}" IsTextSelectionEnabled="True" />
                             <Expander x:Name="ResultDetails" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
                                 <TextBlock x:Name="ResultDetailText" Style="{StaticResource SecondaryTextStyle}" IsTextSelectionEnabled="True" FontFamily="Consolas" />
@@ -153,25 +156,28 @@
                             <CheckBox x:Name="DesktopCheck" />
                             <CheckBox x:Name="StartMenuCheck" />
                         </StackPanel>
+                        <!-- Package-defined switches (e.g. "Start when I sign in"), filled from the hello message. -->
+                        <StackPanel x:Name="ChoicesPanel" Visibility="Collapsed">
+                            <TextBlock x:Name="ChoicesLabel" Style="{StaticResource FieldLabelStyle}" />
+                        </StackPanel>
                     </StackPanel>
-
-                    <!-- License -->
-                    <Grid x:Name="LicensePage" RowSpacing="12" Visibility="Collapsed">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock x:Name="LicenseHeading" Style="{StaticResource PageHeadingStyle}" AutomationProperties.HeadingLevel="Level1" />
-                        <TextBlock x:Name="LicenseSubtitle" Grid.Row="1" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" />
-                        <TextBox x:Name="LicenseText" Grid.Row="2" Height="150" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto" FontSize="12" />
-                        <CheckBox x:Name="LicenseAccept" Grid.Row="3" Checked="OnLicenseChanged" Unchecked="OnLicenseChanged" />
-                    </Grid>
-                </Grid>
             </Grid>
         </ScrollViewer>
+
+        <!-- License: outside the scroller so the text can use all of the available height. -->
+        <Grid x:Name="LicensePage" Grid.Row="1" Padding="32,8,32,4" RowSpacing="12" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="LicenseHeading" Style="{StaticResource PageHeadingStyle}" AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock x:Name="LicenseSubtitle" Grid.Row="1" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" />
+            <TextBox x:Name="LicenseText" Grid.Row="2" MinHeight="120" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" />
+            <CheckBox x:Name="LicenseAccept" Grid.Row="3" Checked="OnLicenseChanged" Unchecked="OnLicenseChanged" />
+        </Grid>
 
         <!-- Bottom bar: "launch when ready" or live progress on the left, actions on the right. -->
         <Grid Grid.Row="2" Padding="32,12,32,24" ColumnSpacing="24">

@@ -215,6 +215,15 @@ Package ParsePackage(const std::string& headerJson, const std::function<bool(uin
     }
     if (p.IsUninstaller() && !p.payload.files.empty()) Bad(L"uninstaller must not carry a payload");
 
+    {
+        std::unordered_set<std::wstring> payloadSet;
+        for (const auto& f : p.payload.files) payloadSet.insert(ToLower(f.path));
+        p.ext = ParseExtensions(root, [&](const std::wstring& rel) { return payloadSet.count(ToLower(rel)) != 0; });
+        if (!p.ext.adoptUninstallKey.empty() && !EqualsIgnoreCase(p.ext.adoptUninstallKey, p.appId)) {
+            Bad(L"adoptUninstallKey must equal the app id");
+        }
+    }
+
     const json::Value& fe = root["frontend"];
     if (fe.isObject()) {
         p.frontend = ParseFileSet(fe, L"frontend", rangeCheck, false);

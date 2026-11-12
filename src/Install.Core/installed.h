@@ -43,6 +43,8 @@ std::optional<InstalledProduct> QueryInstalled(const std::wstring& appId, Scope 
 std::optional<InstalledProduct> FindInstalled(const std::wstring& appId);
 // True if an ARP key with this id exists but was not written by FluentSetup (we must not take it over).
 bool ForeignArpEntryExists(const std::wstring& appId, Scope scope);
+// InstallLocation and DisplayVersion of such a foreign entry (used when a package adopts an older installer's install).
+std::optional<InstalledProduct> QueryForeign(const std::wstring& appId, Scope scope);
 
 json::Value RecordToJson(const InstallRecord& r);
 // Validates every field; relative paths must be safe, shortcuts must live in Start menu / desktop folders of the scope.

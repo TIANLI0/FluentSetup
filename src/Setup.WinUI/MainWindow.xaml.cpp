@@ -29,8 +29,8 @@ namespace winrt::FluentSetupUI::implementation {
 
 namespace {
 
-constexpr int kWindowWidth = 640;   // DIP
-constexpr int kWindowHeight = 430;  // DIP
+constexpr int kWindowWidth = 720;   // DIP
+constexpr int kWindowHeight = 540;  // DIP
 
 const Value& Hello() { return fsui::UiChannel::Get().hello(); }
 
@@ -294,6 +294,21 @@ void MainWindow::ApplyHello() {
     DesktopCheck().IsChecked(desktop["value"].asBool());
     StartMenuCheck().IsChecked(startMenu["value"].asBool());
     LaunchCheck().IsChecked(opts["launchAfter"]["value"].asBool());
+    // Package-defined options (e.g. "Start when I sign in").
+    ChoicesLabel().Text(Str("options.choices"));
+    for (const auto& choice : opts["choices"].array()) {
+        CheckBox box;
+        box.Content(box_value(choice["label"].asWide()));
+        box.Tag(box_value(winrt::to_hstring(choice["id"].asString())));
+        box.IsChecked(choice["value"].asBool());
+        ChoicesPanel().Children().Append(box);
+    }
+    SetVisible(ChoicesPanel(), !opts["choices"].array().empty());
+    const std::wstring running = h["runningApps"].asWide();
+    if (!running.empty() && !IsUninstall()) {
+        RunningInfo().Message(Fmt("welcome.running", {running}));
+        RunningInfo().IsOpen(true);
+    }
     LicenseText().Text(h["ui"]["licenseText"].asWide());
     UpdateInfoLines();
     UpdateSpaceText();
@@ -319,7 +334,7 @@ void MainWindow::UpdateInfoLines() {
         else if (relation == "downgrade") versionText = Fmt("version.downgrade", {installed, version});
     }
     VersionLine().Text(versionText);
-    row(VersionLabel(), VersionLine(), !version.empty());
+    row(VersionLabel(), VersionLine(), versionText != version);  // the title already shows the plain version
 
     // Long paths: keep the drive + first folder and as many trailing folders as fit, collapse the middle (like the
     // shell's path ellipsis), so the app folder - the part users care about - is always visible.
@@ -368,7 +383,7 @@ bool MainWindow::HasOptions() const {
     if (IsUninstall()) return false;
     const Value& o = Hello()["options"];
     return o["canChangeDir"].asBool() || o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
-           o["startMenuShortcut"]["visible"].asBool();
+           o["startMenuShortcut"]["visible"].asBool() || !o["choices"].array().empty();
 }
 
 bool MainWindow::ShowsLicense() const { return !IsUninstall() && !Hello()["ui"]["licenseText"].asString().empty(); }
@@ -389,6 +404,7 @@ void MainWindow::ShowPage(Page page) {
     SetVisible(SummaryPage(), summary);
     SetVisible(OptionsPage(), page == Page::Options);
     SetVisible(LicensePage(), page == Page::License);
+    SetVisible(PageScroller(), page != Page::License);
     SetVisible(ResultExtras(), page == Page::Result);
     SetVisible(StatusIcon(), page == Page::Result);
     if (page != Page::Result) {
@@ -397,6 +413,7 @@ void MainWindow::ShowPage(Page page) {
     }
     // Notices about the existing installation only make sense before starting.
     SetVisible(WelcomeInfo(), page == Page::Welcome);
+    SetVisible(RunningInfo(), page == Page::Welcome);
     SetVisible(WelcomeDirError(), page == Page::Welcome);
     SetVisible(DescriptionText(), page == Page::Welcome && !DescriptionText().Text().empty());
 
@@ -406,10 +423,10 @@ void MainWindow::ShowPage(Page page) {
                           : relation == "upgrade"  ? "ask.update"
                           : relation == "same"     ? "ask.reinstall"
                                                    : "ask.install";
-        QuestionText().Text(Fmt(key, {AppName()}));
+        QuestionText().Text(Fmt(key, {AppName(), Hello()["app"]["version"].asWide()}));
         UpdateInfoLines();
     } else if (page == Page::Progress) {
-        QuestionText().Text(Fmt(IsUninstall() ? "progress.uninstalling" : "progress.installing", {AppName()}));
+        QuestionText().Text(Fmt(IsUninstall() ? "progress.uninstalling" : "progress.installing", {AppName(), Hello()["app"]["version"].asWide()}));
         UpdateInfoLines();
     } else {
         UpdateInfoLines();
@@ -572,6 +589,13 @@ void MainWindow::StartInstall() {
     options.set("scope", scope_);
     options.set("desktopShortcut", DesktopCheck().IsChecked().Value());
     options.set("startMenuShortcut", StartMenuCheck().IsChecked().Value());
+    Value choices = Value::MakeObject();
+    for (const auto& child : ChoicesPanel().Children()) {
+        if (auto box = child.try_as<CheckBox>()) {
+            choices.set(winrt::to_string(winrt::unbox_value<winrt::hstring>(box.Tag())), box.IsChecked().Value());
+        }
+    }
+    options.set("choices", choices);
     Value m;
     m.set("t", "start");
     m.set("options", options);
@@ -659,7 +683,7 @@ void MainWindow::OnDone(const Value& m) {
         StatusIcon().Glyph(L"");
         StatusIcon().Foreground(ThemeBrush(L"SystemFillColorSuccessBrush"));
         const bool updated = Hello()["existing"]["relation"].asString() == "upgrade";
-        QuestionText().Text(Fmt(uninstall ? "done.uninstalled" : updated ? "done.updated" : "done.installed", {name}));
+        QuestionText().Text(Fmt(uninstall ? "done.uninstalled" : updated ? "done.updated" : "done.installed", {name, Hello()["app"]["version"].asWide()}));
         body = uninstall ? std::wstring() : Hello()["ui"]["finishText"].asWide();
         if (uninstall && m["leftovers"].asBool()) body = Fmt("result.leftovers", {installDir_});
         SetVisible(OpenFolderLink(), !uninstall && !installDir_.empty());
@@ -685,6 +709,11 @@ void MainWindow::OnDone(const Value& m) {
         SetVisible(ResultDetails(), !detail.empty());
     }
     SetLine(ResultBody(), body);
+    std::wstring warnings;
+    for (const auto& w : m["warnings"].array()) warnings += (warnings.empty() ? L"" : L"\n") + w.asWide();
+    ResultWarnings().Title(Str("result.warnings"));
+    ResultWarnings().Message(warnings);
+    ResultWarnings().IsOpen(!warnings.empty());
     ShowPage(Page::Result);
 }
 

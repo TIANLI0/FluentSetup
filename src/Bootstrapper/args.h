@@ -9,6 +9,7 @@
 //   /scope user|machine       installation scope
 //   /desktop-shortcut yes|no  /start-menu-shortcut yes|no
 //   /lang en-US|zh-CN         UI language
+//   /option <id>=yes|no       package-defined option (repeatable), e.g. /option autostart=no
 //   /ui auto|winui|win32      front-end selection (diagnostics)
 //   /help | /?
 // Internal switches (used between FluentSetup processes, documented in docs/architecture.md):
@@ -17,6 +18,7 @@
 //   --ui-simulate <mode>
 #pragma once
 
+#include <map>
 #include <optional>
 #include <string>
 
@@ -35,6 +37,7 @@ struct Args {
     std::optional<bool> startMenuShortcut;
     std::wstring language;
     UiChoice ui = UiChoice::Auto;
+    std::map<std::string, bool> choices;  // /option id=yes|no (package-defined options)
     std::wstring uiSimulate;
 
     // internal
