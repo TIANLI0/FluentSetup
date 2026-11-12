@@ -127,7 +127,13 @@ dotnet test tests\Builder.Core.Tests -c Release           # builder tests
 ```
 
 The end-to-end and UI tests install and remove a test app for the current user only. They do not need administrator
-rights.
+rights. To keep using the PC while they run, start them on an invisible desktop at idle priority: their windows never
+appear on your screen or take the mouse and keyboard (UI tests talk to windows through UI Automation and window
+messages only):
+
+```powershell
+.\scripts\run-hidden.ps1 -Command 'powershell -NoProfile -File tests\UI\ui-tests.ps1' -Log out\ui-tests.log
+```
 
 ## License
 
