@@ -1,0 +1,48 @@
+name: Builder screenshots
+
+# Every page of the Builder app (light and dark theme, all cards expanded) for a project that uses every setting.
+# Runs on demand and for pull requests that change the Builder; the screenshots are uploaded as an artifact.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['src/Builder/**', 'tests/UI/builder-screenshots.ps1']
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The Builder is a framework-dependent WinUI 3 app: same runtime FluentSetup's own installer brings.
+      - name: Windows App Runtime 2.5
+        shell: pwsh
+        run: |
+          $req = (Get-Content packaging/fluentsetup.json -Raw | ConvertFrom-Json).requirements.windowsAppRuntime
+          $file = Join-Path $env:RUNNER_TEMP 'WindowsAppRuntimeInstall-x64.exe'
+          Invoke-WebRequest -UseBasicParsing $req.download.url -OutFile $file
+          if ((Get-FileHash $file -Algorithm SHA256).Hash -ne $req.download.sha256.ToUpperInvariant()) { throw 'SHA-256 mismatch' }
+          & $file --quiet
+          if ($LASTEXITCODE -ne 0) { throw "Windows App Runtime installer exit code $LASTEXITCODE" }
+
+      - name: Build the Builder
+        shell: pwsh
+        run: dotnet build src/Builder/FluentSetup.Builder.csproj -c Release -p:Platform=x64 -nologo -v q
+
+      - name: Screenshots
+        shell: pwsh
+        run: ./tests/UI/builder-screenshots.ps1 -Out out/builder-shots -Themes light,dark
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: builder-screenshots
+          path: out/builder-shots/*.png
+          if-no-files-found: warn
