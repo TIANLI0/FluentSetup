@@ -21,41 +21,49 @@ with a Fluent WinUI 3 interface and no .NET, VC++ redistributable, WebView2 or n
 - **Complete lifecycle.** Per-user or per-machine installs, upgrade, reinstall, downgrade protection, Apps & features
   registration, shortcuts, a self-removing `uninstall.exe`, silent mode, and adopting an existing install of the
   same app made by another installer.
-- **Prerequisites with version checks.** .NET Framework, .NET (Core) runtimes and WebView2, each with a minimum
-  version. A missing or outdated one is installed from a bundled installer or an optional https download (verified
-  by SHA-256), or setup stops with a help link. With `onFailure: "fail"` the app is never left on an outdated runtime.
+- **Drop-in replacement for Inno Setup and NSIS.** Takes over their installations in place and understands the command
+  lines in-app updaters already use (`/SILENT /RELAUNCH=1`, `/S /UPDATE`, `/DIR=`, `/TASKS=`, …), so apps can switch
+  in a patch release. See [four real migrations](docs/thrm.md).
+- **Prerequisites with version checks.** .NET Framework, .NET (Core) runtimes, WebView2 and the Windows App Runtime,
+  each with a minimum version. A missing or outdated one is installed from a bundled installer or an optional https
+  download (verified by SHA-256), or setup stops with a help link.
 - **Declarative extensions.** Close running processes, required (locked) and optional components, payload programs
-  after install or before uninstall with fallbacks, adoption of installs made under older product names, NGen,
-  and cleanup of legacy tasks, Run entries, shortcuts and uninstall keys.
+  after install or before uninstall with fallbacks, NGen, PATH, and cleanup of legacy tasks, Run entries, shortcuts,
+  files, registry keys and uninstall keys.
 - **Variants.** One package can carry a self-contained and a framework-dependent build of the same app (shared files
   stored once); the user picks at install time, or `--variant` builds a single-variant package.
 - **Accessible and localized.** English, Simplified Chinese, Japanese and Korean built in, following the Windows display
-  language; any other language can be added by a package (`fluentsetup locale add fr-FR`); package texts live in one
-  file per language. UI Automation names, keyboard navigation,
-  light/dark/high-contrast themes, and per-monitor DPI.
-- **Three ways to build:** the `fluentsetup` CLI, a WinUI 3 Builder app, or the `Builder.Core` library.
+  language; any other language can be added by a package (`fluentsetup locale add fr-FR`). UI Automation names,
+  keyboard navigation, light/dark/high-contrast themes, and per-monitor DPI.
+- **Three ways to build:** the Builder app, the `fluentsetup` CLI (also as a GitHub Action), or the `Builder.Core`
+  library.
 - **Made for AI-assisted authoring.** `fluentsetup guide` prints a complete authoring guide, `fluentsetup schema` the
   JSON Schema, and `fluentsetup validate --json` machine-readable diagnostics with codes and field paths.
 
 ## Quick start
 
-Requirements for building: Windows 10 1809+ (Windows 11 recommended), Visual Studio 2022 or newer with
-*Desktop development with C++*, and the .NET 10 SDK.
+### 1. Install FluentSetup
+
+Download from the [latest release](https://github.com/TIANLI0/FluentSetup/releases/latest):
+
+- **`FluentSetup-<version>-Setup.exe`**: the Builder app and the `fluentsetup` command-line tool (put on PATH).
+  Setup installs the .NET 10 runtime and the Windows App Runtime if they are missing. Windows 10 1809 or later.
+- **`fluentsetup-<version>-win-x64.zip`**: the command-line tool alone, self-contained (no .NET needed). Unzip it
+  anywhere; for build servers and scripts.
+
+### 2. Describe your app
+
+In the **Builder** app: *New project*, pick the folder with your app's build output (for example
+`bin\Release\publish`), fill in the name, ID and publisher, then go through the pages: files, install options,
+prerequisites, options and actions, upgrade, uninstall, appearance. Problems are listed as you type.
+
+Or with the command line:
 
 ```powershell
-git clone <this repository>
-cd FluentSetup
-.\scripts\build.ps1                      # native runtime, WinUI front end, CLI, Builder GUI, tests
-
-$fs = '.\src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe'
-& $fs init my-app --name "My App" --id Contoso.MyApp --source C:\build\MyApp\bin --publisher Contoso
-& $fs validate my-app\fluentsetup.json
-& $fs build my-app\fluentsetup.json      # -> my-app\dist\My App-1.0.0-Setup.exe
-& $fs inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
-& $fs guide                              # the full authoring guide (also for AI tools)
+fluentsetup init my-app --name "My App" --id Contoso.MyApp --source C:\build\MyApp\bin --publisher Contoso
 ```
 
-A minimal project file:
+Both create a `fluentsetup.json`. A minimal one looks like this:
 
 ```json
 {
@@ -69,21 +77,45 @@ A minimal project file:
 }
 ```
 
-The full reference is in [docs/project-file.md](docs/project-file.md), and the JSON schema is in
-[shared/schemas](shared/schemas/fluentsetup.project.schema.json). [samples/DemoApp](samples/DemoApp) is the test app.
-Real-world projects that replaced NSIS and Inno Setup installers with FluentSetup, including updates started from
-their old versions, are described in [docs/thrm.md](docs/thrm.md): [THRM](https://github.com/TIANLI0/THRM),
-[EncoDeck](https://github.com/TIANLI0/EncoDeck), [PinyinFlux](https://github.com/TIANLI0/PinyinFlux) and
-[MediaDuet](https://github.com/TIANLI0/MediaDuet).
+Every setting is explained in [docs/project-file.md](docs/project-file.md); `fluentsetup guide` prints a complete
+authoring guide (also useful for AI assistants).
 
-### In GitHub Actions
+### 3. Build Setup.exe
 
-```yaml
-- uses: TIANLI0/FluentSetup@v1.0.0          # fluentsetup CLI + installer runtime on PATH (verified download)
-- run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3   # e.g. from the tag
+Click **Build** in the Builder app, or:
+
+```powershell
+fluentsetup validate my-app\fluentsetup.json          # errors and warnings with codes and field paths
+fluentsetup build my-app\fluentsetup.json             # -> my-app\dist\My App-1.0.0-Setup.exe
+fluentsetup inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
 ```
 
+Run the result to try it, or test it unattended: `Setup.exe /quiet /log setup.log`, then
+`"<install folder>\uninstall.exe" /uninstall /quiet`.
+
+### 4. Build in CI
+
+The GitHub Action installs the command-line tool (verified download) on a Windows runner:
+
+```yaml
+- uses: TIANLI0/FluentSetup@v1.0.0
+- run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3
+```
+
+`-D Version=1.2.3` fills `$(Version)` placeholders in the project (`"version": "$(Version)"`), so the version comes
+from your release pipeline.
+
+### Switching from Inno Setup or NSIS
+
+Keep your app's uninstall key (`install.adoptExistingInstall` or `install.legacyUninstallKeys`), the release file
+name your in-app updater downloads (`output.fileName`) and the command line it runs: existing installations are then
+updated in place, including updates started from the old version. [docs/thrm.md](docs/thrm.md) shows how
+[THRM](https://github.com/TIANLI0/THRM), [EncoDeck](https://github.com/TIANLI0/EncoDeck),
+[PinyinFlux](https://github.com/TIANLI0/PinyinFlux) and [MediaDuet](https://github.com/TIANLI0/MediaDuet) did it.
+
 ## Setup.exe command line
+
+What your users and their administrators can run:
 
 ```
 Setup.exe [/quiet | /S | /passive] [/uninstall] [/dir <path>] [/scope user|machine] [/relaunch]
@@ -91,9 +123,35 @@ Setup.exe [/quiet | /S | /passive] [/uninstall] [/dir <path>] [/scope user|machi
           [/log <file>] [/lang en-US|zh-CN|ja-JP|ko-KR] [/ui auto|winui|win32]
 ```
 
-Exit code 0 means success. All other codes are listed in [docs/diagnostics.md](docs/diagnostics.md).
+Exit code 0 means success. All other codes are listed in [docs/diagnostics.md](docs/diagnostics.md). Inno Setup and
+NSIS switches are understood too ([details](docs/project-file.md#setupexe-command-line)).
 
-## Repository layout
+## Documentation
+
+- [Project file reference](docs/project-file.md)
+- [Migrating from Inno Setup and NSIS: case studies](docs/thrm.md)
+- [Diagnostics](docs/diagnostics.md): exit codes, logs, recovery
+- [Security](docs/security.md): threat model and mitigations
+- [Architecture](docs/architecture.md): components, process model, install state machine, fallback rules
+- [Package format](docs/package-format.md): the `Setup.exe` container
+- [UI/worker protocol](shared/protocols/ui-protocol.md)
+- [Size report](docs/size-report.md)
+- [Changelog](CHANGELOG.md)
+
+## Development
+
+Building FluentSetup itself needs Windows 10 1809+ (Windows 11 recommended), Visual Studio 2022 or newer with
+*Desktop development with C++*, and the .NET 10 SDK.
+
+```powershell
+git clone https://github.com/TIANLI0/FluentSetup.git
+cd FluentSetup
+.\scripts\build.ps1                       # native runtime, WinUI front end, CLI, Builder app, tests
+.\scripts\package-release.ps1             # the release files, in out\release
+```
+
+The CLI built from source is `src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe`.
+[samples/DemoApp](samples/DemoApp) is the app the tests package.
 
 | Path | What |
 |---|---|
@@ -101,22 +159,12 @@ Exit code 0 means success. All other codes are listed in [docs/diagnostics.md](d
 | `src/Install.Core`, `src/Install.Worker` | Install engine (state machine, journal, rollback, uninstall, extensions), elevated worker |
 | `src/Archive`, `src/IPC`, `src/Common` | Container reader + zstd, named-pipe IPC, JSON/crypto/path/security helpers |
 | `src/Setup.WinUI`, `src/Setup.Win32` | C++/WinRT WinUI 3 front end, Win32 fallback front end |
-| `src/Builder.Core`, `src/CLI`, `src/Builder` | C# packaging library, `fluentsetup` CLI, WinUI 3 Builder GUI |
+| `src/Builder.Core`, `src/CLI`, `src/Builder` | C# packaging library, `fluentsetup` CLI, WinUI 3 Builder app |
 | `shared` | Localization strings, JSON schema, IPC protocol |
 | `tests` | Native unit tests, Builder.Core tests, end-to-end install tests, UI Automation tests |
 | `docs` | Architecture, package format, security, diagnostics, size report |
 
-## Documentation
-
-- [Architecture](docs/architecture.md): components, process model, install state machine, fallback rules
-- [Project file reference](docs/project-file.md)
-- [Package format](docs/package-format.md): the `Setup.exe` container
-- [UI/worker protocol](shared/protocols/ui-protocol.md)
-- [Security](docs/security.md): threat model and mitigations
-- [Diagnostics](docs/diagnostics.md): exit codes, logs, recovery
-- [Size report](docs/size-report.md)
-
-## Testing
+### Tests
 
 ```powershell
 .\out\bin\x64\Release\FluentSetup.Tests.Native.exe        # native unit/security tests
@@ -134,6 +182,9 @@ messages only):
 ```powershell
 .\scripts\run-hidden.ps1 -Command 'powershell -NoProfile -File tests\UI\ui-tests.ps1' -Log out\ui-tests.log
 ```
+
+Releases: push a tag `vX.Y.Z` with a matching `## [X.Y.Z]` section in [CHANGELOG.md](CHANGELOG.md); the release
+workflow builds, tests and publishes the files above.
 
 ## License
 
