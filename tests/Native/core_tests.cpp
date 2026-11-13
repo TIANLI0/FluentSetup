@@ -6,6 +6,7 @@
 #include "Common/path.h"
 #include "Common/text.h"
 #include "Common/version.h"
+#include "Install.Core/extensions.h"
 
 #include <shellapi.h>
 
@@ -150,6 +151,70 @@ TEST(arguments_update_switches) {
         boot::Args c;
         CHECK(!boot::ParseArgs(bad, c, err));
     }
+}
+
+TEST(arguments_modify_repair_inputs) {
+    std::wstring err;
+    boot::Args m;
+    CHECK(boot::ParseArgs(L"uninstall.exe /modify /quiet /desktop-shortcut no /input server=https://x.example/?a=b "
+                          L"/input=edition=pro --input \"note=two words\" /input empty=",
+                          m, err));
+    CHECK(m.modify && !m.repair && !m.uninstall && m.quiet && m.desktopShortcut && !*m.desktopShortcut);
+    CHECK(m.inputs.size() == 4 && m.inputs["server"] == L"https://x.example/?a=b" && m.inputs["edition"] == L"pro");
+    CHECK(m.inputs["note"] == L"two words" && m.inputs.count("empty") == 1 && m.inputs["empty"].empty());
+    boot::Args again;  // the last value of a repeated id wins
+    CHECK(boot::ParseArgs(L"setup.exe /input a=1 /input a=2", again, err) && again.inputs.size() == 1 && again.inputs["a"] == L"2");
+    boot::Args r;
+    CHECK(boot::ParseArgs(L"uninstall.exe --repair /quiet", r, err) && r.repair && !r.modify && r.quiet);
+    boot::Args w;
+    CHECK(boot::ParseArgs(L"setup.exe --worker --pipe FluentSetup-ab12 --parent-pid 5 /modify /lang en-US", w, err) && w.worker && w.modify);
+    for (const wchar_t* bad : {L"uninstall.exe /modify /uninstall", L"uninstall.exe /repair /modify", L"uninstall.exe /repair /uninstall",
+                               L"uninstall.exe /modify=yes", L"uninstall.exe /repair=1", L"uninstall.exe /modify /check-update",
+                               L"uninstall.exe /repair /install-update", L"setup.exe --worker --pipe x --parent-pid 5 /repair",
+                               L"setup.exe /input", L"setup.exe /input =x", L"setup.exe /input noequals", L"setup.exe /input bad.id=1",
+                               L"setup.exe /input b\u00e4d=1", L"setup.exe /input 012345678901234567890123456789012=x",
+                               L"setup.exe /input a=1 /input b=1 /input c=1 /input d=1 /input e=1 /input f=1 /input g=1 /input h=1 /input i=1"}) {
+        boot::Args c;
+        CHECK(!boot::ParseArgs(bad, c, err));
+    }
+}
+
+TEST(input_values_checked) {
+    install::InputDef server;
+    server.id = "server";
+    server.required = true;
+    server.pattern = L"^https://[^ ]+$";
+    CHECK(!install::CheckInputValue(server, L"").empty());
+    CHECK(!install::CheckInputValue(server, L"http://example.test").empty());
+    CHECK(!install::CheckInputValue(server, L"https://two words").empty());
+    CHECK(install::CheckInputValue(server, L"https://example.test/api").empty());
+    CHECK(!install::CheckInputValue(server, L"https://" + std::wstring(4096, L'a')).empty());  // longer than 4096
+
+    install::InputDef port;  // optional: empty is fine, anything else must match
+    port.id = "port";
+    port.pattern = L"^[0-9]{1,5}$";
+    CHECK(install::CheckInputValue(port, L"").empty());
+    CHECK(install::CheckInputValue(port, L"8080").empty());
+    CHECK(!install::CheckInputValue(port, L"80a").empty());
+    CHECK(!install::CheckInputValue(port, L"123456").empty());
+
+    install::InputDef edition;
+    edition.id = "edition";
+    edition.type = install::InputDef::Type::Choice;
+    edition.choices = {{L"standard", {}}, {L"pro", {}}};
+    CHECK(install::CheckInputValue(edition, L"pro").empty());
+    CHECK(!install::CheckInputValue(edition, L"Pro").empty());  // values are exact
+    CHECK(!install::CheckInputValue(edition, L"enterprise").empty());
+    CHECK(install::CheckInputValue(edition, L"").empty());  // not required
+    edition.required = true;
+    CHECK(!install::CheckInputValue(edition, L"").empty());
+
+    install::InputDef secret;  // password: no pattern, any characters
+    secret.id = "token";
+    secret.type = install::InputDef::Type::Password;
+    secret.required = true;
+    CHECK(install::CheckInputValue(secret, L"p@ss w\u00f6rd \"'<>").empty());
+    CHECK(!install::CheckInputValue(secret, L"").empty());
 }
 
 TEST(argument_quoting_round_trips) {
