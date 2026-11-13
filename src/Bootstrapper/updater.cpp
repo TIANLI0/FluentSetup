@@ -132,6 +132,65 @@ bool FindChecksum(const std::string& text, const std::wstring& fileName, Sha256D
     return false;
 }
 
+// The release's Setup.exe asset (update.asset with {Version}); `githubDigest` tells whether GitHub published its SHA-256.
+bool AssetFromRelease(const Source& s, const json::Value& release, const std::wstring& version, Release& out, bool& githubDigest) {
+    const std::wstring fileName = ReplaceAll(s.asset, L"{Version}", version);
+    for (const auto& a : release["assets"].array()) {
+        if (!EqualsIgnoreCase(a["name"].asWide(), fileName)) continue;
+        const std::string& url = a["browser_download_url"].asString();
+        if (!IsSafeHttpsUrl(url)) return false;
+        Release rel;
+        rel.version = version;
+        rel.fileName = fileName;
+        rel.url = url;
+        rel.size = a["size"].asUint();
+        if (IsSafeHttpsUrl(release["html_url"].asString())) rel.notesUrl = release["html_url"].asWide();
+        const std::string& digest = a["digest"].asString();  // "sha256:<hex>" on assets uploaded since mid-2025
+        githubDigest = digest.size() == 71 && digest.rfind("sha256:", 0) == 0 && ParseDigest(std::string_view(digest).substr(7), rel.sha256);
+        out = std::move(rel);
+        return true;
+    }
+    return false;
+}
+
+// The SHA-256 of the chosen asset: from the checksums file (which must agree with GitHub's digest, if any) or GitHub's.
+Lookup ResolveChecksum(const Source& s, const json::Value& release, bool githubDigest, Release& out, std::wstring& error) {
+    unsigned long status = 0;
+    if (!s.checksums.empty()) {
+        std::string listUrl;
+        for (const auto& a : release["assets"].array()) {
+            if (EqualsIgnoreCase(a["name"].asWide(), s.checksums)) listUrl = a["browser_download_url"].asString();
+        }
+        if (!IsSafeHttpsUrl(listUrl)) {
+            error = Printf(L"Release %s has no %s", out.version.c_str(), s.checksums.c_str());
+            return Lookup::Failed;
+        }
+        std::string list;
+        if (!install::HttpGetText(listUrl, nullptr, kMaxSmallFile, list, status, error)) {
+            error = s.checksums + L": " + error;
+            return Lookup::Failed;
+        }
+        Sha256Digest listed{};
+        if (!FindChecksum(list, out.fileName, listed)) {
+            error = Printf(L"%s has no SHA-256 for %s", s.checksums.c_str(), out.fileName.c_str());
+            return Lookup::Failed;
+        }
+        if (githubDigest && listed != out.sha256) {
+            error = Printf(L"%s and GitHub disagree about the SHA-256 of %s", s.checksums.c_str(), out.fileName.c_str());
+            return Lookup::Failed;
+        }
+        out.sha256 = listed;
+    } else if (!githubDigest) {
+        error = Printf(L"GitHub publishes no SHA-256 for %s; add a checksums file (update.checksums)", out.fileName.c_str());
+        return Lookup::Failed;
+    }
+    if (out.size == 0 || out.size > kMaxSetupSize) {
+        error = Printf(L"Unexpected size of %s", out.fileName.c_str());
+        return Lookup::Failed;
+    }
+    return Lookup::Found;
+}
+
 Lookup FromGitHub(const Source& s, Release& out, std::wstring& error) {
     const std::string api = "https://api.github.com/repos/" + WideToUtf8(s.github) + (s.prerelease ? "/releases?per_page=30" : "/releases/latest");
     const wchar_t* headers = L"Accept: application/vnd.github+json\r\nX-GitHub-Api-Version: 2022-11-28\r\n";
@@ -166,66 +225,58 @@ Lookup FromGitHub(const Source& s, Release& out, std::wstring& error) {
         const std::wstring version = VersionFromTag((*r)["tag_name"].asWide());
         Version v;
         if (!Version::Parse(version, v) || (chosen && Compare(v, best) <= 0)) continue;
-        const std::wstring fileName = ReplaceAll(s.asset, L"{Version}", version);
-        bool found = false;
-        for (const auto& a : (*r)["assets"].array()) {
-            if (!EqualsIgnoreCase(a["name"].asWide(), fileName)) continue;
-            const std::string& url = a["browser_download_url"].asString();
-            if (!IsSafeHttpsUrl(url)) break;
-            Release rel;
-            rel.version = version;
-            rel.fileName = fileName;
-            rel.url = url;
-            rel.size = a["size"].asUint();
-            if (IsSafeHttpsUrl((*r)["html_url"].asString())) rel.notesUrl = (*r)["html_url"].asWide();
-            const std::string& digest = a["digest"].asString();  // "sha256:<hex>" on assets uploaded since mid-2025
-            githubDigest = digest.size() == 71 && digest.rfind("sha256:", 0) == 0 && ParseDigest(std::string_view(digest).substr(7), rel.sha256);
-            out = std::move(rel);
-            found = true;
-            break;
-        }
-        if (!found) {
-            log::Info(L"GitHub release %s has no %s", version.c_str(), fileName.c_str());
+        Release rel;
+        bool digest = false;
+        if (!AssetFromRelease(s, *r, version, rel, digest)) {
+            log::Info(L"GitHub release %s has no %s", version.c_str(), ReplaceAll(s.asset, L"{Version}", version).c_str());
             continue;
         }
+        out = std::move(rel);
+        githubDigest = digest;
         chosen = r;
         best = v;
     }
     if (!chosen) return Lookup::None;
+    return ResolveChecksum(s, *chosen, githubDigest, out, error);
+}
 
-    if (!s.checksums.empty()) {
-        std::string listUrl;
-        for (const auto& a : (*chosen)["assets"].array()) {
-            if (EqualsIgnoreCase(a["name"].asWide(), s.checksums)) listUrl = a["browser_download_url"].asString();
-        }
-        if (!IsSafeHttpsUrl(listUrl)) {
-            error = Printf(L"Release %s has no %s", out.version.c_str(), s.checksums.c_str());
-            return Lookup::Failed;
-        }
-        std::string list;
-        if (!install::HttpGetText(listUrl, nullptr, kMaxSmallFile, list, status, error)) {
-            error = s.checksums + L": " + error;
-            return Lookup::Failed;
-        }
-        Sha256Digest listed{};
-        if (!FindChecksum(list, out.fileName, listed)) {
-            error = Printf(L"%s has no SHA-256 for %s", s.checksums.c_str(), out.fileName.c_str());
-            return Lookup::Failed;
-        }
-        if (githubDigest && listed != out.sha256) {
-            error = Printf(L"%s and GitHub disagree about the SHA-256 of %s", s.checksums.c_str(), out.fileName.c_str());
-            return Lookup::Failed;
-        }
-        out.sha256 = listed;
-    } else if (!githubDigest) {
-        error = Printf(L"GitHub publishes no SHA-256 for %s; add a checksums file (update.checksums)", out.fileName.c_str());
+// The release of exactly `version` (repair): tag "v<version>", else "<version>"; drafts are skipped, pre-releases
+// count (the installed version may be one).
+Lookup FromGitHubTag(const Source& s, const std::wstring& version, Release& out, std::wstring& error) {
+    if (version.empty() || version.size() > 64 ||
+        !std::all_of(version.begin(), version.end(), [](wchar_t c) { return (c < 128 && iswalnum(c)) || c == L'.' || c == L'-' || c == L'+'; })) {
+        error = L"The installed version cannot be looked up: " + version;
         return Lookup::Failed;
     }
-    if (out.size == 0 || out.size > kMaxSetupSize) {
-        error = Printf(L"Unexpected size of %s", out.fileName.c_str());
-        return Lookup::Failed;
+    const wchar_t* headers = L"Accept: application/vnd.github+json\r\nX-GitHub-Api-Version: 2022-11-28\r\n";
+    for (const std::wstring& tag : {L"v" + version, version}) {
+        std::string body;
+        unsigned long status = 0;
+        const std::string api = "https://api.github.com/repos/" + WideToUtf8(s.github) + "/releases/tags/" + WideToUtf8(tag);
+        log::Info(L"Repair source: GitHub %s, release %s", s.github.c_str(), tag.c_str());
+        if (!install::HttpGetText(api, headers, kMaxApiAnswer, body, status, error)) {
+            if (status == 404) {
+                error.clear();
+                continue;
+            }
+            error = L"GitHub: " + error + (status == 403 || status == 429 ? L" (rate limit; try again later)" : L"");
+            return Lookup::Failed;
+        }
+        json::Value release;
+        if (!json::Parse(body, release) || !release.isObject()) {
+            error = L"GitHub sent an answer that is not a release";
+            return Lookup::Failed;
+        }
+        if (release["draft"].asBool()) continue;
+        bool githubDigest = false;
+        if (!AssetFromRelease(s, release, version, out, githubDigest)) {
+            error = Printf(L"GitHub release %s has no %s", tag.c_str(), ReplaceAll(s.asset, L"{Version}", version).c_str());
+            return Lookup::None;
+        }
+        return ResolveChecksum(s, release, githubDigest, out, error);
     }
-    return Lookup::Found;
+    error = L"GitHub has no release of version " + version;
+    return Lookup::None;
 }
 
 Lookup FromFeed(const Source& s, const std::wstring& appId, Release& out, std::wstring& error) {
@@ -267,6 +318,19 @@ Lookup FindUpdate(const Source& s, const std::wstring& appId, const std::wstring
     Version::Parse(out.version, latest);
     log::Info(L"Published version %s, installed %s", out.version.c_str(), installed.c_str());
     return Compare(latest, current) > 0 ? Lookup::Found : Lookup::None;
+}
+
+// The release of exactly `version` from the update source (repair).
+Lookup FindExactRelease(const Source& s, const std::wstring& appId, const std::wstring& version, Release& out, std::wstring& error) {
+    if (!s.github.empty()) return FromGitHubTag(s, version, out, error);
+    const Lookup found = FromFeed(s, appId, out, error);
+    if (found != Lookup::Found) return found;
+    Version advertised, installed;
+    if (!Version::Parse(version, installed) || !Version::Parse(out.version, advertised) || Compare(advertised, installed) != 0) {
+        error = Printf(L"The update feed offers version %s, not the installed %s", out.version.c_str(), version.c_str());
+        return Lookup::None;
+    }
+    return Lookup::Found;
 }
 
 // Old download folders: a Setup.exe still running from one simply keeps it until next time.
@@ -380,6 +444,34 @@ bool VerifyPackage(const std::wstring& file, const std::wstring& appId, const st
         }
         log::Info(L"Signed by %s", signer.c_str());
     }
+    return true;
+}
+
+// The Setup.exe recorded at install time, if it is still there and unchanged (SHA-256 from the verified record).
+bool RecordedPackage(const install::Package& pkg, const std::wstring& version, const install::InstallRecord& record, RepairPackage& out,
+                     std::wstring& why) {
+    const std::wstring& file = record.sourcePackage;
+    if (file.empty()) return why = L"the install record names no original setup", false;
+    // Kept open read-only (no other writers) from the check until the setup has started from it.
+    UniqueHandle lock(::CreateFileW(path::Long(file).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!lock) return why = file + L" is no longer available", false;
+    // The record keeps the package's header digest (the footer's header SHA-256), which identifies the exact build:
+    // the header lists the SHA-256 of every stream, and the setup verifies those itself before using them.
+    try {
+        const auto container = archive::Container::Open(file);
+        if (!EqualsIgnoreCase(container->HeaderDigestHex(), record.sourcePackageSha256)) {
+            return why = file + L" is not the setup that installed this version", false;
+        }
+    } catch (const Failure& f) {
+        return why = file + L": " + f.detail(), false;
+    }
+    Release r;
+    r.version = version;
+    if (!VerifyPackage(file, pkg.appId, pkg.architecture, r, Source{}, why)) return false;
+    out.path = file;
+    out.lock = std::move(lock);
+    out.downloaded = false;
     return true;
 }
 
@@ -744,6 +836,63 @@ private:
 };
 
 }  // namespace
+
+RepairPackage::~RepairPackage() {
+    lock.reset();
+    if (downloaded && !path.empty()) {
+        ::DeleteFileW(path.c_str());
+        ::RemoveDirectoryW(path::Parent(path).c_str());
+    }
+}
+
+RepairLookup FindRepairPackage(const install::Package& pkg, const std::wstring& version, const install::InstallRecord* record,
+                               const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress,
+                               RepairPackage& out, std::wstring& error) {
+    std::wstring why;
+    if (record && RecordedPackage(pkg, version, *record, out, why)) {
+        log::Info(L"Repair source: the original setup %s", out.path.c_str());
+        return RepairLookup::Found;
+    }
+    if (record) log::Info(L"Repair: not using the original setup: %s", why.c_str());
+    std::wstring noSource;
+    const std::optional<Source> source = ReadSource(pkg, noSource);
+    if (!source) {
+        error = why.empty() ? noSource : why;
+        return RepairLookup::None;
+    }
+    Release r;
+    const Lookup found = FindExactRelease(*source, pkg.appId, version, r, error);
+    if (found == Lookup::None) return RepairLookup::None;
+    Downloaded d;
+    if (found == Lookup::Failed || !DownloadRelease(r, cancel, progress, d, error)) return RepairLookup::Failed;
+    if (!VerifyPackage(d.path, pkg.appId, pkg.architecture, r, *source, error)) {
+        Discard(d);
+        return RepairLookup::Failed;
+    }
+    out.path = d.path;
+    out.lock = std::move(d.lock);
+    out.downloaded = true;
+    return RepairLookup::Found;
+}
+
+bool RunSetup(const std::wstring& file, bool quiet, const std::wstring& language, DWORD& exitCode, std::wstring& error) {
+    std::wstring cmd = QuoteArg(file) + (quiet ? L" /quiet" : L" /passive");
+    if (!language.empty()) cmd += L" /lang " + QuoteArg(language);
+    log::Info(L"Starting %s", cmd.c_str());
+    ::AllowSetForegroundWindow(ASFW_ANY);
+    STARTUPINFOW si{sizeof(si)};
+    PROCESS_INFORMATION pi{};
+    const std::wstring dir = path::Parent(file);
+    if (!::CreateProcessW(file.c_str(), cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, dir.c_str(), &si, &pi)) {
+        error = L"Cannot start the setup: " + Win32Message(::GetLastError());
+        return false;
+    }
+    UniqueHandle process(pi.hProcess), thread(pi.hThread);
+    ::WaitForSingleObject(process.get(), INFINITE);
+    exitCode = static_cast<DWORD>(ErrorCode::Internal);
+    ::GetExitCodeProcess(process.get(), &exitCode);
+    return true;
+}
 
 int RunUpdate(const install::Package& pkg, const Args& args, const Strings& strings) {
     std::wstring why;

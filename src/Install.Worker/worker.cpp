@@ -64,17 +64,34 @@ int RunWorker(const boot::Args& args, const install::Package& pkg, const archive
     const std::string& op = run["op"].asString();
     const bool cleanup = op == "cleanup";  // undo what the app did elevated (only what this package declares)
     const bool uninstall = op == "uninstall" || cleanup;
-    if ((op != "install" && !uninstall) || uninstall != args.uninstall || (!uninstall && pkg.IsUninstaller())) {
+    const bool modify = op == "modify";    // ARP "Modify": new choices for the existing installation
+    if ((op != "install" && !uninstall && !modify) || uninstall != args.uninstall || modify != args.modify ||
+        (op == "install" && pkg.IsUninstaller())) {
         log::Error(L"Worker: operation '%S' is not allowed for this package/command line", op.c_str());
         return internal;
     }
     install::InstallOptions options;
-    // Re-check against the package: the unelevated parent is not trusted to respect allowCustomDir, scopes or option ids.
+    // Re-check against the package: the unelevated parent is not trusted to respect allowCustomDir, scopes, option ids
+    // or the inputs' rules.
     if (uninstall) {
         options.removeUserData = run["options"]["removeUserData"].asBool(false);
     } else if (!install::OptionsFromJson(run["options"], options) || !install::Engine(pkg, container).SanitizeOptions(options)) {
         log::Error(L"Worker: malformed or disallowed install options");
         return static_cast<int>(ErrorCode::InvalidArguments);
+    } else {
+        for (const auto& [id, value] : options.inputs) {
+            if (!pkg.ext.FindInput(id)) {
+                log::Error(L"Worker: unknown input %S", id.c_str());
+                return static_cast<int>(ErrorCode::InvalidArguments);
+            }
+        }
+        for (const auto& input : pkg.ext.inputs) {
+            const auto it = options.inputs.find(input.id);
+            if (const std::wstring why = install::CheckInputValue(input, it == options.inputs.end() ? std::wstring() : it->second); !why.empty()) {
+                log::Error(L"Worker: input %S: %s", input.id.c_str(), why.c_str());
+                return static_cast<int>(ErrorCode::InvalidArguments);
+            }
+        }
     }
 
     std::atomic<bool> cancel{false};
@@ -91,6 +108,7 @@ int RunWorker(const boot::Args& args, const install::Package& pkg, const archive
     install::Engine engine(pkg, container);
     install::Outcome outcome;
     if (cleanup) engine.RunElevatedCleanup(outcome);
+    else if (modify) outcome = engine.Modify(options, sink, cancel);
     else outcome = uninstall ? engine.Uninstall(args.originDir, sink, cancel, options.removeUserData) : engine.Install(options, sink, cancel);
     json::Value done;
     done.set("t", "done");
@@ -116,7 +134,8 @@ int RunWorker(const boot::Args& args, const install::Package& pkg, const archive
     channel.CancelIo();
     reader.join();
     channel.Close();
-    return static_cast<int>(outcome.code);
+    // Same as Setup.exe: 3010 (ERROR_SUCCESS_REBOOT_REQUIRED) when files in use are replaced at the next restart.
+    return outcome.code == ErrorCode::Ok && outcome.rebootRequired ? 3010 : static_cast<int>(outcome.code);
 }
 
 }  // namespace fsetup::worker

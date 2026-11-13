@@ -8,7 +8,7 @@
 
 namespace winrt::FluentSetupUI::implementation {
 
-enum class Page { Welcome, License, Progress, Result };
+enum class Page { Welcome, Inputs, License, Progress, Result };
 enum class ResultKind { None, Success, Failed, Cancelled };
 
 struct MainWindow : MainWindowT<MainWindow> {
@@ -27,7 +27,30 @@ struct MainWindow : MainWindowT<MainWindow> {
     void OnLicenseChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
 
 private:
+    // One field of the Settings page. `ok` is the bootstrapper's verdict for the value shown (false while a check of a
+    // changed value is pending); errors appear once the user has changed the field.
+    struct InputField {
+        std::string id;
+        std::string type;
+        winrt::Microsoft::UI::Xaml::Controls::TextBox text{nullptr};
+        winrt::Microsoft::UI::Xaml::Controls::PasswordBox password{nullptr};
+        winrt::Microsoft::UI::Xaml::Controls::ComboBox combo{nullptr};
+        winrt::Microsoft::UI::Xaml::Controls::TextBlock error{nullptr};
+        bool required = false;
+        bool ok = true;
+        bool touched = false;
+    };
+
     void InitWindow();
+    winrt::fire_and_forget LoadBanner(std::wstring path, int maxPixels);
+    void BuildInputs();
+    [[nodiscard]] std::wstring InputValue(const InputField& field) const;
+    void OnInputEdited(size_t index);
+    void OnInputCheck(const fsetup::json::Value& m);
+    [[nodiscard]] bool InputsValid() const;
+    [[nodiscard]] bool HasInputsPage() const;
+    void StartRepair();
+    void BeginProgress();
     winrt::fire_and_forget LoadIconFrame(std::wstring path, int pixels,
                                          std::function<void(winrt::Microsoft::UI::Xaml::Media::ImageSource const&)> apply);
     void ApplyHello();
@@ -56,6 +79,9 @@ private:
 
     [[nodiscard]] std::wstring AppName() const;
     [[nodiscard]] bool IsUninstall() const;
+    [[nodiscard]] bool IsModify() const;
+    [[nodiscard]] bool IsInstall() const { return !IsUninstall() && !IsModify(); }
+    [[nodiscard]] bool CanRepair() const;
     void UpdateSpaceText();
 
     HWND hwnd_ = nullptr;
@@ -71,6 +97,8 @@ private:
     bool readySent_ = false;
     bool closing_ = false;
     bool dialogOpen_ = false;
+    bool repairing_ = false;  // the progress/result pages are about a repair (modify mode)
+    std::vector<InputField> inputs_;
     std::wstring scope_;
     std::string variant_;
     std::wstring logPath_;

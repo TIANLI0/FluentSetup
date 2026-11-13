@@ -17,9 +17,13 @@
 #include "Setup.Win32/fallback_ui.h"
 
 #include <commctrl.h>
+#include <sddl.h>
 #include <shellapi.h>
 
+#include <future>
 #include <memory>
+#include <mutex>
+#include <thread>
 
 using namespace fsetup;
 
@@ -52,6 +56,70 @@ void ShowError(const std::wstring& title, const std::wstring& instruction, const
         ::MessageBoxW(nullptr, (instruction + L"\n\n" + content).c_str(), title.c_str(), MB_ICONERROR | MB_OK);
     }
 }
+
+// One setup/uninstall per app at a time, across users and sessions: the named mutex Global\FluentSetup-<appId>. It is
+// owned by a helper thread so that any thread can give it up (a repair hands over to another Setup.exe, which takes
+// the same lock).
+class InstanceLock {
+public:
+    InstanceLock() = default;
+    InstanceLock(const InstanceLock&) = delete;
+    InstanceLock& operator=(const InstanceLock&) = delete;
+    ~InstanceLock() { Release(); }
+
+    // False if another setup holds the lock, or if the mutex cannot be created or opened (`error` = the Win32 error):
+    // a mutex we may not wait on is treated as held, never as absent.
+    bool Acquire(const std::wstring& name, DWORD& error) {
+        // Every signed-in user (and services) may wait on it and release what they own, so setups in other sessions
+        // see each other; only SYSTEM and administrators may do more. OW limits the creator's implicit owner rights,
+        // so whoever creates it first cannot lock others out by rewriting its security.
+        PSECURITY_DESCRIPTOR sd = nullptr;
+        if (!::ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                L"D:P(A;;0x001F0001;;;SY)(A;;0x001F0001;;;BA)(A;;0x00100001;;;AU)(A;;0x00100001;;;IU)(A;;0x00100001;;;OW)",
+                SDDL_REVISION_1, &sd, nullptr)) {
+            error = ::GetLastError();
+            return false;
+        }
+        SECURITY_ATTRIBUTES sa{sizeof(sa), sd, FALSE};
+        mutex_.reset(::CreateMutexExW(&sa, name.c_str(), 0, SYNCHRONIZE | MUTEX_MODIFY_STATE));
+        error = mutex_ ? 0 : ::GetLastError();
+        ::LocalFree(sd);
+        if (!mutex_) return false;
+        release_.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        if (!release_) {
+            error = ::GetLastError();
+            return false;
+        }
+        std::promise<bool> owned;
+        std::future<bool> result = owned.get_future();
+        thread_ = std::thread([this, &owned] {
+            const DWORD wait = ::WaitForSingleObject(mutex_.get(), 0);
+            const bool mine = wait == WAIT_OBJECT_0 || wait == WAIT_ABANDONED;  // abandoned: the previous owner died
+            owned.set_value(mine);
+            if (!mine) return;
+            ::WaitForSingleObject(release_.get(), INFINITE);
+            ::ReleaseMutex(mutex_.get());
+        });
+        const bool mine = result.get();
+        if (!mine) {
+            thread_.join();
+            error = ERROR_ALREADY_EXISTS;
+        }
+        return mine;
+    }
+
+    // Any thread; idempotent.
+    void Release() {
+        std::lock_guard lock(releaseMutex_);
+        if (release_) ::SetEvent(release_.get());
+        if (thread_.joinable()) thread_.join();
+    }
+
+private:
+    UniqueHandle mutex_, release_;
+    std::thread thread_;
+    std::mutex releaseMutex_;
+};
 
 // The installed uninstall.exe cannot delete itself while running. Phase 1 copies it to a private temp directory,
 // runs the copy (phase 2) and waits for its result, so callers (Settings, scripts) still get the real exit code.
@@ -160,15 +228,17 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     strings.Load(argsOk ? args.language : std::wstring(), pkg.ui["defaultLanguage"].asWide(), pkg.ui["strings"]);
     const std::wstring appName = pkg.name.empty() ? path::FileName(self) : pkg.name;
     const bool updateMode = argsOk && (args.checkUpdate || args.installUpdate);
-    const bool uninstallMode = argsOk && !updateMode && (args.uninstall || pkg.IsUninstaller());
+    const bool modifyMode = argsOk && !updateMode && (args.modify || args.repair);
+    const bool uninstallMode = argsOk && !updateMode && !modifyMode && (args.uninstall || pkg.IsUninstaller());
 
     std::wstring logPath = argsOk ? args.logPath : std::wstring();
     if (logPath.empty()) {
         const std::wstring id = pkg.appId.empty() ? L"package" : pkg.appId;
         logPath = path::Join(path::Join(path::TempRoot(), L"FluentSetup"),
-                             id + (updateMode ? L"-update-" : uninstallMode ? L"-uninstall-" : L"-install-") + Timestamp() + L".log");
+                             id + (updateMode ? L"-update-" : uninstallMode ? L"-uninstall-" : modifyMode ? L"-modify-" : L"-install-") +
+                                 Timestamp() + L".log");
     }
-    log::Open(logPath, args.worker ? L"worker" : args.phase2 ? L"uninstall" : updateMode ? L"update" : L"setup");
+    log::Open(logPath, args.worker ? L"worker" : args.phase2 ? (modifyMode ? L"modify" : L"uninstall") : updateMode ? L"update" : L"setup");
     log::Info(L"FluentSetup %s (%s) started: %s", kProductVersion,
 #if defined(_M_ARM64)
               L"arm64",
@@ -196,6 +266,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     }
     log::Info(L"Package %s %s (%s), %zu files, %s", pkg.appId.c_str(), pkg.version.c_str(), pkg.kind.c_str(),
               pkg.payload.files.size(), FormatBytes(pkg.payload.totalRaw).c_str());
+    if (!args.uiSimulate.empty() && !pkg.testHooks) {
+        // Test hook for the WinUI fallback tests: only packages built with "fluentsetup build --test-hooks" honour it.
+        log::Warn(L"--ui-simulate is ignored: the package was not built with test hooks");
+        args.uiSimulate.clear();
+    }
 
     if (args.worker) {
         const int code = worker::RunWorker(args, pkg, *container);
@@ -214,26 +289,49 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         log::Close();
         return code;
     }
-    if (uninstallMode && pkg.IsUninstaller() && !args.phase2) {
+    // The uninstaller relocates itself for /modify and /repair too: a repair reinstalls the same version, which
+    // replaces uninstall.exe. Phase 1 only waits for the copy's exit code and gives up its handle on the file, so the
+    // reinstall can move the running uninstall.exe aside (renaming a running program is allowed, writing it is not).
+    if ((uninstallMode || modifyMode) && pkg.IsUninstaller() && !args.phase2) {
         log::Info(L"Relocating the uninstaller to a temporary directory");
         log::Close();
+        if (modifyMode) container.reset();
         return RunUninstallPhase1(self);
     }
 
-    // One setup/uninstall per app at a time (across sessions).
-    UniqueHandle mutex(::CreateMutexW(nullptr, FALSE, (L"Global\\FluentSetup-" + pkg.appId).c_str()));
-    if (mutex && ::WaitForSingleObject(mutex.get(), 0) == WAIT_TIMEOUT) {
-        log::Error(L"Another setup of %s is running", pkg.appId.c_str());
+    // One setup/uninstall per app at a time (across users and sessions).
+    InstanceLock instance;
+    if (DWORD lockError = 0; !instance.Acquire(L"Global\\FluentSetup-" + pkg.appId, lockError)) {
+        if (lockError == ERROR_ALREADY_EXISTS) log::Error(L"Another setup of %s is running", pkg.appId.c_str());
+        else log::Error(L"The single-instance lock of %s cannot be opened (%s); assuming another setup is running", pkg.appId.c_str(), Win32Message(lockError).c_str());
         if (!quiet) ShowError(appName, strings.Fmt("error.AlreadyRunning", {appName}), {});
         return static_cast<int>(ErrorCode::AlreadyRunning);
     }
 
-    const boot::Mode mode = uninstallMode ? boot::Mode::Uninstall : boot::Mode::Install;
+    const boot::Mode mode = uninstallMode ? boot::Mode::Uninstall : modifyMode ? boot::Mode::Modify : boot::Mode::Install;
     boot::Controller controller(pkg, *container, mode, strings, args, logPath);
-    if (mode == boot::Mode::Uninstall && !controller.existing().product) {
-        log::Error(L"%s is not installed", pkg.appId.c_str());
+    controller.SetLockRelease([&instance] { instance.Release(); });
+    const auto& existing = controller.existing();
+    if ((mode == boot::Mode::Uninstall && !existing.product) || (mode == boot::Mode::Modify && (!existing.product || existing.foreign))) {
+        log::Error(L"%s is not installed%s", pkg.appId.c_str(), existing.product ? L" by FluentSetup (no install record)" : L"");
         if (!quiet) ShowError(appName, strings.Get("error.NotInstalled"), {});
         return static_cast<int>(ErrorCode::NotInstalled);
+    }
+    std::wstring refused;
+    if (mode == boot::Mode::Modify && !pkg.IsUninstaller() && existing.relation != install::Relation::Same) {
+        // Changing or repairing needs the package of the installed version (uninstall.exe always is).
+        refused = Printf(L"/modify and /repair need the setup of the installed version %s (this is %s); use the installed uninstall.exe",
+                         existing.product->version.c_str(), pkg.version.c_str());
+    }
+    if (mode != boot::Mode::Uninstall) {
+        for (const auto& [id, value] : args.inputs) {
+            if (!pkg.ext.FindInput(id)) refused = L"Unknown input: /input " + Utf8ToWide(id);
+        }
+    }
+    if (!refused.empty()) {
+        log::Error(L"Invalid command line: %s", refused.c_str());
+        if (!quiet) ShowError(appName, strings.Get("error.InvalidArguments"), refused);
+        return static_cast<int>(ErrorCode::InvalidArguments);
     }
 
     int exitCode = 0;
@@ -244,11 +342,13 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         // A per-machine operation started without administrator rights (typically an app's own updater updating a
         // per-machine install) asks for them with the UAC prompt, as Inno Setup and NSIS do. Deployment tools run
         // elevated and never see it; a declined prompt ends with ElevationRequired.
-        if (machine && !security::IsElevated()) log::Info(L"Quiet per-machine operation: requesting administrator rights");
-        controller.Start(options, nullptr);
+        if (machine && !security::IsElevated() && !args.repair) log::Info(L"Quiet per-machine operation: requesting administrator rights");
+        if (args.repair) controller.Repair(nullptr);
+        else controller.Start(options, nullptr);
         controller.WaitDone(INFINITE);
         exitCode = controller.ExitCode();
-        // An app's own updater ran us silently and exited; start it again (Inno /RELAUNCH=1, NSIS-style /UPDATE).
+        // An app's own updater ran us silently and exited; start it again (Inno /RELAUNCH=1, NSIS-style /UPDATE). Not
+        // after 3010: files of the app are still waiting for the restart.
         if (exitCode == 0 && args.relaunch && mode == boot::Mode::Install) controller.Relaunch();
     } else {
         bool finished = false, resume = false;

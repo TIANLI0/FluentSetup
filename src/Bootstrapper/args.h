@@ -5,12 +5,15 @@
 //   /quiet | /verysilent | /s no UI at all
 //   /passive | /silent        progress window only (no questions); Inno Setup's /SILENT
 //   /uninstall                remove the installed app
+//   /modify                   change the installed app's options (Apps & features "Modify"); with /quiet: no UI
+//   /repair                   verify the installed files and restore damaged ones from the original package
 //   /log <file>               write the log to this file
 //   /dir <path>               install location
 //   /scope user|machine       installation scope
 //   /desktop-shortcut yes|no  /start-menu-shortcut yes|no
 //   /lang en-US|zh-CN         UI language
 //   /option <id>=yes|no       package-defined option (repeatable), e.g. /option autostart=no
+//   /input <id>=<value>       value of a package-defined input (repeatable), e.g. /input server=https://x
 //   /ui auto|winui|win32      front-end selection (diagnostics)
 //   /help | /?
 // Internal switches (used between FluentSetup processes, documented in docs/architecture.md):
@@ -32,6 +35,8 @@ struct Args {
     bool quiet = false;
     bool passive = false;  // /passive, Inno /SILENT: show progress, ask nothing, close when done (quiet wins)
     bool uninstall = false;
+    bool modify = false;  // /modify: change the options of the installed app (ARP "Modify")
+    bool repair = false;  // /repair: verify the installed files, reinstall the same version if any is damaged
     bool help = false;
     std::wstring logPath;
     std::wstring installDir;
@@ -41,6 +46,7 @@ struct Args {
     std::wstring language;
     UiChoice ui = UiChoice::Auto;
     std::map<std::string, bool> choices;  // /option id=yes|no (package-defined options)
+    std::map<std::string, std::wstring> inputs;  // /input id=value (package-defined inputs; the value may be empty)
     std::string variant;                  // /variant id (package variant, e.g. shared or selfContained)
     bool removeUserData = false;          // /remove-user-data (uninstall)
     bool relaunch = false;                // /relaunch, Inno /RELAUNCH=1, NSIS-style /UPDATE: start the app after a quiet or passive install

@@ -51,6 +51,13 @@ public:
     [[nodiscard]] const Footer& footer() const noexcept { return footer_; }
     [[nodiscard]] const std::wstring& FilePath() const noexcept { return path_; }
     [[nodiscard]] uint64_t OverlayStart() const noexcept { return footer_.overlayStart; }
+    // SHA-256 of the stored header (from the footer): identifies this exact package build.
+    [[nodiscard]] std::wstring HeaderDigestHex() const {
+        static constexpr wchar_t kHex[] = L"0123456789abcdef";
+        std::wstring out;
+        for (const uint8_t b : footer_.headerSha256) out += kHex[b >> 4], out += kHex[b & 15];
+        return out;
+    }
     [[nodiscard]] uint64_t FileSize() const noexcept { return fileSize_; }
     [[nodiscard]] bool HasSignature() const noexcept { return signatureOffset_ != 0; }
 

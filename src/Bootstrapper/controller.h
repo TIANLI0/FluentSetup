@@ -11,13 +11,18 @@
 #include "Install.Core/engine.h"
 
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <vector>
 
 namespace fsetup::boot {
 
-enum class Mode { Install, Uninstall };
+// Install: Setup.exe. Uninstall: /uninstall (or uninstall.exe). Modify: /modify or /repair on an installed app.
+enum class Mode { Install, Uninstall, Modify };
+// What the current (or last) operation of the session is: the mode's own operation, or a repair in modify mode.
+enum class Operation { Install, Uninstall, Modify, Repair };
 
 class IListener {
 public:
@@ -41,21 +46,35 @@ public:
     [[nodiscard]] const std::wstring& logPath() const noexcept { return logPath_; }
     [[nodiscard]] const install::Existing& existing() const noexcept { return existing_; }
 
-    // The "hello" document shared by both front ends (see shared/protocols/ui-protocol.md).
-    [[nodiscard]] json::Value Hello(const std::wstring& iconPath) const;
+    // The "hello" document shared by both front ends (see shared/protocols/ui-protocol.md). bannerPath: the extracted
+    // ui.banner file (WinUI); the Win32 front end reads the banner with ReadFrontendFile instead.
+    [[nodiscard]] json::Value Hello(const std::wstring& iconPath, const std::wstring& bannerPath = {}) const;
     // Reply to a "checkPath" request: {t:"pathCheck", path, normalized, ok, message, requiredBytes, freeBytes}.
     [[nodiscard]] json::Value CheckPath(const std::wstring& dir, install::Scope scope) const;
+    // Reply to a "checkInput" request: {t:"inputCheck", id, value, ok, message} (message localized, empty when ok).
+    [[nodiscard]] json::Value CheckInput(const std::string& id, const std::wstring& value) const;
     [[nodiscard]] install::InstallOptions DefaultOptions() const;
     // Validates options coming from a front end against the package's offers. Returns false if they are not allowed.
     bool SanitizeOptions(const json::Value& v, install::InstallOptions& out) const;
+    // English description of the first input problem (an id the package does not define, a missing required value, a
+    // value that does not match); empty if every input value is acceptable.
+    [[nodiscard]] std::wstring InputProblem(const install::InstallOptions& o) const;
+    // Decodes one file of the package's frontend set into memory and verifies its SHA-256 (e.g. the banner).
+    bool ReadFrontendFile(const std::wstring& relativePath, std::vector<uint8_t>& out, uint64_t maxBytes) const;
 
     // Starts the operation asynchronously. Ignored if one is running. `owner` parents the UAC prompt.
     void Start(const install::InstallOptions& options, HWND owner);
+    // Modify mode: verifies the installed files and, if any is missing or damaged, runs the same version's Setup.exe
+    // (recorded original or update source) with /passive (/quiet in quiet mode). Asynchronous like Start.
+    void Repair(HWND owner);
+    // Called before a repair hands over to another Setup.exe, which needs the per-app single-instance lock.
+    void SetLockRelease(std::function<void()> release) { releaseLock_ = std::move(release); }
     void Cancel();
     [[nodiscard]] bool Started() const;
     [[nodiscard]] bool Running() const;
     bool WaitDone(DWORD ms) const;
     [[nodiscard]] std::optional<install::Outcome> Result() const;
+    [[nodiscard]] Operation operation() const;
 
     // Atomically returns the latest state and installs `listener` (nullptr to detach).
     void Attach(IListener* listener, install::Progress* last, std::optional<install::Outcome>* outcome, bool* started);
@@ -66,13 +85,18 @@ public:
     // After a quiet install started by an app's own updater (/relaunch): start the app again with install.relaunchArgs.
     void Relaunch() const { LaunchApp(pkg_.ext.relaunchArgs); }
     void MarkClosedByUser() { closedByUser_ = true; }
+    // The outcome's ErrorCode, 3010 (ERROR_SUCCESS_REBOOT_REQUIRED) for a success that needs a restart.
     [[nodiscard]] int ExitCode() const;
 
     // Deletes files the engine could not remove while the original uninstaller was running (per-user uninstall).
     void CompleteDeferred(HANDLE originProcess) const;
 
 private:
+    enum class RepairResult { None, NoProblems, Repaired, NoSource };
+    bool Begin(Operation op);
     void Run(install::InstallOptions options, HWND owner);
+    void RunRepair();
+    [[nodiscard]] std::optional<install::InstallRecord> PreviousRecord() const;
     install::Outcome RunElevated(const install::InstallOptions& options, HWND owner, const char* op = nullptr);
     void Publish(const install::Progress& p);
     void Finish(install::Outcome o);
@@ -84,6 +108,9 @@ private:
     const Args& args_;
     std::wstring logPath_;
     install::Existing existing_;
+    std::function<void()> releaseLock_;
+    mutable std::once_flag signerOnce_;
+    mutable archive::SignerInfo signer_;
 
     mutable std::mutex mutex_;          // session state
     std::recursive_mutex listenerMutex_; // listener installation + delivery
@@ -93,6 +120,8 @@ private:
     bool started_ = false;
     bool running_ = false;
     bool closedByUser_ = false;
+    Operation operation_ = Operation::Install;
+    RepairResult repair_ = RepairResult::None;
     std::atomic<bool> cancel_{false};
     ipc::Channel* workerChannel_ = nullptr;
     std::thread thread_;

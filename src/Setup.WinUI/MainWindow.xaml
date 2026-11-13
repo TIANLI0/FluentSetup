@@ -64,6 +64,9 @@
 
                     <!-- Summary: welcome, progress and result. Only this header reserves room for the app icon. -->
                     <StackPanel x:Name="SummaryPage" Visibility="Collapsed">
+                        <!-- ui.banner: decorative, first page only, scaled to the content width. -->
+                        <Image x:Name="BannerImage" Stretch="Uniform" MaxHeight="160" HorizontalAlignment="Left" Margin="0,4,0,16"
+                               Visibility="Collapsed" AutomationProperties.AccessibilityView="Raw" />
                         <Grid ColumnSpacing="24">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -82,6 +85,11 @@
                             <TextBlock x:Name="QuestionText" Grid.Column="1" Style="{StaticResource QuestionStyle}"
                                        AutomationProperties.HeadingLevel="Level1" />
                         </Grid>
+                        <!-- Who signed this setup: "Verified publisher: X" or "Unknown publisher". -->
+                        <StackPanel x:Name="SignaturePanel" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" Visibility="Collapsed">
+                            <FontIcon x:Name="SignatureIcon" FontSize="14" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw" />
+                            <TextBlock x:Name="SignatureText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        </StackPanel>
                         <TextBlock x:Name="DescriptionText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" MaxLines="3"
                                    TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,8,0,0" />
                         <StackPanel x:Name="UserDataPanel" Margin="0,16,0,0" Visibility="Collapsed">
@@ -146,6 +154,8 @@
                             <CheckBox x:Name="StartMenuCheck" />
                             <StackPanel x:Name="ChoicesPanel" />
                         </StackPanel>
+                        <!-- "Change <App>": what Repair does (the button is in the bottom bar). -->
+                        <TextBlock x:Name="RepairNote" Style="{StaticResource SecondaryTextStyle}" Margin="0,12,0,0" Visibility="Collapsed" />
                         <InfoBar x:Name="WelcomeInfo" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
                         <InfoBar x:Name="RunningInfo" Severity="Warning" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
                         <InfoBar x:Name="WelcomeDirError" Severity="Error" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
@@ -159,6 +169,13 @@
                                 <TextBlock x:Name="ResultDetailText" Style="{StaticResource SecondaryTextStyle}" IsTextSelectionEnabled="True" FontFamily="Consolas" />
                             </Expander>
                         </StackPanel>
+                    </StackPanel>
+
+                    <!-- Settings: the package's inputs (text, password, choice), between the first page and the license. -->
+                    <StackPanel x:Name="InputsPage" Spacing="12" Visibility="Collapsed">
+                        <TextBlock x:Name="InputsHeading" Style="{StaticResource PageHeadingStyle}" AutomationProperties.HeadingLevel="Level1" />
+                        <TextBlock x:Name="InputsSubtitle" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" />
+                        <StackPanel x:Name="InputsPanel" Spacing="16" Margin="0,4,0,0" />
                     </StackPanel>
 
             </Grid>
