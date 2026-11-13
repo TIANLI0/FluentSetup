@@ -31,9 +31,17 @@ public static class Program
               --json                    Print the build report as JSON instead of text
               --non-interactive         Never prompt (the default; accepted for CI scripts)
               --refresh-installers      Download official prerequisite installers ("auto": "bundle") again
+              --msbuild                 Diagnostics as "<project> : error FS1234: ..." (for the MSBuild targets)
           fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
           fluentsetup inspect <Setup.exe> [--verify] [--json]
           fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
+          fluentsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [options]
+                                        Write winget manifests (winget-pkgs layout) for a built Setup.exe
+              -o, --output <dir>        Root folder (default: current folder): <dir>/manifests/<x>/<Publisher>/<App>/<version>
+              --identifier <id>         PackageIdentifier (default: app.id if it is Publisher.App)
+              --license <name>          e.g. MIT (default: recognized from the license text, else Proprietary)
+              --license-url, --publisher-url, --release-notes-url <url>
+              --short-description <text>, --tags <a,b,...>, --json
           fluentsetup locale add <language> <project.json> [--force]
                                         Create <ui.localization>/<language>.json with every text to translate
                                         (installer strings, option/action/variant ids); any BCP-47 tag, e.g. fr-FR
@@ -80,6 +88,7 @@ public static class Program
                 "schema" => PrintResource("FluentSetup.Cli.fluentsetup.project.schema.json"),
                 "locale" => Locale(parsed),
                 "update" => await UpdateAsync(parsed, cts.Token),
+                "winget" => WingetCommand.Run(parsed),
                 _ => UsageError($"Unknown command '{args[0]}'."),
             };
         }
@@ -198,6 +207,7 @@ public static class Program
         var project = LoadProject(projectPath);
         var verbose = a.Flag("verbose", "v");
         var json = a.Flag("json");
+        var msbuild = a.Flag("msbuild");
         var options = new BuildOptions
         {
             OutputDirectory = a.Value("output", "o") is { } o ? Path.GetFullPath(o) : null,
@@ -235,7 +245,7 @@ public static class Program
         }
         else
         {
-            PrintDiagnostics(report.Diagnostics, verbose);
+            PrintDiagnostics(report.Diagnostics, verbose, msbuild ? projectPath : null);
             if (report.Success)
             {
                 var s = report.Sizes;
@@ -249,6 +259,10 @@ public static class Program
                 foreach (var b in report.BundledInstallers)
                     Console.WriteLine($"  Bundled {b.FileName} ({PackageBuilder.Format(b.Size)}, {b.Url}, downloaded {b.Downloaded.LocalDateTime:g}{(b.SignatureChecked ? ", signature checked" : "")})");
                 Console.WriteLine($"  {report.DurationSeconds:F1} s{(report.Signed ? ", signed" : "")}{(report.UninstallerSigned ? " (also uninstall.exe)" : "")}{(report.IncludesWinUI ? "" : ", Win32 interface only")}");
+            }
+            else if (msbuild && !report.Diagnostics.Any(d => d.Severity == Severity.Error))
+            {
+                Console.Error.WriteLine($"{projectPath} : error : Build failed: {report.Error}");
             }
             else
             {
@@ -403,13 +417,17 @@ public static class Program
         return 0;
     }
 
-    private static void PrintDiagnostics(IEnumerable<Diagnostic> diagnostics, bool verbose)
+    /// <param name="msbuildFile">The project path: errors and warnings in MSBuild's canonical form, which MSBuild's Exec
+    /// task logs as build errors and warnings with their code ("&lt;file&gt; : error FS1101: [app.version] ...").</param>
+    private static void PrintDiagnostics(IEnumerable<Diagnostic> diagnostics, bool verbose, string? msbuildFile = null)
     {
         foreach (var d in diagnostics)
         {
             if (d.Severity == Severity.Info && !verbose) continue;
             var w = d.Severity == Severity.Error ? Console.Error : Console.Out;
-            w.WriteLine(d.ToString());
+            w.WriteLine(msbuildFile is not null && d.Severity != Severity.Info
+                ? $"{msbuildFile} : {d.Severity.ToString().ToLowerInvariant()} {d.Code}: [{d.Field}] {d.Message}"
+                : d.ToString());
         }
     }
 
@@ -440,7 +458,7 @@ internal sealed class ParsedArgs
     private readonly Dictionary<string, string?> _options = new(StringComparer.Ordinal);
     private readonly HashSet<string> _used = [];
     private readonly List<string> _defines = [];
-    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease", "refresh-installers", "test-hooks"];
+    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease", "refresh-installers", "test-hooks", "msbuild"];
 
     public static ParsedArgs Parse(string[] args)
     {

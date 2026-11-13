@@ -1,0 +1,13 @@
+<Project>
+  <!-- FluentSetup.Builder.Core NuGet package: copies the installer runtime it carries (stub, WinUI front end, installer
+       strings, default icon) into the app's output and publish folders as runtime\, where RuntimeAssets looks for it
+       (AppContext.BaseDirectory\runtime). Set FluentSetupCopyRuntime to false to leave it out, e.g. when the app passes
+       BuildOptions.RuntimeRoot or sets FLUENTSETUP_RUNTIME. -->
+  <ItemGroup Condition="'$(FluentSetupCopyRuntime)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)..\runtime\**\*"
+          Link="runtime\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          Visible="false" />
+  </ItemGroup>
+</Project>

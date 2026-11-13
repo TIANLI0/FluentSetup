@@ -1,0 +1,22 @@
+<Project>
+  <!-- Shared metadata of the NuGet packages FluentSetup.Builder.Core, FluentSetup.Cli and FluentSetup.MSBuild, imported by
+       those projects (scripts/pack-nuget.ps1 packs them, docs/msbuild.md explains them). The version is the one in
+       Directory.Build.props. Each package's README is packaging/nuget/<PackageId>.md. -->
+  <PropertyGroup>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/TIANLI0/FluentSetup</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/TIANLI0/FluentSetup</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>https://github.com/TIANLI0/FluentSetup/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <!-- Source Link (built into the .NET SDK): symbols point at the exact commit on GitHub. -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\src\Builder\Assets\AppIcon.png" Pack="true" PackagePath="icon.png" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)..\packaging\nuget\$(PackageId).md" Pack="true" PackagePath="README.md" Visible="false" />
+  </ItemGroup>
+</Project>

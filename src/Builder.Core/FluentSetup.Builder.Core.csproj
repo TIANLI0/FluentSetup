@@ -15,4 +15,28 @@
   <ItemGroup>
     <InternalsVisibleTo Include="FluentSetup.Builder.Core.Tests" />
   </ItemGroup>
+
+  <!-- NuGet package FluentSetup.Builder.Core (scripts/pack-nuget.ps1, docs/msbuild.md). It carries the installer runtime
+       built by the native projects; buildTransitive/FluentSetup.Builder.Core.targets copies it next to the consuming app,
+       so PackageBuilder works without a FluentSetup installation. -->
+  <PropertyGroup>
+    <PackageId>FluentSetup.Builder.Core</PackageId>
+    <Description>Build native Windows 11-style installers (a single Setup.exe) from .NET code: the project model, validation and packaging library behind the fluentsetup CLI and the FluentSetup Builder app. Includes the installer runtime.</Description>
+    <PackageTags>installer;setup;setup.exe;windows;winui;inno-setup;nsis;fluentsetup</PackageTags>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- The runtime files are not assemblies to reference (NU5100). -->
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
+    <FsNativeOut Condition="'$(FsNativeOut)' == ''">$(MSBuildThisFileDirectory)..\..\out\bin\</FsNativeOut>
+  </PropertyGroup>
+  <Import Project="..\..\build\nuget.props" />
+  <ItemGroup>
+    <None Update="buildTransitive\FluentSetup.Builder.Core.targets" Pack="true" PackagePath="buildTransitive\FluentSetup.Builder.Core.targets" />
+    <None Include="$(FsNativeOut)x64\Release\FluentSetup.Stub.exe" Pack="true" PackagePath="runtime\x64\" Visible="false" Condition="Exists('$(FsNativeOut)x64\Release\FluentSetup.Stub.exe')" />
+    <None Include="$(FsNativeOut)x64\Release\ui\*.exe;$(FsNativeOut)x64\Release\ui\*.dll;$(FsNativeOut)x64\Release\ui\*.pri;$(FsNativeOut)x64\Release\ui\*.xbf" Pack="true" PackagePath="runtime\x64\ui\" Visible="false" />
+    <None Include="$(FsNativeOut)ARM64\Release\FluentSetup.Stub.exe" Pack="true" PackagePath="runtime\arm64\" Visible="false" Condition="Exists('$(FsNativeOut)ARM64\Release\FluentSetup.Stub.exe')" />
+    <None Include="$(FsNativeOut)ARM64\Release\ui\*.exe;$(FsNativeOut)ARM64\Release\ui\*.dll;$(FsNativeOut)ARM64\Release\ui\*.pri;$(FsNativeOut)ARM64\Release\ui\*.xbf" Pack="true" PackagePath="runtime\arm64\ui\" Visible="false" />
+    <None Include="..\..\shared\localization\*.json" Pack="true" PackagePath="runtime\localization\" Visible="false" />
+    <None Include="..\..\assets\default-app.ico" Pack="true" PackagePath="runtime\" Visible="false" />
+  </ItemGroup>
 </Project>

@@ -4,6 +4,8 @@ name: Release
 # "## [X.Y.Z]" section in CHANGELOG.md) to build, test and publish:
 #   fluentsetup-X.Y.Z-win-x64.zip   CLI + installer runtime (used by the GitHub Action in action.yml)
 #   FluentSetup-X.Y.Z-Setup.exe     Builder app + CLI
+#   FluentSetup.*.X.Y.Z.nupkg       NuGet packages (Builder.Core, Cli, MSBuild), also pushed to nuget.org when the
+#                                   NUGET_API_KEY secret is set
 #   SHA256SUMS.txt
 on:
   push:
@@ -93,3 +95,18 @@ jobs:
           $major = 'v' + ('${{ steps.version.outputs.version }}' -split '\.')[0]
           git tag -f $major HEAD
           git push -f origin "refs/tags/${major}"
+
+      # The same .nupkg files as on the release page (symbols go along with Builder.Core). Re-runs skip what is there.
+      - name: Push the NuGet packages
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if (-not $env:NUGET_API_KEY) {
+            Write-Host '::notice::NUGET_API_KEY is not set: the NuGet packages are only attached to the release.'
+            exit 0
+          }
+          foreach ($package in Get-ChildItem out/release -Filter *.nupkg) {
+            dotnet nuget push $package.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
