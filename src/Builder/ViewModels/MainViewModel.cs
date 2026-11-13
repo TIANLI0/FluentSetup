@@ -326,6 +326,7 @@ public sealed partial class MainViewModel : ObservableObject
         nameof(BuildStatus), nameof(LastReport), nameof(ErrorCount), nameof(WarningCount), nameof(FilesSummary), nameof(IsCollecting),
         nameof(PayloadBytes), nameof(FileCount), nameof(BuilderThemeIndex), nameof(MainExecutableItem), nameof(IconImage),
         nameof(UpdateRelease), nameof(UpdateStatus), nameof(IsUpdating), nameof(CheckForUpdatesAutomatically),
+        nameof(BannerImage), nameof(BannerInfo),
     ];
 
     private void OnAnyPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -504,6 +505,9 @@ public sealed partial class MainViewModel : ObservableObject
         _ when IsFieldUnder(field, "options") || IsFieldUnder(field, "actions") => "options",
         _ when IsFieldUnder(field, "uninstall") => "uninstall",
         _ when IsFieldUnder(field, "variables") => "build",
+        _ when IsFieldUnder(field, "shortcuts") || IsFieldUnder(field, "associations") || IsFieldUnder(field, "protocols") => "shortcuts",
+        _ when IsFieldUnder(field, "registry") || IsFieldUnder(field, "environment") || IsFieldUnder(field, "services") || IsFieldUnder(field, "firewall") => "system",
+        _ when IsFieldUnder(field, "inputs") || IsFieldUnder(field, "configFiles") => "inputs",
         "ui.license" or "ui.defaultLanguage" => "app",
         _ when field.StartsWith("ui.", StringComparison.Ordinal) => "appearance",
         "output.fileName" => "app",
@@ -543,6 +547,7 @@ public sealed partial class MainViewModel : ObservableObject
             }
             if (!string.Equals(MainExecutable, current, StringComparison.Ordinal)) MainExecutable = current;
             OnPropertyChanged(nameof(MainExecutableItem));
+            SyncIconChoices(result.Files.Select(f => f.RelativePath));
             _collectorDiagnostics = result.Diagnostics.Items.ToList();
             FileProblems.Clear();
             foreach (var d in _collectorDiagnostics.Where(d => d.Severity != Severity.Info)) FileProblems.Add(ToRow(d));

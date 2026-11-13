@@ -499,11 +499,13 @@ fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [-
 fluentsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [-o <dir>] [--identifier <Publisher.App>]
                    [--license <name>] [--license-url <url>] [--short-description <text>] [--publisher-url <url>]
                    [--tags <a,b>] [--release-notes-url <url>] [--json]
+fluentsetup versions <webview2|windowsappruntime|dotnet|vcredist> [--json]
 fluentsetup --version | --help
 ```
 
 - `validate` runs all project checks and collects the files, the same steps `build` performs before compressing, and prints diagnostics as `severity CODE [field]: message`. With `--json` it prints `{ valid, files, bytes, diagnostics }`.
 - `inspect` prints the header summary, sizes and signature state of a built Setup.exe. `--verify` also checks every stream's SHA-256.
+- `versions` lists versions for a prerequisite's version field, newest first, as the Builder's version pickers offer them: `webview2` = the current Microsoft Edge Stable and Beta versions for Windows (`edgeupdates.microsoft.com`), `windowsappruntime` = stable Windows App SDK releases from NuGet in the project's format (`1.6` for a 1.x channel, `2.5.1` from 2.x on), `dotnet` = one `M.m.0` minimum per .NET channel with its latest runtime, LTS/STS and support phase (`builds.dotnet.microsoft.com` release metadata), `vcredist` = common minimums (there is no feed; Microsoft's official installer is always the latest). Lists are cached for a day under `%LocalAppData%\FluentSetup\cache\versions`; offline, the saved (or a built-in) list is printed with a warning. `--json` prints `{ product, versions[], source, retrievedAt, feedUrl, error }`.
 - `init` creates `<folder>\fluentsetup.json` (default folder: the current one) and refuses to overwrite an existing file. `mainExecutable` is set to the first `*.exe` found directly in the source folder.
 - `winget` writes winget manifests for a built Setup.exe into `<dir>\manifests\<letter>\<Publisher>\<App>\<version>\` (default `<dir>`: the current folder), the layout of the winget-pkgs repository. Everything else comes from the package. See [winget.md](winget.md); [msbuild.md](msbuild.md) covers the NuGet packages (MSBuild targets, .NET tool, library).
 - Options accept `--name value` or `--name=value`. Unknown or repeated options are usage errors.

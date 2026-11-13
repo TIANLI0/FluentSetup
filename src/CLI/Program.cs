@@ -49,6 +49,9 @@ public static class Program
                                         Update FluentSetup (Builder and CLI) to the latest release on GitHub:
                                         downloads Setup.exe, verifies its SHA-256 and installs it.
                                         --check only reports; --json (with --check) prints the result as JSON
+          fluentsetup versions <webview2|windowsappruntime|dotnet|vcredist> [--json]
+                                        Versions to use as a prerequisite's minimum (from Microsoft's
+                                        update feeds, cached for a day; vcredist: common minimums)
           fluentsetup guide                     Print the complete project-authoring guide (for people and AI tools)
           fluentsetup schema                    Print the JSON Schema of fluentsetup.json
           fluentsetup --version | --help
@@ -89,6 +92,7 @@ public static class Program
                 "locale" => Locale(parsed),
                 "update" => await UpdateAsync(parsed, cts.Token),
                 "winget" => WingetCommand.Run(parsed),
+                "versions" => await VersionsAsync(parsed, cts.Token),
                 _ => UsageError($"Unknown command '{args[0]}'."),
             };
         }
@@ -185,6 +189,38 @@ public static class Program
         if (showProgress) Console.Error.WriteLine();
         Console.WriteLine("SHA-256 verified. Starting Setup (it closes FluentSetup if it is running).");
         FluentSetupUpdates.StartSetup(setup, relaunch: false);
+        return 0;
+    }
+
+    /// <summary>versions &lt;product&gt;: the version catalog the Builder's prerequisite pickers use.</summary>
+    private static async Task<int> VersionsAsync(ParsedArgs a, CancellationToken ct)
+    {
+        var name = a.PositionalOrDefault(0) ?? throw new UsageException("Give a prerequisite: webview2, windowsappruntime, dotnet or vcredist.");
+        if (!FluentSetup.Builder.Core.Prerequisites.VersionCatalog.TryParseProduct(name, out var product))
+            throw new UsageException($"Unknown prerequisite '{name}'. Use webview2, windowsappruntime, dotnet or vcredist.");
+        if (a.PositionalOrDefault(1) is { } extra) throw new UsageException($"Unexpected argument '{extra}'.");
+        bool json = a.Flag("json");
+        a.EnsureAllUsed();
+        using var catalog = new FluentSetup.Builder.Core.Prerequisites.VersionCatalog();
+        var list = await catalog.GetAsync(product, refresh: false, ct);
+        if (json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(list, ReportJson));
+            return 0;
+        }
+        var origin = list.Source switch
+        {
+            FluentSetup.Builder.Core.Prerequisites.VersionListSource.Online or FluentSetup.Builder.Core.Prerequisites.VersionListSource.Cache =>
+                $"from {list.FeedUrl}, retrieved {list.RetrievedAt!.Value.ToLocalTime():yyyy-MM-dd HH:mm}",
+            FluentSetup.Builder.Core.Prerequisites.VersionListSource.StaleCache =>
+                $"saved {list.RetrievedAt!.Value.ToLocalTime():yyyy-MM-dd HH:mm} (Microsoft could not be reached: {list.Error})",
+            _ when list.Error is not null => $"built-in list (Microsoft could not be reached: {list.Error})",
+            _ => "common minimum versions; Microsoft's official installer is always the latest",
+        };
+        if (list.Error is not null) Console.Error.WriteLine($"warning: {list.FeedUrl}: {list.Error}");
+        Console.WriteLine($"{product}: {origin}");
+        int width = list.Versions.Count == 0 ? 0 : list.Versions.Max(v => v.Version.Length);
+        foreach (var v in list.Versions) Console.WriteLine($"  {v.Version.PadRight(width)}  {v.Description}");
         return 0;
     }
 

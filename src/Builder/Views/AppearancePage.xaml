@@ -79,6 +79,33 @@
                 </Border>
             </StackPanel>
 
+            <!-- Banner image at the top of the installer's first page -->
+            <TextBlock x:Uid="AppearanceBannerSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}">
+                <StackPanel Spacing="12">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE8B9;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppearanceBannerTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="AppearanceBannerDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            <TextBox Text="{x:Bind VM.Banner, Mode=TwoWay}" Margin="0,8,0,0" IsSpellCheckEnabled="False" x:Uid="AppearanceBannerBox" />
+                            <TextBlock Text="{x:Bind VM.BannerInfo, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" Margin="0,4,0,0" AutomationProperties.LiveSetting="Polite" />
+                            <TextBlock Text="{x:Bind VM.Errors.UiBanner, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UiBanner), Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button x:Uid="AppearanceBannerClear" Command="{x:Bind VM.ClearBannerCommand}" />
+                            <Button x:Uid="AppearanceBannerBrowse" Command="{x:Bind VM.BrowseBannerCommand}" />
+                        </StackPanel>
+                    </Grid>
+                    <Border CornerRadius="{StaticResource ControlCornerRadius}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            HorizontalAlignment="Left" Margin="44,0,0,0" MaxWidth="480"
+                            Visibility="{x:Bind local:Converters.VisibleIfImage(VM.BannerImage), Mode=OneWay}">
+                        <Image x:Uid="AppearanceBannerPreview" Source="{x:Bind VM.BannerImage, Mode=OneWay}" Stretch="Uniform" MaxHeight="120" />
+                    </Border>
+                </StackPanel>
+            </Border>
+
             <TextBlock x:Uid="AppearanceTextSection" Style="{StaticResource SectionHeaderStyle}" />
             <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
                 <StackPanel Spacing="16">

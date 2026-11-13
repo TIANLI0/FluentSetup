@@ -23,7 +23,8 @@ $Out = [IO.Path]::GetFullPath((Join-Path $root $Out))
 Remove-Item -Recurse -Force $Out -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $Out | Out-Null
 
-# A project that touches every page: two variants, prerequisites, options, actions, upgrade and uninstall settings.
+# A project that touches every page: two variants, prerequisites (every kind of source), options, actions, shortcuts,
+# file types, URL schemes, registry, environment, services, firewall, inputs, config files, banner, upgrade and uninstall.
 $work = Join-Path $Out 'project'
 foreach ($v in 'full', 'shared') {
     New-Item -ItemType Directory -Force (Join-Path $work "$v\redist") | Out-Null
@@ -32,12 +33,25 @@ foreach ($v in 'full', 'shared') {
     'readme' | Set-Content (Join-Path $work "$v\readme.txt")
 }
 'MIT License' | Set-Content (Join-Path $work 'LICENSE.txt')
+# A 960 x 240 banner (ui.banner) for the Appearance page's preview.
+Add-Type -AssemblyName System.Drawing
+$banner = New-Object System.Drawing.Bitmap 960, 240
+$g = [System.Drawing.Graphics]::FromImage($banner)
+$fill = New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.Point 0, 0), (New-Object System.Drawing.Point 960, 240),
+    [System.Drawing.Color]::FromArgb(0, 95, 184), [System.Drawing.Color]::FromArgb(120, 60, 200))
+$g.FillRectangle($fill, 0, 0, 960, 240)
+$font = New-Object System.Drawing.Font 'Segoe UI', 44
+$g.DrawString('Contoso Notes', $font, [System.Drawing.Brushes]::White, 48, 72)
+$g.Dispose(); $fill.Dispose(); $font.Dispose()
+$banner.Save((Join-Path $work 'banner.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+$banner.Dispose()
 $project = @'
 {
   "schemaVersion": 1,
   "variables": { "Version": "2.4.1", "DriverVersion": "1.2.0.0" },
   "app": { "id": "Contoso.Notes", "name": "Contoso Notes", "publisher": "Contoso", "version": "$(Version)",
-           "description": "Notes with sync", "website": "https://example.com", "mainExecutable": "App.exe" },
+           "description": "Notes with sync", "website": "https://example.com", "mainExecutable": "App.exe",
+           "appUserModelId": "Contoso.Notes", "toastActivatorClsid": "{6F2C3D8A-7B41-4E5F-9A0C-1D2E3F405162}" },
   "files": {
     "include": ["**/*"], "exclude": ["**/*.pdb"], "preserve": ["config/*.json"], "emptyDirectories": ["logs"],
     "variants": [
@@ -49,14 +63,20 @@ $project = @'
     "scope": "userOrMachine", "defaultScope": "user", "startMenuFolder": "Contoso", "closeProcesses": ["App.exe"],
     "closeCommand": { "run": "App.exe", "arguments": ["--exit"] }, "relaunchArguments": ["--updated"],
     "legacyUninstallKeys": ["{11111111-2222-3333-4444-555555555555}_is1"], "addToPath": ["cli"],
-    "cleanup": { "removeFiles": ["unins*.exe", "unins*.dat"], "removeShortcuts": ["Contoso\\Uninstall Contoso Notes.lnk"], "removeRunValues": ["ContosoOld"] }
+    "cleanup": { "removeFiles": ["unins*.exe", "unins*.dat"], "removeShortcuts": ["Contoso\\Uninstall Contoso Notes.lnk"], "removeRunValues": ["ContosoOld"] },
+    "appPaths": true, "restartManager": "auto", "lockedFiles": "reboot"
   },
   "requirements": {
     "netFramework": "4.8",
     "netFrameworkSetup": { "helpUrl": "https://dotnet.microsoft.com/download/dotnet-framework" },
-    "webView2": { "required": true, "minVersion": "120.0.0.0", "installer": "redist\\driver-setup.exe", "onFailure": "warn" },
+    "webView2": { "required": true, "minVersion": "120.0.0.0", "auto": "download", "onFailure": "warn" },
+    "windowsAppRuntime": { "required": true, "version": "2.5.1", "auto": "bundle", "variants": ["shared"] },
+    "vcRedist": { "required": true, "minVersion": "14.40", "architecture": "", "auto": "bundle" },
     "dotNet": [{ "runtime": "desktop", "version": "8.0.0", "variants": ["shared"],
-                 "download": { "url": "https://example.com/windowsdesktop-runtime-win-x64.exe", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size": 0 } }]
+                 "download": { "url": "https://example.com/windowsdesktop-runtime-win-x64.exe", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size": 0, "signer": "Microsoft Corporation" } }],
+    "custom": [{ "id": "driver", "name": "Contoso Sync Driver 2",
+                 "detect": { "registry": { "hive": "HKLM", "key": "SOFTWARE\\Contoso\\Driver", "value": "Version", "version": "2.0" } },
+                 "installer": "redist\\driver-setup.exe", "arguments": ["/S"], "onFailure": "fail" }]
   },
   "options": [
     { "id": "driver", "label": { "en-US": "Install the sync driver (required)", "zh-CN": "安装同步驱动（必需）" }, "required": true },
@@ -76,8 +96,41 @@ $project = @'
     "elevated": { "ifExists": ["{CommonAppData}\\Contoso\\driver.state"], "scheduledTasks": ["Contoso\\Sync"], "removeRegistryKeys": ["HKLM\\Software\\Contoso\\Notes"] }
   },
   "update": { "github": "contoso/notes", "checksums": "SHA256SUMS.txt" },
-  "ui": { "license": "LICENSE.txt", "licenseMode": "firstInstall", "defaultLanguage": "auto" },
-  "output": { "directory": "dist", "fileName": "{AppName}-{Version}-Setup.exe", "compression": "max" }
+  "ui": { "license": "LICENSE.txt", "licenseMode": "firstInstall", "defaultLanguage": "auto", "banner": "banner.png" },
+  "output": { "directory": "dist", "fileName": "{AppName}-{Version}-Setup.exe", "compression": "max" },
+  "signing": { "signUninstaller": true },
+  "shortcuts": [
+    { "name": "Contoso Notes (Safe mode)", "arguments": ["--safe-mode"], "description": "Start without add-ins", "location": "startMenu" },
+    { "name": "Contoso Notes Sync", "target": "App.exe", "arguments": ["--sync", "--minimized"], "location": "startup", "ifOption": "autostart" }
+  ],
+  "associations": [
+    { "extensions": [".cnote", ".cnotes"], "progId": "Contoso.Notes.Document", "description": "Contoso Notes document",
+      "arguments": ["%1"], "contentType": "application/x-contoso-note" }
+  ],
+  "protocols": [{ "scheme": "contoso-notes", "description": "Contoso Notes link", "arguments": ["--open", "%1"] }],
+  "registry": [
+    { "key": "Software\\Contoso\\Notes", "uninstall": "values", "values": [
+        { "name": "InstallDir", "type": "string", "data": "{InstallDir}" },
+        { "name": "Server", "type": "string", "data": "{Input:server}" },
+        { "name": "Telemetry", "type": "dword", "data": "0" } ] }
+  ],
+  "environment": [{ "name": "CONTOSO_NOTES_HOME", "value": "{InstallDir}" }],
+  "services": [
+    { "name": "ContosoNotesSync", "displayName": "Contoso Notes Sync", "description": "Keeps notes in sync in the background.",
+      "run": "App.exe", "arguments": ["--service"], "startType": "delayedAuto", "account": "localService" }
+  ],
+  "firewall": [{ "name": "Contoso Notes sync", "direction": "in", "protocol": "tcp", "localPorts": "8765", "profiles": ["private"] }],
+  "inputs": [
+    { "id": "server", "label": { "en-US": "Server address", "zh-CN": "服务器地址" }, "description": { "en-US": "Where your notes are stored.", "zh-CN": "笔记的存储位置。" },
+      "type": "text", "default": "https://notes.example.com", "required": true, "pattern": "^https://" },
+    { "id": "edition", "label": { "en-US": "Edition", "zh-CN": "版本" }, "type": "choice", "default": "personal",
+      "choices": [ { "value": "personal", "label": { "en-US": "Personal", "zh-CN": "个人版" } }, { "value": "team", "label": { "en-US": "Team", "zh-CN": "团队版" } } ] }
+  ],
+  "configFiles": [
+    { "path": "config\\settings.json", "format": "json", "values": [
+        { "key": "server.url", "value": "{Input:server}" }, { "key": "sync.enabled", "value": "true", "type": "bool" } ] },
+    { "path": "{AppData}\\Contoso Notes\\notes.ini", "format": "ini", "values": [ { "section": "General", "key": "Edition", "value": "{Input:edition}" } ] }
+  ]
 }
 '@
 $projectPath = Join-Path $work 'fluentsetup.json'

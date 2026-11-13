@@ -357,7 +357,6 @@
   <data name="RollForwardPatch.Content" xml:space="preserve"><value>Same major.minor (patch)</value></data>
   <data name="RollForwardMinor.Content" xml:space="preserve"><value>Same major version (minor)</value></data>
   <data name="RollForwardMajor.Content" xml:space="preserve"><value>Any newer version (major)</value></data>
-  <data name="SourceHelp.Text" xml:space="preserve"><value>Setup runs a bundled installer (add it on the Files page under Additional folders), otherwise it downloads the file and verifies its SHA-256. With neither, setup stops before changing anything and shows the help link.</value></data>
   <data name="SourceInstallerCombo.Header" xml:space="preserve"><value>Bundled installer (among the installed files)</value></data>
   <data name="SourceInstallerCombo.PlaceholderText" xml:space="preserve"><value>redist\installer.exe</value></data>
   <data name="SourceOnFailureCombo.Header" xml:space="preserve"><value>If it is still missing afterwards</value></data>
@@ -367,7 +366,6 @@
   <data name="SourceHelpUrlBox.Header" xml:space="preserve"><value>Help link (https)</value></data>
   <data name="SourceHelpUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
   <data name="SourceVariantsBox.Header" xml:space="preserve"><value>Only for these variants (comma-separated; empty = always)</value></data>
-  <data name="SourceDownloadToggle.Header" xml:space="preserve"><value>Download it when no installer is bundled</value></data>
   <data name="SourceUrlBox.Header" xml:space="preserve"><value>Download URL (https)</value></data>
   <data name="SourceUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
   <data name="SourceComputeButton.Content" xml:space="preserve"><value>Compute hash and size</value></data>
@@ -603,4 +601,308 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="UpdateSignerBox.Header" xml:space="preserve"><value>Required signer (optional)</value></data>
   <data name="UpdateSignerBox.PlaceholderText" xml:space="preserve"><value>Certificate subject, e.g. Contoso Ltd</value></data>
   <data name="UpdateHowToUse.Text" xml:space="preserve"><value>In the app, run "uninstall.exe /install-update /relaunch" from the install folder for "Check for updates" (a small window asks first), or "uninstall.exe /check-update" in the background (exit code 18 = update available). Downloads must match the published SHA-256 and be a newer version of this app; {Version} in the file name stands for the release's version.</value></data>
+  <data name="NavShortcuts.Content" xml:space="preserve"><value>Shortcuts &amp; file types</value></data>
+  <data name="NavSystem.Content" xml:space="preserve"><value>System</value></data>
+  <data name="NavInputs.Content" xml:space="preserve"><value>Inputs &amp; config files</value></data>
+  <data name="AppNotificationsSection.Text" xml:space="preserve"><value>Taskbar and notifications</value></data>
+  <data name="AppNotificationsDescription.Text" xml:space="preserve"><value>Set on the app's Start menu and desktop shortcuts. Unpackaged apps need an AppUserModelID to show toast notifications, and a toast activator to be started from them.</value></data>
+  <data name="AppAumidBox.Header" xml:space="preserve"><value>AppUserModelID (optional)</value></data>
+  <data name="AppAumidBox.PlaceholderText" xml:space="preserve"><value>Contoso.Notes</value></data>
+  <data name="AppToastClsidBox.Header" xml:space="preserve"><value>Toast activator CLSID (optional)</value></data>
+  <data name="AppToastClsidBox.PlaceholderText" xml:space="preserve"><value>{00000000-0000-0000-0000-000000000000}</value></data>
+  <data name="AppToastClsidGenerate.Content" xml:space="preserve"><value>Generate</value></data>
+  <data name="AppToastClsidGenerate.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Generate a new CLSID</value></data>
+  <data name="InstallAppPathsTitle.Text" xml:space="preserve"><value>Register in App Paths</value></data>
+  <data name="InstallAppPathsDescription.Text" xml:space="preserve"><value>The Run dialog (Win+R) and other programs find the main program by its file name.</value></data>
+  <data name="InstallAppPathsToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Register in App Paths</value></data>
+  <data name="InstallInUseSection.Text" xml:space="preserve"><value>Files in use</value></data>
+  <data name="InstallRestartManagerTitle.Text" xml:space="preserve"><value>Programs using the app's files</value></data>
+  <data name="InstallRestartManagerDescription.Text" xml:space="preserve"><value>Before files are replaced or removed. Windows Restart Manager closes them politely, then forcibly, and restarts those that support it afterwards.</value></data>
+  <data name="InstallRestartManagerCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Programs using the app's files</value></data>
+  <data name="RestartManagerAuto.Content" xml:space="preserve"><value>Close and restart them</value></data>
+  <data name="RestartManagerOff.Content" xml:space="preserve"><value>Only close the listed processes</value></data>
+  <data name="InstallLockedFilesTitle.Text" xml:space="preserve"><value>A file that is still in use</value></data>
+  <data name="InstallLockedFilesDescription.Text" xml:space="preserve"><value>When a file cannot be replaced even after the programs were closed.</value></data>
+  <data name="InstallLockedFilesMachineOnly.Text" xml:space="preserve"><value>Replacing files at the next restart needs administrator rights: it only applies to installations for all users.</value></data>
+  <data name="InstallLockedFilesCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>A file that is still in use</value></data>
+  <data name="LockedFilesFail.Content" xml:space="preserve"><value>Stop and roll back</value></data>
+  <data name="LockedFilesReboot.Content" xml:space="preserve"><value>Replace it at the next restart</value></data>
+  <data name="AppearanceBannerSection.Text" xml:space="preserve"><value>Banner</value></data>
+  <data name="AppearanceBannerTitle.Text" xml:space="preserve"><value>Banner image</value></data>
+  <data name="AppearanceBannerDescription.Text" xml:space="preserve"><value>Shown at the top of the installer's first page. PNG, JPG or BMP up to 1 MB, about 4:1 (for example 960 × 240 pixels).</value></data>
+  <data name="AppearanceBannerBox.PlaceholderText" xml:space="preserve"><value>banner.png</value></data>
+  <data name="AppearanceBannerBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Banner image file</value></data>
+  <data name="AppearanceBannerClear.Content" xml:space="preserve"><value>Remove</value></data>
+  <data name="AppearanceBannerBrowse.Content" xml:space="preserve"><value>Browse…</value></data>
+  <data name="AppearanceBannerPreview.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Banner preview</value></data>
+  <data name="Banner_None" xml:space="preserve"><value>No banner</value></data>
+  <data name="Banner_Missing" xml:space="preserve"><value>File not found: {0}</value></data>
+  <data name="Banner_Info" xml:space="preserve"><value>{0} × {1} pixels · {2}</value></data>
+  <data name="Banner_Unreadable" xml:space="preserve"><value>The image cannot be read.</value></data>
+  <data name="SignUninstallerToggle.Header" xml:space="preserve"><value>Also sign the uninstaller (uninstall.exe)</value></data>
+  <data name="PrereqVcTitle.Text" xml:space="preserve"><value>Microsoft Visual C++ Redistributable</value></data>
+  <data name="PrereqVcDescription.Text" xml:space="preserve"><value>For apps built with Visual C++ 2015–2022 (v14) that use its shared runtime DLLs.</value></data>
+  <data name="PrereqVcToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Requires the Visual C++ Redistributable</value></data>
+  <data name="PrereqVcMinVersionBox.Header" xml:space="preserve"><value>Minimum version (optional)</value></data>
+  <data name="PrereqVcMinVersionBox.PlaceholderText" xml:space="preserve"><value>14.40</value></data>
+  <data name="PrereqVcArchCombo.Header" xml:space="preserve"><value>Architecture</value></data>
+  <data name="PrereqVcArchPackage.Content" xml:space="preserve"><value>Same as the package</value></data>
+  <data name="PrereqCustomSection.Text" xml:space="preserve"><value>Other prerequisites</value></data>
+  <data name="PrereqCustomDescription.Text" xml:space="preserve"><value>Anything else the app needs, found through a registry value or a file, for example a driver or a database engine.</value></data>
+  <data name="PrereqAddCustom.Text" xml:space="preserve"><value>Add prerequisite</value></data>
+  <data name="PrereqCustomEmpty.Text" xml:space="preserve"><value>No other prerequisites.</value></data>
+  <data name="Custom_Untitled" xml:space="preserve"><value>New prerequisite</value></data>
+  <data name="CustomNameBox.Header" xml:space="preserve"><value>Name (shown to the user)</value></data>
+  <data name="CustomNameBox.PlaceholderText" xml:space="preserve"><value>Contoso Driver 2</value></data>
+  <data name="CustomIdBox.Header" xml:space="preserve"><value>ID</value></data>
+  <data name="CustomDetectCombo.Header" xml:space="preserve"><value>Found through</value></data>
+  <data name="CustomDetectRegistry.Content" xml:space="preserve"><value>A registry value</value></data>
+  <data name="CustomDetectFile.Content" xml:space="preserve"><value>A file</value></data>
+  <data name="CustomHiveCombo.Header" xml:space="preserve"><value>Hive</value></data>
+  <data name="CustomKeyBox.Header" xml:space="preserve"><value>Key</value></data>
+  <data name="CustomKeyBox.PlaceholderText" xml:space="preserve"><value>SOFTWARE\Contoso\Driver</value></data>
+  <data name="CustomValueBox.Header" xml:space="preserve"><value>Value name (empty = default value)</value></data>
+  <data name="CustomVersionBox.Header" xml:space="preserve"><value>Minimum version (empty = the value only has to exist)</value></data>
+  <data name="CustomFileBox.Header" xml:space="preserve"><value>File</value></data>
+  <data name="CustomFileBox.PlaceholderText" xml:space="preserve"><value>{ProgramFiles}\Contoso\driver.dll</value></data>
+  <data name="CustomFileVersionBox.Header" xml:space="preserve"><value>Minimum file version (optional)</value></data>
+  <data name="SourceModeChoice.Header" xml:space="preserve"><value>When it is missing, setup uses</value></data>
+  <data name="SourceMode_OfficialBundle" xml:space="preserve"><value>Microsoft's official installer, bundled when building</value></data>
+  <data name="SourceMode_OfficialDownload" xml:space="preserve"><value>Microsoft's official installer, downloaded during setup</value></data>
+  <data name="SourceMode_Installer" xml:space="preserve"><value>An installer among the app's files</value></data>
+  <data name="SourceMode_Download" xml:space="preserve"><value>A download URL, verified by SHA-256 or signer</value></data>
+  <data name="SourceMode_None" xml:space="preserve"><value>None — show a help link</value></data>
+  <data name="SourceOfficialBundleHelp.Text" xml:space="preserve"><value>When you build, the official installer is downloaded from Microsoft (cached, signature checked) and stored in Setup.exe. Setup extracts and runs it only if the component is missing; it is never installed into the app's folder.</value></data>
+  <data name="SourceOfficialDownloadHelp.Text" xml:space="preserve"><value>Setup downloads the official installer from Microsoft only when the component is missing, and runs it only if it carries a valid signature from Microsoft Corporation. The PC needs an internet connection during setup.</value></data>
+  <data name="SourceInstallerHelp.Text" xml:space="preserve"><value>Add the installer to the app's files on the Files page (Additional folders); it is installed with the app.</value></data>
+  <data name="SourceDownloadHelp.Text" xml:space="preserve"><value>Downloaded before anything is changed (https only) and run only if it matches the SHA-256, or, for an installer that changes over time, carries a valid signature issued to the signer.</value></data>
+  <data name="SourceSignerBox.Header" xml:space="preserve"><value>Required signer (instead of or with the SHA-256)</value></data>
+  <data name="SourceSignerBox.PlaceholderText" xml:space="preserve"><value>Microsoft Corporation</value></data>
+  <data name="SourceNoneHelp.Text" xml:space="preserve"><value>Setup does not install it: when it is missing, setup stops before changing anything and shows the help link.</value></data>
+  <data name="Source_SummaryOfficialBundle" xml:space="preserve"><value>Microsoft's installer, bundled</value></data>
+  <data name="Source_SummaryOfficialDownload" xml:space="preserve"><value>Microsoft's installer, downloaded when needed</value></data>
+  <data name="VersionRefreshButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Refresh the versions from Microsoft</value></data>
+  <data name="VersionRefreshButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Refresh the versions from Microsoft</value></data>
+  <data name="Versions_Loading" xml:space="preserve"><value>Getting versions from Microsoft…</value></data>
+  <data name="Versions_FromMicrosoft" xml:space="preserve"><value>From Microsoft, {0}</value></data>
+  <data name="Versions_OfflineSaved" xml:space="preserve"><value>Offline · list from {0}</value></data>
+  <data name="Versions_OfflineBuiltIn" xml:space="preserve"><value>Offline · built-in list</value></data>
+  <data name="Versions_VcNote" xml:space="preserve"><value>Common minimum versions · Microsoft's official installer is always the latest</value></data>
+  <data name="Versions_Failed" xml:space="preserve"><value>Versions unavailable: {0}</value></data>
+  <data name="Versions_EdgeStable" xml:space="preserve"><value>Microsoft Edge Stable</value></data>
+  <data name="Versions_EdgeBeta" xml:space="preserve"><value>Microsoft Edge Beta</value></data>
+  <data name="Versions_Released" xml:space="preserve"><value>released {0}</value></data>
+  <data name="Versions_WasChannel" xml:space="preserve"><value>Any {0} runtime</value></data>
+  <data name="Versions_Latest" xml:space="preserve"><value>latest {0}</value></data>
+  <data name="Versions_Lts" xml:space="preserve"><value>LTS</value></data>
+  <data name="Versions_Sts" xml:space="preserve"><value>STS</value></data>
+  <data name="Versions_Eol" xml:space="preserve"><value>Out of support</value></data>
+  <data name="Versions_EolSince" xml:space="preserve"><value>Out of support since {0}</value></data>
+  <data name="Versions_SupportedUntil" xml:space="preserve"><value>Supported until {0}</value></data>
+  <data name="Versions_Newest" xml:space="preserve"><value>Newest</value></data>
+  <data name="Versions_VcAny" xml:space="preserve"><value>Any Visual C++ 2015–2022 runtime</value></data>
+  <data name="IfOptionCombo.Header" xml:space="preserve"><value>Only when this option is selected</value></data>
+  <data name="IconIndexBox.Header" xml:space="preserve"><value>Icon index</value></data>
+  <data name="PlaceholdersHelp.Text" xml:space="preserve"><value>Values can use {InstallDir}, {MainExecutable}, {AppVersion}, {AppId} and {Input:id} (a value entered on the installer's Settings page).</value></data>
+  <data name="ShortcutsPageTitle.Text" xml:space="preserve"><value>Shortcuts and file types</value></data>
+  <data name="ShortcutsPageDescription.Text" xml:space="preserve"><value>More shortcuts besides the app's own, the file types it opens and the links (URL schemes) it handles. Everything is removed on uninstall.</value></data>
+  <data name="ShortcutsSection.Text" xml:space="preserve"><value>More shortcuts</value></data>
+  <data name="ShortcutsSectionDescription.Text" xml:space="preserve"><value>Other programs of the app, shortcuts with arguments, the desktop or the Startup folder. The app's main shortcuts are set under Install options.</value></data>
+  <data name="ShortcutsAdd.Text" xml:space="preserve"><value>Add shortcut</value></data>
+  <data name="ShortcutsEmpty.Text" xml:space="preserve"><value>No more shortcuts.</value></data>
+  <data name="Shortcuts_Untitled" xml:space="preserve"><value>New shortcut</value></data>
+  <data name="Shortcuts_MainProgram" xml:space="preserve"><value>main program</value></data>
+  <data name="ShortcutLocation_0" xml:space="preserve"><value>Start menu</value></data>
+  <data name="ShortcutLocation_1" xml:space="preserve"><value>Desktop</value></data>
+  <data name="ShortcutLocation_2" xml:space="preserve"><value>Startup folder</value></data>
+  <data name="ShortcutNameBox.Header" xml:space="preserve"><value>Name</value></data>
+  <data name="ShortcutNameBox.PlaceholderText" xml:space="preserve"><value>Contoso Notes (Safe mode)</value></data>
+  <data name="ShortcutLocationCombo.Header" xml:space="preserve"><value>Location</value></data>
+  <data name="ShortcutLocationStartMenu.Content" xml:space="preserve"><value>Start menu</value></data>
+  <data name="ShortcutLocationDesktop.Content" xml:space="preserve"><value>Desktop</value></data>
+  <data name="ShortcutLocationStartup.Content" xml:space="preserve"><value>Startup folder (starts at sign-in)</value></data>
+  <data name="ShortcutTargetCombo.Header" xml:space="preserve"><value>Target (empty = main program)</value></data>
+  <data name="ShortcutTargetCombo.PlaceholderText" xml:space="preserve"><value>tools\helper.exe</value></data>
+  <data name="ShortcutFolderBox.Header" xml:space="preserve"><value>Start menu folder (empty = the app's folder)</value></data>
+  <data name="ShortcutArgumentsBox.Header" xml:space="preserve"><value>Arguments (one per line)</value></data>
+  <data name="ShortcutDescriptionBox.Header" xml:space="preserve"><value>Description (tooltip)</value></data>
+  <data name="ShortcutIconCombo.Header" xml:space="preserve"><value>Icon (empty = the target)</value></data>
+  <data name="ShortcutWorkingDirBox.Header" xml:space="preserve"><value>Working folder (empty = the target's folder)</value></data>
+  <data name="ShortcutAumidBox.Header" xml:space="preserve"><value>AppUserModelID (optional)</value></data>
+  <data name="AssociationsSection.Text" xml:space="preserve"><value>File types</value></data>
+  <data name="AssociationsSectionDescription.Text" xml:space="preserve"><value>Double-clicking these files in Explorer opens the app; it is also listed under Open with and Default apps.</value></data>
+  <data name="AssociationsAdd.Text" xml:space="preserve"><value>Add file type</value></data>
+  <data name="AssociationsEmpty.Text" xml:space="preserve"><value>No file types.</value></data>
+  <data name="Associations_Untitled" xml:space="preserve"><value>New file type</value></data>
+  <data name="AssociationExtensionsBox.Header" xml:space="preserve"><value>Extensions (comma-separated)</value></data>
+  <data name="AssociationExtensionsBox.PlaceholderText" xml:space="preserve"><value>.cnote, .cnotes</value></data>
+  <data name="AssociationProgIdBox.Header" xml:space="preserve"><value>ProgID</value></data>
+  <data name="AssociationProgIdBox.PlaceholderText" xml:space="preserve"><value>Contoso.Notes.Document</value></data>
+  <data name="AssociationDescriptionBox.Header" xml:space="preserve"><value>File type name (shown in Explorer)</value></data>
+  <data name="AssociationDescriptionBox.PlaceholderText" xml:space="preserve"><value>Contoso Notes document</value></data>
+  <data name="AssociationContentTypeBox.Header" xml:space="preserve"><value>MIME type (optional)</value></data>
+  <data name="AssociationContentTypeBox.PlaceholderText" xml:space="preserve"><value>application/x-contoso-note</value></data>
+  <data name="AssociationTargetCombo.Header" xml:space="preserve"><value>Program that opens the files (empty = main program)</value></data>
+  <data name="AssociationArgumentsBox.Header" xml:space="preserve"><value>Arguments (one per line; %1 is the file)</value></data>
+  <data name="AssociationIconCombo.Header" xml:space="preserve"><value>Icon (empty = the program)</value></data>
+  <data name="ProtocolsSection.Text" xml:space="preserve"><value>Links (URL schemes)</value></data>
+  <data name="ProtocolsSectionDescription.Text" xml:space="preserve"><value>Links such as contoso-notes://open?id=1 in a browser or another app start the app.</value></data>
+  <data name="ProtocolsAdd.Text" xml:space="preserve"><value>Add URL scheme</value></data>
+  <data name="ProtocolsEmpty.Text" xml:space="preserve"><value>No URL schemes.</value></data>
+  <data name="Protocols_Untitled" xml:space="preserve"><value>New URL scheme</value></data>
+  <data name="ProtocolSchemeBox.Header" xml:space="preserve"><value>Scheme (lowercase, without ://)</value></data>
+  <data name="ProtocolSchemeBox.PlaceholderText" xml:space="preserve"><value>contoso-notes</value></data>
+  <data name="ProtocolDescriptionBox.Header" xml:space="preserve"><value>Description</value></data>
+  <data name="ProtocolTargetCombo.Header" xml:space="preserve"><value>Program that handles the links (empty = main program)</value></data>
+  <data name="ProtocolArgumentsBox.Header" xml:space="preserve"><value>Arguments (one per line; %1 is the link)</value></data>
+  <data name="ProtocolIconCombo.Header" xml:space="preserve"><value>Icon (empty = the program)</value></data>
+  <data name="SystemPageTitle.Text" xml:space="preserve"><value>System</value></data>
+  <data name="SystemPageDescription.Text" xml:space="preserve"><value>Registry values, environment variables, Windows services and firewall rules of the app. Setup records them and undoes them on uninstall.</value></data>
+  <data name="RegistrySection.Text" xml:space="preserve"><value>Registry</value></data>
+  <data name="RegistrySectionDescription.Text" xml:space="preserve"><value>Keys below Software\&lt;Vendor&gt; in HKEY_CURRENT_USER (installations for the current user) or HKEY_LOCAL_MACHINE (for all users).</value></data>
+  <data name="RegistryAdd.Text" xml:space="preserve"><value>Add key</value></data>
+  <data name="RegistryEmpty.Text" xml:space="preserve"><value>No registry values.</value></data>
+  <data name="Registry_Untitled" xml:space="preserve"><value>New key</value></data>
+  <data name="Registry_ValueCount" xml:space="preserve"><value>{0} value(s)</value></data>
+  <data name="RegistryUninstall_0" xml:space="preserve"><value>values removed on uninstall</value></data>
+  <data name="RegistryUninstall_1" xml:space="preserve"><value>key removed on uninstall</value></data>
+  <data name="RegistryUninstall_2" xml:space="preserve"><value>kept on uninstall</value></data>
+  <data name="RegistryKeyBox.Header" xml:space="preserve"><value>Key (below HKCU or HKLM)</value></data>
+  <data name="RegistryKeyBox.PlaceholderText" xml:space="preserve"><value>Software\Contoso\Notes</value></data>
+  <data name="RegistryUninstallCombo.Header" xml:space="preserve"><value>On uninstall</value></data>
+  <data name="RegistryUninstallValues.Content" xml:space="preserve"><value>Remove the values written (and the key once empty)</value></data>
+  <data name="RegistryUninstallKey.Content" xml:space="preserve"><value>Remove the whole key</value></data>
+  <data name="RegistryUninstallKeep.Content" xml:space="preserve"><value>Keep everything</value></data>
+  <data name="RegistryValuesTitle.Text" xml:space="preserve"><value>Values</value></data>
+  <data name="RegistryAddValue.Text" xml:space="preserve"><value>Add value</value></data>
+  <data name="RegistryNoValues.Text" xml:space="preserve"><value>No values: the key is created empty.</value></data>
+  <data name="RegistryValueNameBox.PlaceholderText" xml:space="preserve"><value>Name (empty = default value)</value></data>
+  <data name="RegistryValueNameBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Value name</value></data>
+  <data name="RegistryValueTypeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Value type</value></data>
+  <data name="RegistryTypeString.Content" xml:space="preserve"><value>String (REG_SZ)</value></data>
+  <data name="RegistryTypeExpandString.Content" xml:space="preserve"><value>Expandable string (REG_EXPAND_SZ)</value></data>
+  <data name="RegistryTypeDword.Content" xml:space="preserve"><value>DWORD (32-bit)</value></data>
+  <data name="RegistryTypeQword.Content" xml:space="preserve"><value>QWORD (64-bit)</value></data>
+  <data name="RegistryTypeMultiString.Content" xml:space="preserve"><value>Multi-string (one per line)</value></data>
+  <data name="RegistryValueDataBox.PlaceholderText" xml:space="preserve"><value>Data (numbers: decimal or 0x hex)</value></data>
+  <data name="RegistryValueDataBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Value data</value></data>
+  <data name="EnvironmentSection.Text" xml:space="preserve"><value>Environment variables</value></data>
+  <data name="EnvironmentSectionDescription.Text" xml:space="preserve"><value>User variables for installations for the current user, system variables for all users; removed on uninstall while unchanged. Folders for PATH are set under Install options.</value></data>
+  <data name="EnvironmentAdd.Text" xml:space="preserve"><value>Add variable</value></data>
+  <data name="EnvironmentEmpty.Text" xml:space="preserve"><value>No environment variables.</value></data>
+  <data name="Environment_Untitled" xml:space="preserve"><value>New variable</value></data>
+  <data name="EnvironmentNameBox.Header" xml:space="preserve"><value>Name</value></data>
+  <data name="EnvironmentNameBox.PlaceholderText" xml:space="preserve"><value>CONTOSO_HOME</value></data>
+  <data name="EnvironmentValueBox.Header" xml:space="preserve"><value>Value</value></data>
+  <data name="EnvironmentValueBox.PlaceholderText" xml:space="preserve"><value>{InstallDir}</value></data>
+  <data name="EnvironmentExpandCheck.Content" xml:space="preserve"><value>Expandable (refers to other variables such as %USERPROFILE%)</value></data>
+  <data name="SystemMachineSection.Text" xml:space="preserve"><value>Installations for all users only</value></data>
+  <data name="SystemMachineOnlyWarning.Title" xml:space="preserve"><value>Needs an installation for all users</value></data>
+  <data name="SystemMachineOnlyWarning.Message" xml:space="preserve"><value>Services and firewall rules are only set up by installations for all users, but this app installs for the current user (see Install options).</value></data>
+  <data name="SystemMachineOnlyInfo.Title" xml:space="preserve"><value>Only for installations for all users</value></data>
+  <data name="SystemMachineOnlyInfo.Message" xml:space="preserve"><value>The user chooses where to install: services and firewall rules are only set up when installing for all users.</value></data>
+  <data name="ServicesSection.Text" xml:space="preserve"><value>Windows services</value></data>
+  <data name="ServicesSectionDescription.Text" xml:space="preserve"><value>Created (or updated) and started after the files are installed, stopped before files are replaced, deleted on uninstall.</value></data>
+  <data name="ServicesAdd.Text" xml:space="preserve"><value>Add service</value></data>
+  <data name="ServicesEmpty.Text" xml:space="preserve"><value>No services.</value></data>
+  <data name="Services_Untitled" xml:space="preserve"><value>New service</value></data>
+  <data name="ServiceStart_0" xml:space="preserve"><value>Automatic</value></data>
+  <data name="ServiceStart_1" xml:space="preserve"><value>Automatic (delayed start)</value></data>
+  <data name="ServiceStart_2" xml:space="preserve"><value>Manual</value></data>
+  <data name="ServiceStart_3" xml:space="preserve"><value>Disabled</value></data>
+  <data name="ServiceKeyNameBox.Header" xml:space="preserve"><value>Service name</value></data>
+  <data name="ServiceKeyNameBox.PlaceholderText" xml:space="preserve"><value>ContosoSync</value></data>
+  <data name="ServiceDisplayNameBox.Header" xml:space="preserve"><value>Display name</value></data>
+  <data name="ServiceDescriptionBox.Header" xml:space="preserve"><value>Description</value></data>
+  <data name="ServiceRunCombo.Header" xml:space="preserve"><value>Program (among the installed files)</value></data>
+  <data name="ServiceRunCombo.PlaceholderText" xml:space="preserve"><value>service\ContosoSync.exe</value></data>
+  <data name="ServiceArgumentsBox.Header" xml:space="preserve"><value>Arguments (one per line)</value></data>
+  <data name="ServiceStartTypeCombo.Header" xml:space="preserve"><value>Startup type</value></data>
+  <data name="ServiceStartAuto.Content" xml:space="preserve"><value>Automatic</value></data>
+  <data name="ServiceStartDelayed.Content" xml:space="preserve"><value>Automatic (delayed start)</value></data>
+  <data name="ServiceStartManual.Content" xml:space="preserve"><value>Manual</value></data>
+  <data name="ServiceStartDisabled.Content" xml:space="preserve"><value>Disabled</value></data>
+  <data name="ServiceAccountCombo.Header" xml:space="preserve"><value>Log on as</value></data>
+  <data name="ServiceAccountLocalSystem.Content" xml:space="preserve"><value>Local System</value></data>
+  <data name="ServiceAccountLocalService.Content" xml:space="preserve"><value>Local Service</value></data>
+  <data name="ServiceAccountNetworkService.Content" xml:space="preserve"><value>Network Service</value></data>
+  <data name="ServiceDependenciesBox.Header" xml:space="preserve"><value>Depends on (service names, comma-separated)</value></data>
+  <data name="ServiceStartCheck.Content" xml:space="preserve"><value>Start after installing</value></data>
+  <data name="ServiceRestartCheck.Content" xml:space="preserve"><value>Restart when it fails</value></data>
+  <data name="FirewallSection.Text" xml:space="preserve"><value>Firewall rules</value></data>
+  <data name="FirewallSectionDescription.Text" xml:space="preserve"><value>Windows Defender Firewall allow rules for the app's programs, replaced on updates and removed on uninstall.</value></data>
+  <data name="FirewallAdd.Text" xml:space="preserve"><value>Add rule</value></data>
+  <data name="FirewallEmpty.Text" xml:space="preserve"><value>No firewall rules.</value></data>
+  <data name="Firewall_Untitled" xml:space="preserve"><value>New rule</value></data>
+  <data name="FirewallDirection_0" xml:space="preserve"><value>Inbound</value></data>
+  <data name="FirewallDirection_1" xml:space="preserve"><value>Outbound</value></data>
+  <data name="FirewallProtocol_0" xml:space="preserve"><value>any protocol</value></data>
+  <data name="FirewallProtocol_1" xml:space="preserve"><value>TCP</value></data>
+  <data name="FirewallProtocol_2" xml:space="preserve"><value>UDP</value></data>
+  <data name="FirewallNameBox.Header" xml:space="preserve"><value>Rule name</value></data>
+  <data name="FirewallProgramCombo.Header" xml:space="preserve"><value>Program (empty = main program)</value></data>
+  <data name="FirewallDirectionCombo.Header" xml:space="preserve"><value>Direction</value></data>
+  <data name="FirewallDirectionIn.Content" xml:space="preserve"><value>Inbound</value></data>
+  <data name="FirewallDirectionOut.Content" xml:space="preserve"><value>Outbound</value></data>
+  <data name="FirewallProtocolCombo.Header" xml:space="preserve"><value>Protocol</value></data>
+  <data name="FirewallProtocolAny.Content" xml:space="preserve"><value>Any</value></data>
+  <data name="FirewallPortsBox.Header" xml:space="preserve"><value>Local ports (empty = any)</value></data>
+  <data name="FirewallPortsBox.PlaceholderText" xml:space="preserve"><value>8080, 9000-9010</value></data>
+  <data name="FirewallProfilesTitle.Text" xml:space="preserve"><value>Network profiles</value></data>
+  <data name="FirewallProfileDomain.Content" xml:space="preserve"><value>Domain</value></data>
+  <data name="FirewallProfilePrivate.Content" xml:space="preserve"><value>Private</value></data>
+  <data name="FirewallProfilePublic.Content" xml:space="preserve"><value>Public</value></data>
+  <data name="FirewallProfilesHelp.Text" xml:space="preserve"><value>None selected = all profiles.</value></data>
+  <data name="InputsPageTitle.Text" xml:space="preserve"><value>Inputs and config files</value></data>
+  <data name="InputsPageDescription.Text" xml:space="preserve"><value>Values the user enters on the installer's Settings page (or with /input id=value), and the JSON or INI files setup writes them into.</value></data>
+  <data name="InputsSection.Text" xml:space="preserve"><value>Settings page</value></data>
+  <data name="InputsSectionDescription.Text" xml:space="preserve"><value>Shown after the first page. Use the values as {Input:id} in registry values, environment variables, config files and arguments; remembered values are filled in on updates.</value></data>
+  <data name="InputsAdd.Text" xml:space="preserve"><value>Add field</value></data>
+  <data name="InputsEmpty.Text" xml:space="preserve"><value>No fields: the installer has no Settings page.</value></data>
+  <data name="Inputs_Untitled" xml:space="preserve"><value>New field</value></data>
+  <data name="Inputs_Required" xml:space="preserve"><value>required</value></data>
+  <data name="Inputs_PatternInvalid" xml:space="preserve"><value>Not a valid regular expression: {0}</value></data>
+  <data name="InputType_0" xml:space="preserve"><value>Text</value></data>
+  <data name="InputType_1" xml:space="preserve"><value>Password</value></data>
+  <data name="InputType_2" xml:space="preserve"><value>Choice</value></data>
+  <data name="InputIdBox.Header" xml:space="preserve"><value>ID (used as {Input:id})</value></data>
+  <data name="InputTypeCombo.Header" xml:space="preserve"><value>Type</value></data>
+  <data name="InputTypeText.Content" xml:space="preserve"><value>Text</value></data>
+  <data name="InputTypePassword.Content" xml:space="preserve"><value>Password (never remembered)</value></data>
+  <data name="InputTypeChoice.Content" xml:space="preserve"><value>Choice from a list</value></data>
+  <data name="InputLabelBox.Header" xml:space="preserve"><value>Label per language (one per line: en-US = text)</value></data>
+  <data name="InputLabelBox.PlaceholderText" xml:space="preserve"><value>en-US = Server address</value></data>
+  <data name="InputDescriptionBox.Header" xml:space="preserve"><value>Help text under the field (one per line: en-US = text)</value></data>
+  <data name="InputDefaultBox.Header" xml:space="preserve"><value>Default value</value></data>
+  <data name="InputPatternBox.Header" xml:space="preserve"><value>Pattern (regular expression, optional)</value></data>
+  <data name="InputPatternBox.PlaceholderText" xml:space="preserve"><value>^https://</value></data>
+  <data name="InputRequiredCheck.Content" xml:space="preserve"><value>Required</value></data>
+  <data name="InputRememberCheck.Content" xml:space="preserve"><value>Remember for updates</value></data>
+  <data name="InputChoicesTitle.Text" xml:space="preserve"><value>Choices</value></data>
+  <data name="InputAddChoice.Text" xml:space="preserve"><value>Add choice</value></data>
+  <data name="InputChoiceValueBox.PlaceholderText" xml:space="preserve"><value>Value</value></data>
+  <data name="InputChoiceValueBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Choice value</value></data>
+  <data name="InputChoiceLabelBox.PlaceholderText" xml:space="preserve"><value>en-US = Label</value></data>
+  <data name="InputChoiceLabelBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Choice label per language</value></data>
+  <data name="ConfigFilesSection.Text" xml:space="preserve"><value>Config files</value></data>
+  <data name="ConfigFilesSectionDescription.Text" xml:space="preserve"><value>Setup writes these values into JSON or INI files after the files are installed; other settings in an existing file are kept.</value></data>
+  <data name="ConfigFilesAdd.Text" xml:space="preserve"><value>Add file</value></data>
+  <data name="ConfigFilesEmpty.Text" xml:space="preserve"><value>No config files.</value></data>
+  <data name="ConfigFiles_Untitled" xml:space="preserve"><value>New config file</value></data>
+  <data name="ConfigPathBox.Header" xml:space="preserve"><value>File (relative to the install folder, or {LocalAppData}\…, {AppData}\…, {CommonAppData}\…)</value></data>
+  <data name="ConfigPathBox.PlaceholderText" xml:space="preserve"><value>config.json</value></data>
+  <data name="ConfigFormatCombo.Header" xml:space="preserve"><value>Format</value></data>
+  <data name="ConfigValuesTitle.Text" xml:space="preserve"><value>Values</value></data>
+  <data name="ConfigAddValue.Text" xml:space="preserve"><value>Add value</value></data>
+  <data name="ConfigNoValues.Text" xml:space="preserve"><value>No values.</value></data>
+  <data name="ConfigSectionBox.PlaceholderText" xml:space="preserve"><value>Section</value></data>
+  <data name="ConfigSectionBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>INI section</value></data>
+  <data name="ConfigKeyBox.PlaceholderText" xml:space="preserve"><value>Key (JSON: server.url)</value></data>
+  <data name="ConfigKeyBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Key</value></data>
+  <data name="ConfigValueBox.PlaceholderText" xml:space="preserve"><value>Value, e.g. {Input:server}</value></data>
+  <data name="ConfigValueBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Value</value></data>
+  <data name="ConfigTypeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>JSON type</value></data>
+  <data name="ConfigTypeString.Content" xml:space="preserve"><value>Text</value></data>
+  <data name="ConfigTypeNumber.Content" xml:space="preserve"><value>Number</value></data>
+  <data name="ConfigTypeBool.Content" xml:space="preserve"><value>true / false</value></data>
 </root>

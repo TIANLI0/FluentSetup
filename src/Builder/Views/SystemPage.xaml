@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FluentSetup.Builder.Views.SystemPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FluentSetup.Builder.Views"
+    xmlns:vm="using:FluentSetup.Builder.ViewModels"
+    Background="Transparent">
+    <ScrollViewer>
+        <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
+            <TextBlock x:Uid="SystemPageTitle" Style="{StaticResource PageTitleStyle}" AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock x:Uid="SystemPageDescription" Style="{StaticResource PageDescriptionStyle}" />
+
+            <!-- Registry -->
+            <Grid Margin="0,28,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="RegistrySection" Style="{StaticResource BodyStrongTextBlockStyle}" AutomationProperties.HeadingLevel="Level2" />
+                    <TextBlock x:Uid="RegistrySectionDescription" Style="{StaticResource RowDescriptionStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddRegistryCommand}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="RegistryAdd" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoRegistry, Mode=OneWay}">
+                <TextBlock x:Uid="RegistryEmpty" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+            </Border>
+            <ItemsControl ItemsSource="{x:Bind VM.RegistryRows}" IsTabStop="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="4" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RegistryKeyRow">
+                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <Expander.Header>
+                                <Grid ColumnSpacing="16" Padding="0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xE943;" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                        <Button x:Uid="RowMoveUp" Command="{x:Bind MoveUpCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Uid="RowMoveDown" Command="{x:Bind MoveDownCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE70D;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Uid="RowRemove" Command="{x:Bind RemoveCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Expander.Header>
+                            <StackPanel Spacing="16" Padding="40,4,0,4">
+                                <Grid ColumnSpacing="24" RowSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <TextBox x:Uid="RegistryKeyBox" Grid.ColumnSpan="2" Text="{x:Bind Key, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <ComboBox x:Uid="RegistryUninstallCombo" Grid.Row="1" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind UninstallIndex, Mode=TwoWay}">
+                                        <ComboBoxItem x:Uid="RegistryUninstallValues" />
+                                        <ComboBoxItem x:Uid="RegistryUninstallKey" />
+                                        <ComboBoxItem x:Uid="RegistryUninstallKeep" />
+                                    </ComboBox>
+                                    <ComboBox x:Uid="IfOptionCombo" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
+                                              ItemsSource="{x:Bind IfOptionChoices}" SelectedItem="{x:Bind IfOptionItem, Mode=TwoWay}" />
+                                </Grid>
+
+                                <!-- Values -->
+                                <StackPanel Spacing="8">
+                                    <Grid>
+                                        <TextBlock x:Uid="RegistryValuesTitle" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
+                                        <Button HorizontalAlignment="Right" Command="{x:Bind AddValueCommand}">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <FontIcon Glyph="&#xE710;" FontSize="14" />
+                                                <TextBlock x:Uid="RegistryAddValue" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                    <TextBlock x:Uid="RegistryNoValues" Style="{StaticResource RowDescriptionStyle}" Visibility="{x:Bind HasNoValues, Mode=OneWay}" />
+                                    <ItemsControl ItemsSource="{x:Bind Values}" IsTabStop="False">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><StackPanel Spacing="8" /></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:RegistryValueRow">
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="2*" /><ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox x:Uid="RegistryValueNameBox" Text="{x:Bind Name, Mode=TwoWay}" IsSpellCheckEnabled="False" VerticalAlignment="Top" />
+                                                    <ComboBox x:Uid="RegistryValueTypeCombo" Grid.Column="1" MinWidth="168" VerticalAlignment="Top" SelectedIndex="{x:Bind TypeIndex, Mode=TwoWay}">
+                                                        <ComboBoxItem x:Uid="RegistryTypeString" />
+                                                        <ComboBoxItem x:Uid="RegistryTypeExpandString" />
+                                                        <ComboBoxItem x:Uid="RegistryTypeDword" />
+                                                        <ComboBoxItem x:Uid="RegistryTypeQword" />
+                                                        <ComboBoxItem x:Uid="RegistryTypeMultiString" />
+                                                    </ComboBox>
+                                                    <TextBox x:Uid="RegistryValueDataBox" Grid.Column="2" Text="{x:Bind Data, Mode=TwoWay}" IsSpellCheckEnabled="False"
+                                                             AcceptsReturn="{x:Bind IsMultiString, Mode=OneWay}" TextWrapping="Wrap" />
+                                                    <Button x:Uid="RowRemove" Grid.Column="3" Command="{x:Bind RemoveCommand}" VerticalAlignment="Bottom">
+                                                        <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{x:Bind VM.Errors.Registry, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.Registry), Mode=OneWay}" />
+
+            <!-- Environment variables -->
+            <Grid Margin="0,28,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="EnvironmentSection" Style="{StaticResource BodyStrongTextBlockStyle}" AutomationProperties.HeadingLevel="Level2" />
+                    <TextBlock x:Uid="EnvironmentSectionDescription" Style="{StaticResource RowDescriptionStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddEnvironmentCommand}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="EnvironmentAdd" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoEnvironment, Mode=OneWay}">
+                <TextBlock x:Uid="EnvironmentEmpty" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+            </Border>
+            <ItemsControl ItemsSource="{x:Bind VM.EnvironmentRows}" IsTabStop="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="4" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:EnvironmentRow">
+                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <Expander.Header>
+                                <Grid ColumnSpacing="16" Padding="0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xE756;" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                        <Button x:Uid="RowRemove" Command="{x:Bind RemoveCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Expander.Header>
+                            <StackPanel Spacing="16" Padding="40,4,0,4">
+                                <Grid ColumnSpacing="24" RowSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <TextBox x:Uid="EnvironmentNameBox" Text="{x:Bind Name, Mode=TwoWay}" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                    <TextBox x:Uid="EnvironmentValueBox" Grid.Column="1" Text="{x:Bind Value, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <CheckBox x:Uid="EnvironmentExpandCheck" Grid.Row="1" IsChecked="{x:Bind Expand, Mode=TwoWay}" VerticalAlignment="Bottom" />
+                                    <ComboBox x:Uid="IfOptionCombo" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
+                                              ItemsSource="{x:Bind IfOptionChoices}" SelectedItem="{x:Bind IfOptionItem, Mode=TwoWay}" />
+                                </Grid>
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{x:Bind VM.Errors.EnvironmentVariables, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.EnvironmentVariables), Mode=OneWay}" />
+
+            <!-- Per-machine installations only -->
+            <TextBlock x:Uid="SystemMachineSection" Style="{StaticResource SectionHeaderStyle}" AutomationProperties.HeadingLevel="Level2" />
+            <InfoBar x:Uid="SystemMachineOnlyWarning" Severity="Warning" IsClosable="False" IsOpen="{x:Bind VM.IsUserScope, Mode=OneWay}" Margin="0,0,0,4" />
+            <InfoBar x:Uid="SystemMachineOnlyInfo" Severity="Informational" IsClosable="False" IsOpen="{x:Bind VM.IsEitherScope, Mode=OneWay}" Margin="0,0,0,4" />
+
+            <!-- Services -->
+            <Grid Margin="0,8,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="ServicesSection" Style="{StaticResource BodyStrongTextBlockStyle}" AutomationProperties.HeadingLevel="Level3" />
+                    <TextBlock x:Uid="ServicesSectionDescription" Style="{StaticResource RowDescriptionStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddServiceCommand}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="ServicesAdd" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoServices, Mode=OneWay}">
+                <TextBlock x:Uid="ServicesEmpty" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+            </Border>
+            <ItemsControl ItemsSource="{x:Bind VM.ServiceRows}" IsTabStop="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="4" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ServiceRow">
+                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <Expander.Header>
+                                <Grid ColumnSpacing="16" Padding="0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xE912;" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                        <Button x:Uid="RowRemove" Command="{x:Bind RemoveCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Expander.Header>
+                            <StackPanel Spacing="16" Padding="40,4,0,4">
+                                <Grid ColumnSpacing="24" RowSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <TextBox x:Uid="ServiceKeyNameBox" Text="{x:Bind Name, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <TextBox x:Uid="ServiceDisplayNameBox" Grid.Column="1" Text="{x:Bind DisplayName, Mode=TwoWay}" />
+                                    <TextBox x:Uid="ServiceDescriptionBox" Grid.Row="1" Grid.ColumnSpan="2" Text="{x:Bind Description, Mode=TwoWay}" />
+                                    <local:ProgramBox x:Uid="ServiceRunCombo" Grid.Row="2" Choices="{x:Bind ExecutableChoices}" Text="{x:Bind Run, Mode=TwoWay}" VerticalAlignment="Top" />
+                                    <TextBox x:Uid="ServiceArgumentsBox" Grid.Row="2" Grid.Column="1" Text="{x:Bind ArgumentsText, Mode=TwoWay}" MinHeight="64" Style="{StaticResource LinesBoxStyle}" />
+                                    <ComboBox x:Uid="ServiceStartTypeCombo" Grid.Row="3" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind StartTypeIndex, Mode=TwoWay}">
+                                        <ComboBoxItem x:Uid="ServiceStartAuto" />
+                                        <ComboBoxItem x:Uid="ServiceStartDelayed" />
+                                        <ComboBoxItem x:Uid="ServiceStartManual" />
+                                        <ComboBoxItem x:Uid="ServiceStartDisabled" />
+                                    </ComboBox>
+                                    <ComboBox x:Uid="ServiceAccountCombo" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind AccountIndex, Mode=TwoWay}">
+                                        <ComboBoxItem x:Uid="ServiceAccountLocalSystem" />
+                                        <ComboBoxItem x:Uid="ServiceAccountLocalService" />
+                                        <ComboBoxItem x:Uid="ServiceAccountNetworkService" />
+                                    </ComboBox>
+                                    <TextBox x:Uid="ServiceDependenciesBox" Grid.Row="4" Text="{x:Bind DependenciesText, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <StackPanel Grid.Row="4" Grid.Column="1" VerticalAlignment="Bottom">
+                                        <CheckBox x:Uid="ServiceStartCheck" IsChecked="{x:Bind Start, Mode=TwoWay}" />
+                                        <CheckBox x:Uid="ServiceRestartCheck" IsChecked="{x:Bind RestartOnFailure, Mode=TwoWay}" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{x:Bind VM.Errors.Services, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.Services), Mode=OneWay}" />
+
+            <!-- Firewall -->
+            <Grid Margin="0,28,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="FirewallSection" Style="{StaticResource BodyStrongTextBlockStyle}" AutomationProperties.HeadingLevel="Level3" />
+                    <TextBlock x:Uid="FirewallSectionDescription" Style="{StaticResource RowDescriptionStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddFirewallCommand}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="FirewallAdd" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoFirewall, Mode=OneWay}">
+                <TextBlock x:Uid="FirewallEmpty" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+            </Border>
+            <ItemsControl ItemsSource="{x:Bind VM.FirewallRows}" IsTabStop="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="4" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FirewallRow">
+                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <Expander.Header>
+                                <Grid ColumnSpacing="16" Padding="0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xEA18;" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                        <Button x:Uid="RowRemove" Command="{x:Bind RemoveCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Expander.Header>
+                            <StackPanel Spacing="16" Padding="40,4,0,4">
+                                <Grid ColumnSpacing="24" RowSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <TextBox x:Uid="FirewallNameBox" Text="{x:Bind Name, Mode=TwoWay}" />
+                                    <local:ProgramBox x:Uid="FirewallProgramCombo" Grid.Column="1" Choices="{x:Bind ExecutableChoices}" Text="{x:Bind Program, Mode=TwoWay}" />
+                                    <ComboBox x:Uid="FirewallDirectionCombo" Grid.Row="1" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind DirectionIndex, Mode=TwoWay}">
+                                        <ComboBoxItem x:Uid="FirewallDirectionIn" />
+                                        <ComboBoxItem x:Uid="FirewallDirectionOut" />
+                                    </ComboBox>
+                                    <Grid Grid.Row="1" Grid.Column="1" ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <ComboBox x:Uid="FirewallProtocolCombo" MinWidth="120" SelectedIndex="{x:Bind ProtocolIndex, Mode=TwoWay}">
+                                            <ComboBoxItem x:Uid="FirewallProtocolAny" />
+                                            <ComboBoxItem Content="TCP" />
+                                            <ComboBoxItem Content="UDP" />
+                                        </ComboBox>
+                                        <TextBox x:Uid="FirewallPortsBox" Grid.Column="1" Text="{x:Bind LocalPorts, Mode=TwoWay}" IsSpellCheckEnabled="False" IsEnabled="{x:Bind HasPorts, Mode=OneWay}" />
+                                    </Grid>
+                                    <StackPanel Grid.Row="2" Spacing="4">
+                                        <TextBlock x:Uid="FirewallProfilesTitle" />
+                                        <StackPanel Orientation="Horizontal" Spacing="16">
+                                            <CheckBox x:Uid="FirewallProfileDomain" IsChecked="{x:Bind ProfileDomain, Mode=TwoWay}" MinWidth="0" />
+                                            <CheckBox x:Uid="FirewallProfilePrivate" IsChecked="{x:Bind ProfilePrivate, Mode=TwoWay}" MinWidth="0" />
+                                            <CheckBox x:Uid="FirewallProfilePublic" IsChecked="{x:Bind ProfilePublic, Mode=TwoWay}" MinWidth="0" />
+                                        </StackPanel>
+                                        <TextBlock x:Uid="FirewallProfilesHelp" Style="{StaticResource RowDescriptionStyle}" />
+                                    </StackPanel>
+                                    <ComboBox x:Uid="IfOptionCombo" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Top"
+                                              ItemsSource="{x:Bind IfOptionChoices}" SelectedItem="{x:Bind IfOptionItem, Mode=TwoWay}" />
+                                </Grid>
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{x:Bind VM.Errors.Firewall, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.Firewall), Mode=OneWay}" />
+
+            <TextBlock x:Uid="PlaceholdersHelp" Style="{StaticResource RowDescriptionStyle}" Margin="1,28,0,0" IsTextSelectionEnabled="True" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

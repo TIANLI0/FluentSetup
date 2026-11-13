@@ -4,41 +4,60 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:FluentSetup.Builder.Views">
-    <!-- How setup gets a missing prerequisite: a bundled installer first, else a verified download. -->
+    <!-- How setup gets a missing prerequisite: Microsoft's installer (bundled or downloaded), an installer among the
+         app's files, a verified download, or not at all (help link). -->
     <StackPanel Spacing="16">
-        <TextBlock x:Uid="SourceHelp" Style="{StaticResource RowDescriptionStyle}" />
-        <local:ProgramBox x:Uid="SourceInstallerCombo" Choices="{x:Bind VM.ExecutableChoices}" Text="{x:Bind Source.Installer, Mode=TwoWay}" />
-        <Grid ColumnSpacing="24" RowSpacing="16">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-            <TextBox x:Uid="SourceArgumentsBox" Grid.RowSpan="3" Text="{x:Bind Source.ArgumentsText, Mode=TwoWay}"
-                     MinHeight="96" Style="{StaticResource LinesBoxStyle}" />
-            <ComboBox x:Uid="SourceOnFailureCombo" Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind Source.OnFailureIndex, Mode=TwoWay}">
-                <ComboBoxItem x:Uid="SourceOnFailureWarn" />
-                <ComboBoxItem x:Uid="SourceOnFailureFail" />
-            </ComboBox>
-            <TextBox x:Uid="SourceHelpUrlBox" Grid.Row="1" Grid.Column="1" Text="{x:Bind Source.HelpUrl, Mode=TwoWay}" IsSpellCheckEnabled="False" />
-            <TextBox x:Uid="SourceVariantsBox" Grid.Row="2" Grid.Column="1" Text="{x:Bind Source.VariantsText, Mode=TwoWay}" IsSpellCheckEnabled="False" />
-        </Grid>
-        <ToggleSwitch x:Uid="SourceDownloadToggle" IsOn="{x:Bind Source.HasDownload, Mode=TwoWay}" />
-        <StackPanel Spacing="16" Visibility="{x:Bind Source.HasDownload, Mode=OneWay}">
+        <RadioButtons x:Uid="SourceModeChoice" ItemsSource="{x:Bind Source.ModeChoices, Mode=OneWay}" SelectedIndex="{x:Bind Source.ModeSelection, Mode=TwoWay}" />
+
+        <!-- Microsoft's official installer -->
+        <TextBlock x:Uid="SourceOfficialBundleHelp" Style="{StaticResource RowDescriptionStyle}" Visibility="{x:Bind local:Converters.VisibleIf(Source.IsOfficialBundle), Mode=OneWay}" />
+        <TextBlock x:Uid="SourceOfficialDownloadHelp" Style="{StaticResource RowDescriptionStyle}" Visibility="{x:Bind local:Converters.VisibleIf(Source.IsOfficialDownload), Mode=OneWay}" />
+
+        <!-- An installer among the app's files -->
+        <StackPanel Spacing="4" Visibility="{x:Bind local:Converters.VisibleIf(Source.IsInstaller), Mode=OneWay}">
+            <local:ProgramBox x:Uid="SourceInstallerCombo" Choices="{x:Bind VM.ExecutableChoices}" Text="{x:Bind Source.Installer, Mode=TwoWay}" />
+            <TextBlock x:Uid="SourceInstallerHelp" Style="{StaticResource RowDescriptionStyle}" />
+        </StackPanel>
+
+        <!-- A download verified by SHA-256 or signer -->
+        <StackPanel Spacing="16" Visibility="{x:Bind local:Converters.VisibleIf(Source.IsDownload), Mode=OneWay}">
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                 <TextBox x:Uid="SourceUrlBox" Text="{x:Bind Source.DownloadUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
-                <Button x:Uid="SourceComputeButton" Grid.Column="1" VerticalAlignment="Bottom" Command="{x:Bind Source.ComputeDownloadCommand}" />
+                <Button x:Uid="SourceComputeButton" Grid.Column="1" VerticalAlignment="Bottom" Command="{x:Bind Source.ComputeDownloadCommand, Mode=OneWay}" />
             </Grid>
-            <Grid ColumnSpacing="24">
+            <Grid ColumnSpacing="24" RowSpacing="16">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                 <TextBox x:Uid="SourceSha256Box" Text="{x:Bind Source.DownloadSha256, Mode=TwoWay}" FontFamily="Consolas" IsSpellCheckEnabled="False" />
                 <NumberBox x:Uid="SourceSizeBox" Grid.Column="1" Value="{x:Bind Source.DownloadSize, Mode=TwoWay}" Minimum="0" SpinButtonPlacementMode="Hidden" />
+                <TextBox x:Uid="SourceSignerBox" Grid.Row="1" Grid.ColumnSpan="2" Text="{x:Bind Source.DownloadSigner, Mode=TwoWay}" IsSpellCheckEnabled="False" />
             </Grid>
+            <TextBlock x:Uid="SourceDownloadHelp" Style="{StaticResource RowDescriptionStyle}" />
             <StackPanel Orientation="Horizontal" Spacing="12" Visibility="{x:Bind local:Converters.VisibleIfText(Source.ComputeStatus), Mode=OneWay}">
-                <ProgressRing IsActive="{x:Bind Source.IsComputing, Mode=OneWay}" Width="16" Height="16" Visibility="{x:Bind Source.IsComputing, Mode=OneWay}" />
+                <ProgressRing IsActive="{x:Bind Source.IsComputing, Mode=OneWay}" Width="16" Height="16" Visibility="{x:Bind local:Converters.VisibleIf(Source.IsComputing), Mode=OneWay}" />
                 <TextBlock Text="{x:Bind Source.ComputeStatus, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center"
                            IsTextSelectionEnabled="True" AutomationProperties.LiveSetting="Polite" />
-                <HyperlinkButton x:Uid="SourceComputeCancel" Command="{x:Bind Source.ComputeDownloadCancelCommand}" Visibility="{x:Bind Source.IsComputing, Mode=OneWay}"
-                                 Padding="4,2" VerticalAlignment="Center" />
+                <HyperlinkButton x:Uid="SourceComputeCancel" Command="{x:Bind Source.ComputeDownloadCancelCommand, Mode=OneWay}"
+                                 Visibility="{x:Bind local:Converters.VisibleIf(Source.IsComputing), Mode=OneWay}" Padding="4,2" VerticalAlignment="Center" />
             </StackPanel>
         </StackPanel>
+
+        <!-- Not installed by setup -->
+        <TextBlock x:Uid="SourceNoneHelp" Style="{StaticResource RowDescriptionStyle}" Visibility="{x:Bind local:Converters.VisibleIf(Source.IsNone), Mode=OneWay}" />
+
+        <TextBox x:Uid="SourceArgumentsBox" Text="{x:Bind Source.ArgumentsText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}"
+                 Visibility="{x:Bind local:Converters.VisibleIf(Source.ShowArguments), Mode=OneWay}" />
+        <Grid ColumnSpacing="24" RowSpacing="16">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <TextBox x:Uid="SourceHelpUrlBox" Text="{x:Bind Source.HelpUrl, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+            <ComboBox x:Uid="SourceOnFailureCombo" Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind Source.OnFailureIndex, Mode=TwoWay}"
+                      Visibility="{x:Bind local:Converters.VisibleIf(Source.ShowOnFailure), Mode=OneWay}">
+                <ComboBoxItem x:Uid="SourceOnFailureWarn" />
+                <ComboBoxItem x:Uid="SourceOnFailureFail" />
+            </ComboBox>
+            <TextBox x:Uid="SourceVariantsBox" Grid.Row="1" Text="{x:Bind Source.VariantsText, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+        </Grid>
     </StackPanel>
 </UserControl>

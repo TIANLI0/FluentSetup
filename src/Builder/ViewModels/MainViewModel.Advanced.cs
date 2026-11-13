@@ -126,6 +126,7 @@ public sealed partial class MainViewModel
         Watch(VariantRows, nameof(HasVariants), () => { if (!_loading) _ = RefreshFilesAsync(); });
         Watch(ServiceAccessRows, nameof(HasNoServiceAccess));
         Watch(VariableRows, nameof(HasNoVariables));
+        InitIntegration();
         SyncIfOptionChoices();
     }
 
@@ -219,6 +220,8 @@ public sealed partial class MainViewModel
         UpdatePrerelease = upd.Prerelease;
         UpdateChecksums = upd.Checksums ?? "";
         UpdateSigner = upd.Signer ?? "";
+
+        LoadIntegration(p);
     }
 
     /// <summary>Writes the editors onto <paramref name="p"/>, a copy of the loaded project.</summary>
@@ -308,6 +311,8 @@ public sealed partial class MainViewModel
         upd.Prerelease = github && UpdatePrerelease;
         upd.Checksums = github ? TextForms.Keep(UpdateChecksums, upd.Checksums) : "";
         upd.Signer = github || feed ? TextForms.Keep(UpdateSigner, upd.Signer) : "";
+
+        ApplyIntegration(p);
     }
 
     /// <summary>Shows each list item's own validation errors on its card.</summary>
@@ -323,6 +328,7 @@ public sealed partial class MainViewModel
         Set(VariantRows, "files.variants", Errors);
         Set(ServiceAccessRows, "uninstall.elevated.serviceAccess", Errors);
         foreach (var v in VariableRows) v.Error = v.Name.Trim().Length == 0 ? "" : Errors.Under("variables." + v.Name.Trim());
+        UpdateIntegrationRowErrors();
     }
 
     // ---- list editing --------------------------------------------------------------------------------------------
@@ -351,7 +357,7 @@ public sealed partial class MainViewModel
         var to = newId.Trim();
         if (from.Length > 0 && to.Length > 0 && from != to && !OptionRows.Any(o => o.Id.Trim() == from))
         {
-            foreach (var a in ActionRows.Where(a => a.IfOption == from)) a.IfOption = to;
+            foreach (var a in GatedRows().Where(a => a.IfOption == from).ToList()) a.IfOption = to;
         }
         SyncIfOptionChoices();
     }
@@ -363,7 +369,7 @@ public sealed partial class MainViewModel
         if (wanted.SequenceEqual(IfOptionChoices, StringComparer.Ordinal)) return;
         IfOptionChoices.Clear();
         foreach (var w in wanted) IfOptionChoices.Add(w);
-        foreach (var a in ActionRows) a.RefreshIfOptionItem();
+        foreach (var a in GatedRows()) a.RefreshIfOptionItem();
     }
 
     internal object? IfOptionItemFor(string id) =>
@@ -381,6 +387,7 @@ public sealed partial class MainViewModel
             case VariantRow v: VariantRows.Remove(v); break;
             case ServiceAccessRow s: ServiceAccessRows.Remove(s); break;
             case VariableRow v: VariableRows.Remove(v); break;
+            default: RemoveIntegrationRow(row); break;
         }
         Validate();
     }
@@ -393,6 +400,7 @@ public sealed partial class MainViewModel
             case OptionRow o: Move(OptionRows, o, delta); break;
             case ActionRow a: Move(ActionRows, a, delta); break;
             case VariantRow v: Move(VariantRows, v, delta); break;
+            default: MoveIntegrationRow(row, delta); break;
         }
         Validate();
     }

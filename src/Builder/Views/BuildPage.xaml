@@ -139,6 +139,8 @@
                         <TextBox x:Uid="SignPasswordEnvBox" Text="{x:Bind VM.PasswordEnvironmentVariable, Mode=TwoWay}" IsSpellCheckEnabled="False" />
                         <TextBox x:Uid="SignTimestampBox" Text="{x:Bind VM.TimestampUrl, Mode=TwoWay}" IsSpellCheckEnabled="False" />
                         <TextBox x:Uid="SignToolBox" Text="{x:Bind VM.SignToolPath, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                        <ToggleSwitch x:Uid="SignUninstallerToggle" IsOn="{x:Bind VM.SignUninstaller, Mode=TwoWay}" />
+                        <TextBlock Text="{x:Bind VM.Errors.SignUninstaller, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.SignUninstaller), Mode=OneWay}" />
                         <TextBlock Text="{x:Bind VM.Errors.Signing, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.Signing), Mode=OneWay}" />
                     </StackPanel>
                 </Expander>
