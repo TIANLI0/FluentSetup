@@ -24,12 +24,23 @@ with a Fluent WinUI 3 interface and no .NET, VC++ redistributable, WebView2 or n
 - **Drop-in replacement for Inno Setup and NSIS.** Takes over their installations in place and understands the command
   lines in-app updaters already use (`/SILENT /RELAUNCH=1`, `/S /UPDATE`, `/DIR=`, `/TASKS=`, …), so apps can switch
   in a patch release. See [four real migrations](docs/thrm.md).
-- **Prerequisites with version checks.** .NET Framework, .NET (Core) runtimes, WebView2 and the Windows App Runtime,
-  each with a minimum version. A missing or outdated one is installed from a bundled installer or an optional https
-  download (verified by SHA-256), or setup stops with a help link.
+- **Prerequisites with version checks.** .NET Framework, .NET (Core) runtimes, WebView2, the Windows App Runtime, the
+  Visual C++ Redistributable and any prerequisite you detect by registry value or file, each with a minimum version.
+  A missing or outdated one is installed from Microsoft's official installer (stored in Setup.exe at build time, or
+  downloaded by setup and accepted by its Microsoft signature), from a bundled installer or a verified https
+  download, or setup stops with a help link. The Builder suggests current versions straight from Microsoft.
+- **Desktop integration.** File types, URL schemes, extra shortcuts (Startup folder, arguments, AppUserModelID for
+  toast notifications), registry values, environment variables, App Paths, Windows services, firewall rules, a
+  Settings page for values such as a server address, and JSON/INI config files. Registry and config changes are rolled
+  back with the files; everything is removed on uninstall.
+- **Change and repair.** Apps & features "Modify" lets users switch shortcuts and options later or repair a damaged
+  installation (from the original Setup.exe or the update source). Programs that hold the app's files are closed and
+  restarted through Windows Restart Manager; files still in use can be replaced at the next restart.
 - **Declarative extensions.** Close running processes, required (locked) and optional components, payload programs
   after install or before uninstall with fallbacks, NGen, PATH, and cleanup of legacy tasks, Run entries, shortcuts,
   files, registry keys and uninstall keys.
+- **Signed end to end.** Sign with a certificate, Azure Trusted Signing or any signing command; the uninstaller setup
+  writes is signed too, and setup shows the verified publisher.
 - **Built-in updates.** Point the project at GitHub releases or a JSON feed and the installed app can update itself:
   `uninstall.exe /install-update` checks, asks, downloads, verifies (SHA-256, same app, newer version, optional
   signer) and installs; `/check-update` only reports. No updater code in the app.
@@ -105,7 +116,7 @@ Run the result to try it, or test it unattended: `Setup.exe /quiet /log setup.lo
 The GitHub Action installs the command-line tool (verified download) on a Windows runner:
 
 ```yaml
-- uses: TIANLI0/FluentSetup@v1.0.1
+- uses: TIANLI0/FluentSetup@v1.2.0
 - run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3
 ```
 
@@ -137,7 +148,9 @@ NSIS switches are understood too ([details](docs/project-file.md#setupexe-comman
 ## Documentation
 
 - [Project file reference](docs/project-file.md)
-- [Migrating from Inno Setup and NSIS: case studies](docs/thrm.md)
+- [Migrating from Inno Setup and NSIS: case studies](docs/thrm.md), and [importing an .iss or .nsi script](docs/import.md)
+- [winget and Microsoft Store](docs/winget.md), [MSBuild, .NET tool and library](docs/msbuild.md),
+  [building on Linux and macOS](docs/cross-platform.md)
 - [Diagnostics](docs/diagnostics.md): exit codes, logs, recovery
 - [Security](docs/security.md): threat model and mitigations
 - [Architecture](docs/architecture.md): components, process model, install state machine, fallback rules

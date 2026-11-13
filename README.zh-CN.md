@@ -13,7 +13,10 @@
 - **安装可靠**：预写日志加被替换文件的备份，失败或取消时逐字节回滚；拒绝不安全的安装路径；逐文件 SHA-256 和 Authenticode 校验，能发现损坏或被篡改的安装包；提权由独立的 worker 进程完成，它只安装自身内嵌的安装包。
 - **完整生命周期**：按用户或按机器安装，升级、重新安装、防降级，注册到“应用和功能”，快捷方式，可自删除的 `uninstall.exe`，静默模式，还能接管由其他安装程序安装的同一应用。
 - **可直接替换 Inno Setup 和 NSIS**：原地接管它们的安装，并认得应用内更新已在用的命令行（`/SILENT /RELAUNCH=1`、`/S /UPDATE`、`/DIR=`、`/TASKS=` 等），应用发一个小版本即可切换。见[四个真实的迁移案例](docs/thrm.md)。
-- **前置条件版本检查**：.NET Framework、.NET 运行时、WebView2、Windows App Runtime 都可设置最低版本；缺失或版本过低时，用随包安装程序或可选的 https 下载（SHA-256 校验）安装/升级，否则停止并给出帮助链接。
+- **前置条件版本检查**：.NET Framework、.NET 运行时、WebView2、Windows App Runtime、Visual C++ 运行库，以及按注册表值或文件检测的任意组件，都可设置最低版本；缺失或版本过低时，可直接使用微软官方安装程序（构建时下载并打进 Setup.exe，或安装时下载并校验微软签名），也可用随包安装程序或经 SHA-256 校验的 https 下载，否则停止并给出帮助链接。Builder 会从微软的服务器获取最新版本号供选择。
+- **桌面集成**：文件关联、URL 协议、更多快捷方式（启动文件夹、参数、用于 Toast 通知的 AppUserModelID）、注册表值、环境变量、App Paths、Windows 服务、防火墙规则、安装时的“设置”页（例如填写服务器地址），以及写入 JSON/INI 配置文件。注册表和配置文件的修改会随文件一起回滚，卸载时全部清除。
+- **修改与修复**：在“应用和功能”中点“修改”即可更改快捷方式和选项，或修复损坏的安装（使用原安装包或更新来源）。通过 Windows 重启管理器关闭并重新打开占用应用文件的程序；仍被占用的文件可在重启后替换。
+- **全程签名**：支持证书、Azure 可信签名或任意签名命令；安装时写入的卸载程序同样带签名，安装界面会显示已验证的发布者。
 - **声明式扩展**：关闭正在运行的进程；必需（锁定）组件与可选组件；安装后或卸载前运行安装包内的程序（支持失败后的备用方式）；NGen；PATH；清理旧版本的计划任务、Run 启动项、快捷方式、文件、注册表项和卸载项。
 - **内置更新**：在项目里指定 GitHub Releases 或 JSON 源，已安装的应用即可自行更新：`uninstall.exe /install-update` 负责检查、询问、下载、校验（SHA-256、同一应用、更高版本、可选的签名者）并安装；`/check-update` 只检查。应用里无需编写更新代码。
 - **多变体**：一个安装包可同时带自包含版和依赖共享运行时的版本（相同文件只存一份），安装时由用户选择，或用 `--variant` 只打其中一种。
@@ -75,7 +78,7 @@ fluentsetup inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
 GitHub Action 会在 Windows 构建机上安装命令行工具（下载后校验 SHA-256）：
 
 ```yaml
-- uses: TIANLI0/FluentSetup@v1.0.1
+- uses: TIANLI0/FluentSetup@v1.2.0
 - run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3
 ```
 
@@ -103,7 +106,8 @@ uninstall.exe /check-update | /install-update [/passive | /quiet] [/relaunch]   
 （详细文档为英文。）
 
 - [项目文件参考](docs/project-file.md)
-- [从 Inno Setup / NSIS 迁移：案例](docs/thrm.md)
+- [从 Inno Setup / NSIS 迁移：案例](docs/thrm.md)，以及[导入 .iss / .nsi 脚本](docs/import.md)
+- [winget 与 Microsoft Store](docs/winget.md)、[MSBuild、.NET 工具与类库](docs/msbuild.md)、[在 Linux 和 macOS 上构建](docs/cross-platform.md)
 - [诊断与退出代码](docs/diagnostics.md)
 - [安全](docs/security.md)
 - [架构](docs/architecture.md)

@@ -22,7 +22,7 @@ What every migration needed:
 3. **The same command line.** Inno `/SILENT … /RELAUNCH=1` (a progress window, then the app starts again), NSIS
    `/S /UPDATE`, elevated `/S`: all understood, see [project-file.md](project-file.md#setupexe-command-line).
 4. **The version from the build.** `"version": "$(Version)"` with `fluentsetup build -D Version=<v>`; in GitHub
-   Actions `uses: TIANLI0/FluentSetup@v1.0.1` provides the CLI.
+   Actions `uses: TIANLI0/FluentSetup@v1.2.0` provides the CLI.
 
 ## THRM: NSIS script → FluentSetup project
 

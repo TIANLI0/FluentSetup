@@ -3,6 +3,58 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
+## [1.2.0] - 2026-11-14
+
+### Added
+
+- Desktop integration, all declarative and removed on uninstall: `associations` (file types with icon, open command,
+  "Open with" and Default apps entry), `protocols` (URL schemes), `shortcuts` (more shortcuts: other programs,
+  arguments, desktop or Startup folder, per-shortcut AppUserModelID), `app.appUserModelId`/`toastActivatorClsid` on
+  the app's own shortcuts, `registry` values below `Software\<Vendor>`, `environment` variables, `install.appPaths`,
+  Windows `services` and `firewall` rules (per-machine installs). Registry changes are journaled and rolled back with
+  the files; updates remove what a version no longer declares.
+- `inputs`: a Settings page in both interfaces (text, password, choice; required and pattern checks; remembered for
+  updates) and `/input id=value`, used as `{Input:id}` in registry values, environment variables, arguments and
+  `configFiles` (JSON or INI files updated in place). Placeholders `{InstallDir}`, `{MainExecutable}`, `{AppVersion}`,
+  `{AppId}`.
+- Modify and Repair: Apps & features "Modify" runs `uninstall.exe /modify` (shortcuts, options and inputs can be
+  changed later; the steps of options that were turned on run) and offers Repair (installed files checked against the
+  install record; a damaged installation is reinstalled from the original Setup.exe or the update source).
+  `/modify` and `/repair` work silently too.
+- Prerequisites: `requirements.vcRedist` (Visual C++ 2015-2022 v14) and `requirements.custom` (detected by registry
+  value or file). `"auto": "bundle"` stores Microsoft's official installer in Setup.exe at build time (downloaded once a
+  day, signature checked, never installed into the app folder); `"auto": "download"` lets setup download it and accept
+  it by its Microsoft signature. `download.signer` pins any vendor download to its publisher.
+- Restart Manager (`install.restartManager`): programs that hold the app's files are closed before an update or
+  uninstall and restarted afterwards; the first page lists them. `install.lockedFiles: "reboot"` replaces files that
+  are still in use at the next restart (per-machine; exit code 3010).
+- Signing: `signing.signUninstaller` (on by default) — the uninstall.exe setup writes carries the package's signature.
+  Signing providers: signtool with a certificate, Azure Trusted Signing, or any signing command (also on Linux and
+  macOS). The first page shows "Verified publisher: <name>" or "Unknown publisher".
+- `ui.banner`: an image at the top of the first page in both interfaces.
+- Installer languages: Traditional Chinese, German, French, Spanish, Portuguese (Brazil), Russian and Italian, in
+  addition to English, Simplified Chinese, Japanese and Korean.
+- CLI: `fluentsetup import <setup.iss|script.nsi>` turns an Inno Setup or NSIS script into a project plus a migration
+  report; `fluentsetup winget` writes winget manifests for a built Setup.exe; `fluentsetup versions
+  <webview2|windowsappruntime|dotnet|vcredist>` lists current versions from Microsoft; `build --refresh-installers`.
+- NuGet packages: `FluentSetup.Builder.Core` (library), `FluentSetup.Cli` (.NET tool) and `FluentSetup.MSBuild`
+  (`dotnet publish` produces Setup.exe). The CLI also builds installers on Linux and macOS
+  (`fluentsetup-<version>-linux-x64.tar.gz`).
+- Builder: pages for every new setting, version pickers filled from Microsoft (WebView2, Windows App SDK, .NET, VC++),
+  and a preview with the banner, publisher line and Settings page.
+- Release assets carry the ARM64 installer runtime too (`output.architecture: "arm64"` / `--arch arm64` now work with
+  the released CLI and the GitHub Action). CI builds ARM64 on every push and runs the native tests and the
+  end-to-end installs on an ARM64 runner.
+
+### Changed
+
+- A rollback that cannot undo every step keeps only the remaining steps in its journal, so the next run never undoes a
+  step twice (which could delete a file the first rollback had restored); transient file locks are retried.
+- Revoked or explicitly distrusted signatures are refused (security gap G5). Processes an action leaves running end
+  with it (G8). Duplicate JSON keys are refused (G14). The single-instance lock fails closed (G7). Test hooks only work
+  in packages built for FluentSetup's own tests (G11). The PFX password no longer appears on signtool's command line (G9).
+- The Windows App SDK version accepts 10.x and later. UI tests must pass in CI.
+
 ## [1.1.0] - 2026-11-13
 
 ### Added
