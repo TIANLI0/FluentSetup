@@ -54,6 +54,8 @@ release workflow publishes the section of the pushed tag as the release notes.
   with it (G8). Duplicate JSON keys are refused (G14). The single-instance lock fails closed (G7). Test hooks only work
   in packages built for FluentSetup's own tests (G11). The PFX password no longer appears on signtool's command line (G9).
 - The Windows App SDK version accepts 10.x and later. UI tests must pass in CI.
+- An elevated Setup.exe with UAC turned off (or as the built-in Administrator) now starts the app after installing
+  even when no desktop shell is running, for example on a build server; with UAC on it still never starts it elevated.
 
 ## [1.1.0] - 2026-11-13
 
