@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using FluentSetup.Builder.Core.Model;
+using FluentSetup.Builder.Core.Prerequisites;
 using FluentSetup.Builder.Core.Validation;
 using ZstdSharp;
 using ZstdSharp.Unsafe;
@@ -25,7 +26,14 @@ public sealed class BuildOptions
     public Dictionary<string, string>? Defines { get; set; }
     public bool VerifyOutput { get; set; } = true;
     public Action<string>? Log { get; set; }
+    /// <summary>Download official prerequisite installers again even if the cached copy is less than a day old.</summary>
+    public bool RefreshInstallers { get; set; }
+    /// <summary>Test builds only: the installer honours FLUENTSETUP_TEST_FAULT_AFTER and --ui-simulate.</summary>
+    public bool TestHooks { get; set; }
 }
+
+/// <summary>An official prerequisite installer stored in the package (<c>"auto": "bundle"</c>).</summary>
+public sealed record BundledInstaller(string Prerequisite, string FileName, string Url, string Sha256, long Size, DateTimeOffset Downloaded, bool SignatureChecked);
 
 public sealed class SizeBreakdown
 {
@@ -61,6 +69,10 @@ public sealed class BuildReport
     public double DurationSeconds => (FinishedAt - StartedAt).TotalSeconds;
     public List<Diagnostic> Diagnostics { get; set; } = [];
     public string? Sha256 { get; set; }
+    /// <summary>Official prerequisite installers stored in the package.</summary>
+    public List<BundledInstaller> BundledInstallers { get; set; } = [];
+    /// <summary>The installer writes a signed uninstall.exe (signing.signUninstaller).</summary>
+    public bool UninstallerSigned { get; set; }
 }
 
 public sealed class BuildFailedException(string message, IEnumerable<Diagnostic>? diagnostics = null) : Exception(message)
@@ -167,6 +179,32 @@ public sealed class PackageBuilder
         if (collected.Diagnostics.HasErrors || fileChecks.HasErrors) throw new BuildFailedException("Some files cannot be installed.", report.Diagnostics);
         report.FileCount = collected.Files.Count;
         report.Sizes.PayloadRaw = collected.TotalSize;
+
+        // Official prerequisite installers to store in the package ("auto": "bundle"), downloaded or from the cache.
+        var bundled = new Dictionary<PrerequisiteSource, string>(ReferenceEqualityComparer.Instance);
+        var redistFiles = new List<CollectedFile>();
+        foreach (var (source, field, kind, version, runtime, vcArch) in OfficialInstallers.Sources(project))
+        {
+            if (source.Auto != "bundle" || !string.IsNullOrEmpty(source.Installer)) continue;
+            if (source.Variants.Count > 0 && variants.Count > 0 && !source.Variants.Any(id => variants.Any(v => v.Id == id))) continue;
+            var official = OfficialInstallers.For(kind, arch, version, runtime, vcArch)
+                ?? throw new BuildFailedException($"No official installer for {field}.", [new Diagnostic(Severity.Error, "FS2004", field + ".auto", "No official installer for this prerequisite.")]);
+            CachedInstaller cached;
+            try
+            {
+                cached = InstallerCache.Get(official, options.RefreshInstallers, log, ct);
+            }
+            catch (InvalidDataException ex)
+            {
+                throw new BuildFailedException(ex.Message, [new Diagnostic(Severity.Error, "FS2004", field + ".auto", ex.Message)]);
+            }
+            bundled[source] = official.FileName;
+            if (redistFiles.All(f => !f.RelativePath.Equals(official.FileName, StringComparison.OrdinalIgnoreCase)))
+            {
+                redistFiles.Add(new CollectedFile(cached.Path, official.FileName, cached.Size, false, 0));
+                report.BundledInstallers.Add(new BundledInstaller(field, official.FileName, cached.Url, cached.Sha256, cached.Size, cached.Downloaded, cached.SignatureChecked));
+            }
+        }
         log($"Collected {collected.Files.Count:N0} files, {Format(collected.TotalSize)} in {sw.Elapsed.TotalSeconds:F1}s");
 
         Directory.CreateDirectory(tempDir);
@@ -226,17 +264,28 @@ public sealed class PackageBuilder
         byte[] icon = !string.IsNullOrEmpty(project.App.Icon)
             ? IconConverter.LoadAsIco(ProjectValidator.Resolve(projectDir, project.App.Icon))
             : File.Exists(assets.DefaultIcon) ? File.ReadAllBytes(assets.DefaultIcon) : [];
-        if (includeUi)
+        // ui.banner travels in the front-end set; without the WinUI front end the set holds only the banner and the icon
+        // (the Win32 interface reads the banner from it).
+        string? bannerName = null;
+        if (!string.IsNullOrEmpty(project.Ui.Banner)) bannerName = "banner" + Path.GetExtension(project.Ui.Banner).ToLowerInvariant();
+        if (includeUi || bannerName is not null)
         {
-            var uiFiles = assets.UiFiles(arch).Select(f => new CollectedFile(f, Path.GetFileName(f), new FileInfo(f).Length, false, 0)).ToList();
+            var uiFiles = includeUi ? assets.UiFiles(arch).Select(f => new CollectedFile(f, Path.GetFileName(f), new FileInfo(f).Length, false, 0)).ToList() : [];
             if (icon.Length > 0)
             {
                 var iconTemp = Path.Combine(tempDir, "app.ico");
                 File.WriteAllBytes(iconTemp, icon);
                 uiFiles.Add(new CollectedFile(iconTemp, "app.ico", icon.Length, false, 0));
             }
+            if (bannerName is not null)
+            {
+                var banner = ProjectValidator.Resolve(projectDir, project.Ui.Banner);
+                uiFiles.Add(new CollectedFile(banner, bannerName, new FileInfo(banner).Length, false, 0));
+            }
             ui = CompressFiles(uiFiles, Path.Combine(tempDir, "ui.zst"), 19, 0, true, _ => { }, ct);
         }
+        // Bundled installers are already compressed: a fast level, one stream each so setup decodes only the one it needs.
+        var redist = redistFiles.Select((f, i) => CompressFiles([f], Path.Combine(tempDir, $"redist-{i}.zst"), 3, 0, false, _ => { }, ct)).ToArray();
 
         // ---- write ---------------------------------------------------------------------------------------------
         progress?.Report(new(BuildStage.Writing, 0, "Writing Setup.exe"));
@@ -275,11 +324,24 @@ public sealed class PackageBuilder
                 payloadRecords.Add(AppendStream(output, r, overlayStart, report.Sizes));
             }
             report.Sizes.PayloadCompressed = results.Sum(r => r.CompressedSize);
+            var redistRecords = redist.Select(r => AppendStream(output, r, overlayStart, report.Sizes)).ToList();
+            report.Sizes.PayloadCompressed += redist.Sum(r => r.CompressedSize);
 
             var license = string.IsNullOrEmpty(project.Ui.License) ? "" : File.ReadAllText(ProjectValidator.Resolve(projectDir, project.Ui.License));
             var texts = Localization.Load(project, projectDir);
             var licenses = texts.LicenseFiles.ToDictionary(kv => kv.Key, kv => File.ReadAllText(kv.Value));
-            var headerJson = HeaderWriter.Write(project, texts, variants, arch, license, licenses, payloadRecords, results, collected.Directories, uiRecord, ui);
+            var headerJson = HeaderWriter.Write(project, texts, variants, arch, license, licenses, payloadRecords, results, collected.Directories, uiRecord, ui,
+                                                includeUi, bannerName, bundled, redistRecords, redist, options.TestHooks, null);
+            if ((options.Sign ?? project.Signing.Enabled) && project.Signing.SignUninstaller)
+            {
+                // The uninstaller is derived from this header, signed, and described in the final header.
+                output.Flush();
+                progress?.Report(new(BuildStage.Signing, 0, "Signing the uninstaller"));
+                var image = UninstallerImage.Create(project, projectDir, partial, overlayStart, headerJson, ui is null ? [] : [ui.TempFile], tempDir, log);
+                headerJson = HeaderWriter.Write(project, texts, variants, arch, license, licenses, payloadRecords, results, collected.Directories, uiRecord, ui,
+                                                includeUi, bannerName, bundled, redistRecords, redist, options.TestHooks, image);
+                report.UninstallerSigned = true;
+            }
             var headerCompressed = new Compressor(19).Wrap(headerJson).ToArray();
             var headerOffset = output.Position - overlayStart;
             output.Write(headerCompressed);
@@ -447,7 +509,9 @@ public sealed class PackageBuilder
     internal static class HeaderWriter
     {
         public static byte[] Write(SetupProject p, Localization.Texts texts, IReadOnlyList<VariantSettings> variants, string arch, string license, Dictionary<string, string> licenses, List<StreamRecord> payload, CompressedStream[] payloadStreams,
-                                   List<string> directories, StreamRecord? uiRecord, CompressedStream? ui)
+                                   List<string> directories, StreamRecord? uiRecord, CompressedStream? ui, bool includeUi, string? bannerName,
+                                   IReadOnlyDictionary<PrerequisiteSource, string> bundled, List<StreamRecord> redistRecords, CompressedStream[] redist,
+                                   bool testHooks, UninstallerImage.Image? uninstallerImage)
         {
             using var ms = new MemoryStream();
             using (var w = new Utf8JsonWriter(ms, new JsonWriterOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
@@ -465,6 +529,8 @@ public sealed class PackageBuilder
                 w.WriteString("mainExecutable", string.IsNullOrEmpty(p.App.MainExecutable) ? "" : p.App.MainExecutable.Replace('/', '\\'));
                 w.WriteString("architecture", arch);
                 w.WriteNumber("minWindowsBuild", p.Install.MinWindowsBuild);
+                if (p.App.AppUserModelId.Length > 0) w.WriteString("appUserModelId", p.App.AppUserModelId);
+                if (p.App.ToastActivatorClsid.Length > 0) w.WriteString("toastActivatorClsid", p.App.ToastActivatorClsid);
                 w.WriteEndObject();
 
                 w.WriteStartObject("install");
@@ -500,8 +566,12 @@ public sealed class PackageBuilder
                 WriteStrings(w, "removeFiles", p.Install.Cleanup.RemoveFiles.Select(x => x.Replace('/', '\\')));
                 w.WriteEndObject();
                 if (!string.IsNullOrEmpty(p.Install.StartMenuFolder)) w.WriteString("startMenuFolder", p.Install.StartMenuFolder);
+                w.WriteBoolean("appPaths", p.Install.AppPaths);
+                w.WriteString("restartManager", p.Install.RestartManager);
+                w.WriteString("lockedFiles", p.Install.LockedFiles);
                 w.WriteEndObject();
-                WriteExtensions(w, p, texts, variants);
+                WriteExtensions(w, p, texts, variants, arch, bundled);
+                IntegrationWriter.Write(w, p, texts);
                 w.WriteStartArray("variants");
                 if (variants.Count > 1)
                 {
@@ -532,6 +602,7 @@ public sealed class PackageBuilder
                 w.WriteEndObject();
                 w.WriteString("licenseMode", p.Ui.LicenseMode);
                 w.WriteString("defaultLanguage", p.Ui.DefaultLanguage);
+                if (bannerName is not null) w.WriteString("banner", bannerName);
                 w.WriteStartObject("strings");
                 foreach (var (lang, table) in texts.Strings)
                 {
@@ -559,10 +630,29 @@ public sealed class PackageBuilder
                     w.WriteStartArray("files");
                     WriteFiles(w, ui, 0);
                     w.WriteEndArray();
-                    w.WriteString("entry", "FluentSetup.UI.exe");
+                    if (includeUi) w.WriteString("entry", "FluentSetup.UI.exe");
                     if (ui.Files.Any(f => f.File.RelativePath == "app.ico")) w.WriteString("icon", "app.ico");
                     w.WriteEndObject();
                 }
+                if (redist.Length > 0)
+                {
+                    w.WriteStartObject("redist");
+                    WriteStreams(w, redistRecords);
+                    w.WriteStartArray("files");
+                    for (var i = 0; i < redist.Length; i++) WriteFiles(w, redist[i], i);
+                    w.WriteEndArray();
+                    w.WriteEndObject();
+                }
+                if (uninstallerImage is not null)
+                {
+                    w.WriteStartObject("uninstallerImage");
+                    w.WriteString("header", Convert.ToBase64String(uninstallerImage.Header));
+                    w.WriteString("certificates", Convert.ToBase64String(uninstallerImage.Certificates));
+                    w.WriteNumber("checksum", uninstallerImage.Checksum);
+                    w.WriteString("sha256", PackageFormat.Hex(uninstallerImage.Sha256));
+                    w.WriteEndObject();
+                }
+                if (testHooks) w.WriteBoolean("testHooks", true);
                 w.WriteEndObject();
             }
             return ms.ToArray();
@@ -582,25 +672,48 @@ public sealed class PackageBuilder
             w.WriteEndArray();
         }
 
-        private static void WriteSource(Utf8JsonWriter w, PrerequisiteSource? s)
+        private static void WriteSource(Utf8JsonWriter w, PrerequisiteSource? s, OfficialInstaller? official = null, string? bundledFile = null)
         {
             if (s is null) return;
             if (!string.IsNullOrEmpty(s.Installer)) w.WriteString("installer", s.Installer.Replace('/', '\\'));
-            WriteStrings(w, "args", s.Arguments);
+            if (bundledFile is not null) w.WriteString("bundled", bundledFile);
+            // Official installers run with their own silent switches unless the project says otherwise.
+            WriteStrings(w, "args", s.Arguments.Count == 0 && official is not null && s.Auto.Length > 0 ? official.Arguments : s.Arguments);
             if (s.Download is { Url.Length: > 0 } dl)
             {
                 w.WriteStartObject("download");
                 w.WriteString("url", dl.Url);
-                w.WriteString("sha256", dl.Sha256.ToLowerInvariant());
+                if (dl.Sha256.Length > 0) w.WriteString("sha256", dl.Sha256.ToLowerInvariant());
                 w.WriteNumber("size", dl.Size);
+                if (dl.Signer.Length > 0) w.WriteString("signer", dl.Signer);
+                w.WriteEndObject();
+            }
+            else if (s.Auto == "download" && official is not null)
+            {
+                // Microsoft's link always serves the current installer: pinned by its signature instead of a hash.
+                w.WriteStartObject("download");
+                w.WriteString("url", official.Url);
+                w.WriteNumber("size", 0);
+                w.WriteString("signer", official.Signer);
                 w.WriteEndObject();
             }
             if (!string.IsNullOrEmpty(s.HelpUrl)) w.WriteString("helpUrl", s.HelpUrl);
             w.WriteString("onFailure", s.OnFailure);
         }
 
-        private static void WriteExtensions(Utf8JsonWriter w, SetupProject p, Localization.Texts texts, IReadOnlyList<VariantSettings> variants)
+        private static void WriteExtensions(Utf8JsonWriter w, SetupProject p, Localization.Texts texts, IReadOnlyList<VariantSettings> variants, string arch,
+                                            IReadOnlyDictionary<PrerequisiteSource, string> bundled)
         {
+            var sourceInfo = new Dictionary<PrerequisiteSource, (PrerequisiteSource Source, string Field, PrerequisiteKind Kind, string Version, string Runtime, string VcArchitecture)>(ReferenceEqualityComparer.Instance);
+            foreach (var x in OfficialInstallers.Sources(p)) sourceInfo[x.Source] = x;
+            void WriteSourceOf(PrerequisiteSource? s)
+            {
+                if (s is null) return;
+                OfficialInstaller? official = null;
+                if (sourceInfo.TryGetValue(s, out var info) && s.Auto.Length > 0)
+                    official = OfficialInstallers.For(info.Kind, arch, info.Version, info.Runtime, info.VcArchitecture);
+                WriteSource(w, s, official, bundled.TryGetValue(s, out var file) ? file : null);
+            }
             // A requirement limited to variants that are not in this package is dropped; with a single variant the
             // filter is resolved here (the package then has no variants).
             bool Applies(PrerequisiteSource? s) => s is null || s.Variants.Count == 0 || variants.Count == 0 || s.Variants.Any(id => variants.Any(v => v.Id == id));
@@ -616,7 +729,7 @@ public sealed class PackageBuilder
                 w.WriteString("type", "netfx");
                 w.WriteNumber("minRelease", release);
                 w.WriteString("name", $".NET Framework {p.Requirements.NetFramework}");
-                WriteSource(w, p.Requirements.NetFrameworkSetup);
+                WriteSourceOf(p.Requirements.NetFrameworkSetup);
                 WriteVariantFilter(p.Requirements.NetFrameworkSetup);
                 w.WriteEndObject();
             }
@@ -626,7 +739,7 @@ public sealed class PackageBuilder
                 w.WriteString("type", "webview2");
                 w.WriteString("name", "Microsoft Edge WebView2 Runtime");
                 if (!string.IsNullOrEmpty(p.Requirements.WebView2.MinVersion)) w.WriteString("minVersion", p.Requirements.WebView2.MinVersion);
-                WriteSource(w, p.Requirements.WebView2);
+                WriteSourceOf(p.Requirements.WebView2);
                 WriteVariantFilter(p.Requirements.WebView2);
                 w.WriteEndObject();
             }
@@ -639,7 +752,7 @@ public sealed class PackageBuilder
                 w.WriteString("channel", channel);
                 w.WriteString("name", $"Windows App Runtime {war.Version}");
                 if (parts[0] != "1") w.WriteString("minVersion", war.Version);  // 2.x+: the package version is the SDK version
-                WriteSource(w, war);
+                WriteSourceOf(war);
                 WriteVariantFilter(war);
                 w.WriteEndObject();
             }
@@ -652,8 +765,48 @@ public sealed class PackageBuilder
                 w.WriteString("name", $"{label} {r.Version}");
                 w.WriteString("minVersion", r.Version);
                 w.WriteString("rollForward", r.RollForward);
-                WriteSource(w, r);
+                WriteSourceOf(r);
                 WriteVariantFilter(r);
+                w.WriteEndObject();
+            }
+            if (p.Requirements.VcRedist is { Required: true } vc && Applies(vc))
+            {
+                var vcArch = vc.Architecture.Length > 0 ? vc.Architecture : arch;
+                w.WriteStartObject();
+                w.WriteString("type", "vcredist");
+                w.WriteString("architecture", vcArch);
+                w.WriteString("name", $"Microsoft Visual C++ Redistributable ({vcArch})");
+                if (vc.MinVersion.Length > 0) w.WriteString("minVersion", vc.MinVersion);
+                WriteSourceOf(vc);
+                WriteVariantFilter(vc);
+                w.WriteEndObject();
+            }
+            foreach (var c in p.Requirements.Custom.Where(Applies))
+            {
+                w.WriteStartObject();
+                w.WriteString("type", "custom");
+                w.WriteString("id", c.Id);
+                w.WriteString("name", c.Name);
+                w.WriteStartObject("detect");
+                if (c.Detect.Registry is { } reg)
+                {
+                    w.WriteStartObject("registry");
+                    w.WriteString("hive", reg.Hive);
+                    w.WriteString("key", reg.Key);
+                    w.WriteString("value", reg.Value);
+                    w.WriteString("version", reg.Version);
+                    w.WriteEndObject();
+                }
+                else if (c.Detect.File is { } file)
+                {
+                    w.WriteStartObject("file");
+                    w.WriteString("path", file.Path);
+                    if (file.Version.Length > 0) w.WriteString("version", file.Version);
+                    w.WriteEndObject();
+                }
+                w.WriteEndObject();
+                WriteSource(w, c);
+                WriteVariantFilter(c);
                 w.WriteEndObject();
             }
             w.WriteEndArray();

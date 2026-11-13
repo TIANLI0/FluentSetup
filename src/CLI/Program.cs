@@ -30,6 +30,7 @@ public static class Program
               -v, --verbose             Detailed log
               --json                    Print the build report as JSON instead of text
               --non-interactive         Never prompt (the default; accepted for CI scripts)
+              --refresh-installers      Download official prerequisite installers ("auto": "bundle") again
           fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
           fluentsetup inspect <Setup.exe> [--verify] [--json]
           fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
@@ -206,6 +207,8 @@ public static class Program
             Sign = a.Flag("sign") ? true : a.Flag("no-sign") ? false : null,
             Log = verbose && !json ? m => Console.WriteLine($"  {m}") : null,
             Defines = a.Defines(),
+            RefreshInstallers = a.Flag("refresh-installers"),
+            TestHooks = a.Flag("test-hooks"),  // undocumented: packages for FluentSetup's own tests
         };
         a.Flag("non-interactive");
         var reportPath = a.Value("report");
@@ -243,7 +246,9 @@ public static class Program
                                   $"stub {PackageBuilder.Format(s.Stub)}, WinUI {PackageBuilder.Format(s.WinUiFrontEnd)}, header {PackageBuilder.Format(s.Header)}" +
                                   (s.Signature > 0 ? $", signature {PackageBuilder.Format(s.Signature)}" : "") + ")");
                 Console.WriteLine($"  SHA-256 {report.Sha256}");
-                Console.WriteLine($"  {report.DurationSeconds:F1} s{(report.Signed ? ", signed" : "")}{(report.IncludesWinUI ? "" : ", Win32 interface only")}");
+                foreach (var b in report.BundledInstallers)
+                    Console.WriteLine($"  Bundled {b.FileName} ({PackageBuilder.Format(b.Size)}, {b.Url}, downloaded {b.Downloaded.LocalDateTime:g}{(b.SignatureChecked ? ", signature checked" : "")})");
+                Console.WriteLine($"  {report.DurationSeconds:F1} s{(report.Signed ? ", signed" : "")}{(report.UninstallerSigned ? " (also uninstall.exe)" : "")}{(report.IncludesWinUI ? "" : ", Win32 interface only")}");
             }
             else
             {
@@ -435,7 +440,7 @@ internal sealed class ParsedArgs
     private readonly Dictionary<string, string?> _options = new(StringComparer.Ordinal);
     private readonly HashSet<string> _used = [];
     private readonly List<string> _defines = [];
-    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease"];
+    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease", "refresh-installers", "test-hooks"];
 
     public static ParsedArgs Parse(string[] args)
     {

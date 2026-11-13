@@ -18,6 +18,8 @@ public sealed class PackageInfo
     public long PayloadStoredBytes { get; set; }
     public long FrontendStoredBytes { get; set; }
     public int FrontendFiles { get; set; }
+    /// <summary>Official prerequisite installers stored in the package (redist set).</summary>
+    public int BundledInstallers { get; set; }
     public List<string> Problems { get; } = [];
     public bool StreamsVerified { get; set; }
 }
@@ -65,7 +67,7 @@ public static class PackageInspector
         info.Header = JsonDocument.Parse(json);
         var root = info.Header.RootElement;
 
-        void CheckSet(string name, bool isPayload)
+        void CheckSet(string name, bool? isPayload)
         {
             if (!root.TryGetProperty(name, out var set) || set.ValueKind != JsonValueKind.Object) return;
             var streams = set.GetProperty("streams").EnumerateArray().ToList();
@@ -91,7 +93,11 @@ public static class PackageInspector
                 }
                 if (PackageFormat.Hex(sha.GetHashAndReset()) != s.GetProperty("sha256").GetString()) info.Problems.Add($"{name} stream checksum mismatch at offset {offset}");
             }
-            if (isPayload)
+            if (isPayload is null)
+            {
+                info.BundledInstallers = files.Count;
+            }
+            else if (isPayload == true)
             {
                 info.PayloadFiles = files.Count;
                 info.PayloadRawBytes = files.Sum(f => f.GetProperty("size").GetInt64());
@@ -105,6 +111,7 @@ public static class PackageInspector
         }
         CheckSet("payload", true);
         CheckSet("frontend", false);
+        CheckSet("redist", null);
         info.StreamsVerified = verifyStreams;
         return info;
     }

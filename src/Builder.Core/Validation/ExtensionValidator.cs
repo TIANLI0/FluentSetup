@@ -42,6 +42,8 @@ public static partial class ExtensionValidator
         if (p.Requirements.NetFrameworkSetup is { } nf) yield return (nf, "requirements.netFrameworkSetup");
         if (p.Requirements.WebView2.Required) yield return (p.Requirements.WebView2, "requirements.webView2");
         foreach (var (r, i) in p.Requirements.DotNet.Select((r, i) => (r, i))) yield return (r, $"requirements.dotNet[{i}]");
+        if (p.Requirements.VcRedist.Required) yield return (p.Requirements.VcRedist, "requirements.vcRedist");
+        foreach (var (c, i) in p.Requirements.Custom.Select((c, i) => (c, i))) yield return (c, $"requirements.custom[{i}]");
     }
 
     private static void ValidateSource(PrerequisiteSource s, string field, DiagnosticBag d)
@@ -53,8 +55,10 @@ public static partial class ExtensionValidator
         {
             if (!Uri.TryCreate(dl.Url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps || dl.Url.Length > 2048)
                 d.Error("FS1606", field + ".download.url", "Downloads must use an https URL.");
-            if (!Sha256Regex().IsMatch(dl.Sha256))
-                d.Error("FS1607", field + ".download.sha256", "Give the SHA-256 of the file (64 hex characters); setup refuses to run anything that does not match.");
+            if (dl.Signer.Length == 0 ? !Sha256Regex().IsMatch(dl.Sha256) : dl.Sha256.Length > 0 && !Sha256Regex().IsMatch(dl.Sha256))
+                d.Error("FS1607", field + ".download.sha256", "Give the SHA-256 of the file (64 hex characters) or a signer; setup refuses to run anything that does not match.");
+            if (dl.Signer.Length > 256 || dl.Signer.Trim().Length != dl.Signer.Length)
+                d.Error("FS1683", field + ".download.signer", "The certificate's subject name, e.g. Microsoft Corporation (max 256 characters, no surrounding spaces).");
             if (dl.Size < 0) d.Error("FS1608", field + ".download.size", "Size must be the file size in bytes, or 0 if unknown.");
             if (!string.IsNullOrEmpty(s.Installer)) d.Info("FS1609", field, "Both a bundled installer and a download are set; the bundled installer is used.");
         }
@@ -284,5 +288,6 @@ public static partial class ExtensionValidator
             if (PathRules.TryNormalizeRelative(n, out var rel, out _) && !set.Contains(rel))
                 d.Error("FS1642", $"install.ngen[{i}]", $"'{rel}' is not among the files to install.");
         }
+        IntegrationValidator.ValidateAgainstFiles(p, set, d);
     }
 }

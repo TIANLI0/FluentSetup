@@ -155,6 +155,7 @@ public static partial class ProjectValidator
             else if (new FileInfo(Resolve(projectDirectory, file)).Length > 1024 * 1024) d.Error("FS1306", $"ui.licenses.{lang}", "License file is larger than 1 MB.");
         }
         ExtensionValidator.Validate(p, d);
+        IntegrationValidator.Validate(p, projectDirectory, d);
         Localization.Load(p, projectDirectory, d);  // reports problems in the localization folder
 
         // signing
