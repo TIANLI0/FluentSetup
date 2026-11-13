@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using FluentSetup.Builder.Core.Import;
 using FluentSetup.Builder.Core.Model;
 using FluentSetup.Builder.Core.Packaging;
 using FluentSetup.Builder.Core.Updates;
@@ -33,6 +34,10 @@ public static class Program
           fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
           fluentsetup inspect <Setup.exe> [--verify] [--json]
           fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
+          fluentsetup import <setup.iss|script.nsi> [-o <folder>] [--force] [--json]
+                                        Convert an Inno Setup or NSIS script into <folder>\fluentsetup.json
+                                        (default folder: the script's) plus import-report.md, a checklist of
+                                        what was mapped and what needs manual work
           fluentsetup locale add <language> <project.json> [--force]
                                         Create <ui.localization>/<language>.json with every text to translate
                                         (installer strings, option/action/variant ids); any BCP-47 tag, e.g. fr-FR
@@ -75,6 +80,7 @@ public static class Program
                 "validate" => Validate(parsed),
                 "inspect" => Inspect(parsed),
                 "init" => Init(parsed),
+                "import" => Import(parsed),
                 "guide" => PrintResource("FluentSetup.Cli.ai-guide.md"),
                 "schema" => PrintResource("FluentSetup.Cli.fluentsetup.project.schema.json"),
                 "locale" => Locale(parsed),
@@ -398,6 +404,62 @@ public static class Program
         return 0;
     }
 
+    /// <summary>
+    /// import &lt;script&gt;: converts an Inno Setup or NSIS script into fluentsetup.json and import-report.md (refuses to
+    /// overwrite either without --force). Manual work left in the report is not a failure.
+    /// </summary>
+    private static int Import(ParsedArgs a)
+    {
+        var script = Path.GetFullPath(a.Positional(0, "script (.iss or .nsi)"));
+        var output = a.Value("output", "o") is { } o ? Path.GetFullPath(o) : Path.GetDirectoryName(script)!;
+        var force = a.Flag("force");
+        var json = a.Flag("json");
+        a.EnsureAllUsed();
+        if (a.PositionalOrDefault(1) is { } extra) throw new UsageException($"Unexpected argument '{extra}'.");
+        if (!File.Exists(script)) throw new UsageException($"Script not found: {script}");
+        if (ProjectImporter.Detect(script) is null)
+            throw new UsageException($"{script} is neither an Inno Setup script (.iss) nor an NSIS script (.nsi).");
+        if (!force)
+        {
+            foreach (var name in new[] { ProjectImporter.ProjectFileName, ProjectImporter.ReportFileName })
+            {
+                var existing = Path.Combine(output, name);
+                if (File.Exists(existing)) throw new UsageException($"{existing} exists (use --force to overwrite).");
+            }
+        }
+        var result = ProjectImporter.Import(script, output);
+        ProjectImporter.Save(result, overwrite: true);
+        int manual = result.Count(ImportSeverity.Manual), warnings = result.Count(ImportSeverity.Warning), mapped = result.Count(ImportSeverity.Info);
+        var p = result.Project;
+        if (json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                format = result.FormatName, script = result.ScriptPath, project = result.ProjectPath, report = result.ReportPath,
+                app = new { id = p.App.Id, name = p.App.Name, version = p.App.Version, scope = p.Install.Scope },
+                counts = new { manual, warnings, mapped },
+                notes = result.Notes.Select(n => new { severity = n.Severity.ToString().ToLowerInvariant(), file = n.File, line = n.Line, message = n.Message, field = n.Field }),
+            }, ReportJson));
+            return 0;
+        }
+        string Expand(string s) => p.Variables.Aggregate(s, (t, v) => t.Replace("$(" + v.Key + ")", v.Value, StringComparison.OrdinalIgnoreCase));
+        var scriptDir = Path.GetDirectoryName(script)!;
+        Console.WriteLine($"Imported {Path.GetFileName(script)} ({result.FormatName})");
+        Console.WriteLine($"  {Expand(p.App.Name)} {Expand(p.App.Version)} ({p.App.Id}), install scope: {p.Install.Scope}");
+        Console.WriteLine($"  {manual} to do by hand, {warnings} to check, {mapped} mapped or not needed");
+        Console.WriteLine($"  Project: {result.ProjectPath}");
+        Console.WriteLine($"  Report:  {result.ReportPath}");
+        if (manual + warnings > 0) Console.WriteLine();
+        foreach (var n in result.Notes.Where(n => n.Severity != ImportSeverity.Info).OrderByDescending(n => n.Severity))
+        {
+            var where = n.File.Length == 0 ? "" : Path.GetRelativePath(scriptDir, n.File) + (n.Line > 0 ? $":{n.Line}" : "") + ": ";
+            Console.WriteLine($"{(n.Severity == ImportSeverity.Manual ? "manual " : "warning")} {where}{n.Message}");
+        }
+        Console.WriteLine();
+        Console.WriteLine($"Next: work through {ProjectImporter.ReportFileName}, build the app, then run: fluentsetup validate \"{result.ProjectPath}\"");
+        return 0;
+    }
+
     private static void PrintDiagnostics(IEnumerable<Diagnostic> diagnostics, bool verbose)
     {
         foreach (var d in diagnostics)
@@ -435,7 +497,7 @@ internal sealed class ParsedArgs
     private readonly Dictionary<string, string?> _options = new(StringComparer.Ordinal);
     private readonly HashSet<string> _used = [];
     private readonly List<string> _defines = [];
-    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease"];
+    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease", "force"];
 
     public static ParsedArgs Parse(string[] args)
     {

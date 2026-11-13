@@ -496,12 +496,14 @@ fluentsetup build <project.json> [options]
 fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
 fluentsetup inspect <Setup.exe> [--verify] [--json]
 fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
+fluentsetup import <setup.iss|script.nsi> [-o <folder>] [--force] [--json]
 fluentsetup --version | --help
 ```
 
 - `validate` runs all project checks and collects the files, the same steps `build` performs before compressing, and prints diagnostics as `severity CODE [field]: message`. With `--json` it prints `{ valid, files, bytes, diagnostics }`.
 - `inspect` prints the header summary, sizes and signature state of a built Setup.exe. `--verify` also checks every stream's SHA-256.
 - `init` creates `<folder>\fluentsetup.json` (default folder: the current one) and refuses to overwrite an existing file. `mainExecutable` is set to the first `*.exe` found directly in the source folder.
+- `import` converts an Inno Setup or NSIS script into `<folder>\fluentsetup.json` (default folder: the script's) plus `import-report.md`, a checklist of what was mapped and what needs manual work. It refuses to overwrite either file without `--force`. See [import.md](import.md).
 - Options accept `--name value` or `--name=value`. Unknown or repeated options are usage errors.
 - Exit codes: `0` success, `1` validation or build failure, `2` usage error, `3` unexpected error, `4` cancelled.
 
