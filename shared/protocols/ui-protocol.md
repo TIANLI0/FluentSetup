@@ -67,7 +67,7 @@ Arguments accepted by `FluentSetup.UI.exe` (each must be followed by a value; an
 |---|---|
 | `--pipe <name>` | Bare pipe name (without `\\.\pipe\`). |
 | `--server-pid <pid>` | Expected PID of the pipe server. |
-| `--simulate <mode>` | Test hook, forwarded from Setup.exe `--ui-simulate`: `runtime-missing`, `crash-before-ready`, `crash-after-ready`, `hang`. |
+| `--simulate <mode>` | Test hook, forwarded from Setup.exe `--ui-simulate`: `runtime-missing`, `crash-before-ready`, `crash-after-ready`, `hang`. Setup.exe forwards it only for packages built with `fluentsetup build --test-hooks` (header `testHooks: true`); otherwise `--ui-simulate` is ignored with a warning in the log. |
 | `--preview <file>` | Builder preview: no pipe; `hello` is read from a JSON file, nothing is sent, and progress/completion are simulated locally. |
 
 ### 2.2 Handshake and timeouts
@@ -105,7 +105,9 @@ the UI to exit and then terminates it with `0x26`.
 | `ready` | – | Handshake complete (only meaningful during the handshake). |
 | `init_failed` | `stage`: `"bootstrap"` (runtime binding), `"xaml"` (XAML start), `"unhandled"` (XAML `UnhandledException`); `hr`: HRESULT as unsigned number | During the handshake: fallback (FallbackFresh); the stage and HRESULT go to the log. After `ready` the message is ignored; the UI exits right after sending it (`0x25` for `unhandled`), which leads to FallbackResume. |
 | `checkPath` | `path`: string; `scope`: `"user"` or `"machine"` (anything else = user) | Replied to with `pathCheck`. If the scope is not allowed by the package, the package's default scope is used. |
-| `start` | `options`: see below | Install mode: options are validated (`SanitizeOptions`); if rejected, a `done` with code 3 is sent and the session continues. Uninstall mode: `options` is ignored and the defaults are used. Starts the operation asynchronously; ignored while one is running. May be sent again after a failed `done` (the "Try again" button returns to the first page). |
+| `checkInput` | `id`: input id; `value`: string | Replied to with `inputCheck` (live validation on the Settings page). The bootstrapper applies the same rules as at start: required, one of the choices, `pattern` (ECMAScript `std::wregex`), at most 4096 characters. |
+| `start` | `options`: see below | Install and modify mode: options are validated (`SanitizeOptions`); if rejected, a `done` with code 3 is sent and the session continues. The input values are checked when the operation starts (`Controller::InputProblem`): an unknown id or a value the package does not accept ends the operation at once with a `done` of code 3 (`InvalidArguments`) whose `detail` names the input. Uninstall mode: `options` is ignored except `removeUserData`, the defaults are used. Modify mode: runs `Engine::Modify` (through the elevated worker for a per-machine installation). Starts the operation asynchronously; ignored while one is running. May be sent again after a failed `done` (the "Try again" button returns to the first page). |
+| `repair` | – | Modify mode only (ignored otherwise): verifies the installed files (`Engine::VerifyFiles`, size + SHA-256 from the install record). Nothing damaged: `done` with `result: "success"`, `repair: "noProblems"`. Damaged: looks for the Setup.exe of the installed version (the recorded original if its header digest still matches the record, else the update source: GitHub release `v<version>` or `<version>`, or the feed if it advertises exactly that version; downloads are checked like updates), releases the per-app lock and runs it with `/passive` (`/quiet` in a quiet session), then reports its exit code (`repair: "repaired"` on success, 3010 = success with `rebootRequired`). No source: `done` with code 1 (`Failed`), `repair: "noSource"` and the localized `modify.repairNoSource` as `message`. Asynchronous like `start`. |
 | `cancel` | – | Sets the controller's cancel flag and forwards `cancel` to the elevated worker if one is running. The engine checks the flag between files and before the non-cancellable phases; after that the operation completes normally. |
 | `finish` | `launch`: bool | Ends the session. If `launch` is true and launching is possible (install mode, `launchAfterInstall` not `off`, successful result with a main executable), the app is started as the desktop user. |
 | `close` | – | If no operation was started, the session is marked as closed by the user. If no operation is running, the session ends. |
@@ -118,6 +120,12 @@ the UI to exit and then terminates it with `0x26`.
 | `scope` | `"user"` / `"machine"` | Required. Must be allowed by the package; must equal the installed scope when updating. |
 | `desktopShortcut`, `startMenuShortcut` | bool | Default false / true. Replaced by the package default when the offer is not user-visible. |
 | `choices` | object `{optionId: bool}` | ≤ 16 entries, ids ≤ 32 chars, values must be booleans, every id must be defined by the package; missing ids keep their defaults. |
+| `inputs` | object `{inputId: string}` | ≤ 8 entries, ids ≤ 32 chars, values ≤ 4096 characters, every id must be defined by the package; missing ids keep their current value (`/input`, else remembered, else the default). The values are checked when the operation starts (see `start`). |
+| `variant` | string | Package variant (install mode). |
+| `removeUserData` | bool | Uninstall mode only. |
+
+In modify mode the front ends send the same object as for an install; `installDir` and `scope` must be those of the
+installation (they are fixed), the shortcut offers, `choices` and `inputs` carry the new state.
 
 ### 2.4 Messages: bootstrapper → UI
 
@@ -127,15 +135,20 @@ the UI to exit and then terminates it with `0x26`.
 |---|---|
 | `t` | `"hello"` |
 | `proto` | `1` (`ipc::kProtocolVersion`); the UI refuses other values. |
-| `mode` | `"install"` or `"uninstall"` |
+| `mode` | `"install"`, `"uninstall"` or `"modify"` (`/modify` or `/repair`: the "Change <App>" page) |
 | `elevated` | bool – whether the bootstrapper runs elevated |
 | `strings` | Complete localized string table (en-US base, zh-CN overlay, package overrides) |
 | `language` | `"en-US"` or `"zh-CN"` |
-| `app` | `{name, publisher, version, iconPath}` – `version` is the installed version in uninstall mode; `iconPath` is the extracted `app.ico` (empty if none) |
-| `ui` | `{theme, backdrop, useSystemAccent, accentColor, title, welcomeText, finishText}`, plus `licenseText` (localized license, else the default license) only for a fresh install |
-| `options` | `{installDir, scope, canChangeDir, canChangeScope, userDir, machineDir, dirLeaf, desktopShortcut, startMenuShortcut, launchAfter, choices, dirOk, dirMessage}` – the three offers are `{visible, value}`; `choices` is `[{id, label, value}]` (install mode only); `dirOk`/`dirMessage` are the result of checking the default directory (install mode; always `dirOk: true` in uninstall mode) |
-| `existing` | `{relation: "none"\|"upgrade"\|"same"\|"downgrade", version, blocked}` – `relation` is always `"none"` in uninstall mode; `blocked` = downgrade not allowed (install mode) |
+| `app` | `{name, publisher, version, iconPath}` – `version` is the installed version in uninstall and modify mode; `iconPath` is the extracted `app.ico` (empty if none) |
+| `signature` | `{state, publisher}` from `archive::GetSignerInfo` on the running executable: `state` is `"valid"` (trusted chain; `publisher` = the signing certificate's subject name), `"untrusted"` (intact signature, chain not trusted) or `"unsigned"`; `publisher` is empty unless `valid`. The first page shows `welcome.verifiedPublisher` ("Verified publisher: {0}") or `welcome.unknownPublisher` under the title. |
+| `ui` | `{theme, backdrop, useSystemAccent, accentColor, title, welcomeText, finishText, bannerPath}`, plus `licenseText` (localized license, else the default license) only for a fresh install. `bannerPath` is the extracted `ui.banner` file of the frontend set (WinUI only; empty when the package has none, and always empty for the Win32 front end, which decodes the banner from the package in memory). The banner is decorative: first page only, scaled to the content width, hidden when absent or unreadable. |
+| `options` | `{installDir, scope, canChangeDir, canChangeScope, userDir, machineDir, dirLeaf, desktopShortcut, startMenuShortcut, launchAfter, choices, dirOk, dirMessage}` – the three offers are `{visible, value}`; `choices` is `[{id, label, value, required}]` (install and modify mode; in modify mode the values are the installation's current ones); `dirOk`/`dirMessage` are the result of checking the default directory (install mode; always `dirOk: true` otherwise) |
+| `inputs` | `[{id, label, description, type, value, required, pattern, choices, ok, message}]` (install and modify mode, empty otherwise): `type` is `"text"`, `"password"` or `"choice"`; `label`/`description` are localized; `value` is `/input`, else the value remembered in the install record (never for passwords), else the default; `choices` is `[{value, label}]`; `ok`/`message` are the check of `value` (as `inputCheck`). |
+| `inputsPage` | Show the Settings page (after the first page, before the license): on a first install when the package has inputs, in modify mode when it has inputs, and on an update only when a value is missing or no longer accepted (e.g. a required input without a remembered value) |
+| `modify` | Modify mode: `{canRepair, startRepair}` – `canRepair`: the installation has a verified record to check; `startRepair`: started with `/repair`, the front end starts the repair at once (as with `passive`). `{}` in other modes. |
+| `existing` | `{relation: "none"\|"upgrade"\|"same"\|"downgrade", version, blocked}` – `relation` is always `"none"` in uninstall and modify mode; `blocked` = downgrade not allowed (install mode) |
 | `runningApps` | Comma-separated names of running `closeProcesses` that will be closed |
+| `lockingApps` | Comma-separated display names of other programs that use the installation's `.exe`/`.dll` files (Restart Manager, from the verified install record; empty for a first install or when `install.restartManager` is `off`). Shown with `welcome.lockingApps`; they are closed (and restarted if they registered for it) when the operation runs. |
 | `requiredBytes`, `freeBytes` | Space estimate for the default directory |
 
 #### `pathCheck` (reply to `checkPath`)
@@ -143,6 +156,13 @@ the UI to exit and then terminates it with `0x26`.
 `{t, path, normalized, ok, message, requiredBytes, freeBytes}`. `path` echoes the request (the UI discards replies
 whose `path` is not its latest request). `message` is the localized `path.*` text (empty when `ok`); for
 `path.space` it contains the required and available sizes. Writability is probed only for per-user targets.
+
+#### `inputCheck` (reply to `checkInput`)
+
+`{t, id, value, ok, message}`. `value` echoes the request (the UI ignores replies for a value the field no longer
+shows). `message` is the localized `inputs.required` (a required input is empty) or `inputs.invalid` (any other
+problem), empty when `ok`. The front ends keep Next/Change disabled until every input is `ok`, and show the message
+once the user has changed the field.
 
 #### `progress`
 
@@ -172,7 +192,10 @@ The engine emits progress at most every 40 ms unless the state changes.
 | `restored` | Rolled back and a previous installation was involved (always true for a rolled-back uninstall) |
 | `noChanges` | Rolled back and nothing was installed before |
 | `leftovers` | Uninstall: the install directory still contains files setup did not install |
-| `retryable` | False for codes 3, 4, 5, 10, 11, 16 |
+| `retryable` | False for codes 3, 4, 5, 10, 11, 16, and for a repair without a source |
+| `operation` | `"install"`, `"uninstall"`, `"modify"` or `"repair"` – what the result is about (the result page titles `result.*.modify`, `result.*.repair`) |
+| `repair` | Repair only: `"noProblems"` (nothing was damaged; `modify.noProblems`), `"repaired"`, `"noSource"` (`modify.repairNoSource`); `""` otherwise |
+| `rebootRequired` | Success, but files that were in use are replaced or removed at the next restart: the result page adds `result.rebootRequired`, and the process exit code is 3010 (`ERROR_SUCCESS_REBOOT_REQUIRED`) |
 
 There is no message from the bootstrapper that closes the UI; the UI closes its window itself after sending `finish`
 or `close`, and the bootstrapper terminates it after 3 s if it is still running. If the UI's reader thread sees the
@@ -287,22 +310,25 @@ Used when the operation targets the machine scope and the bootstrapper is not el
 
   ```
   --worker --pipe FluentSetup-<hex> --parent-pid <bootstrapper PID>
-      [/uninstall] [--origin-dir "<dir>"] [--wait-pid <pid of the original uninstaller>]
+      [/uninstall | /modify] [--origin-dir "<dir>"] [--wait-pid <pid of the original uninstaller>]
       [/log "<log file>"] /lang <en-US|zh-CN>
   ```
 
   `--wait-pid` is only passed by an uninstaller running in phase 2. The worker opens and validates its own package
   exactly like a normal start (container, signature, header) before it connects.
+  Modify mode passes `/modify` instead of `/uninstall`.
 * If the elevation request fails, the operation ends with `ElevationRequired` (6); "The administrator permission
   request was declined" if the user declined UAC.
 
 ### 3.2 Worker checks
 
 The worker exits with `Internal` (14) unless: it is elevated; the `--parent-pid` process can be opened; it connects
-within 10 s and the server PID equals `--parent-pid`; a `run` message arrives within 60 s; `op` is `install` or
-`uninstall`, matches the presence of `/uninstall`, and is not `install` for an uninstaller package. Malformed install
-options → `InvalidArguments` (3). The worker does not re-apply the front-end option policy (`SanitizeOptions`); the
-engine's own checks (scope allowed, path checks, elevation) still apply.
+within 10 s and the server PID equals `--parent-pid`; a `run` message arrives within 60 s; `op` is `install`,
+`uninstall`, `cleanup` or `modify`, matches the presence of `/uninstall` (`uninstall`, `cleanup`) and `/modify`
+(`modify`), and is not `install` for an uninstaller package. Malformed install options, options that
+`Engine::SanitizeOptions` refuses (scope, custom folder, undeclared option ids), an input id the package does not define
+or an input value it does not accept → `InvalidArguments` (3). The engine's own checks (scope allowed, path checks,
+elevation) still apply.
 
 The bootstrapper waits up to 60 s for the worker to connect (the wait ends early if the worker exits) and verifies the
 client PID; failure → `Internal` (14), and the worker is terminated.
@@ -311,10 +337,10 @@ client PID; failure → `Internal` (14), and the worker is terminated.
 
 | Direction | `t` | Fields |
 |---|---|---|
-| bootstrapper → worker | `run` | `op`: `"install"` / `"uninstall"`; `options`: `{installDir, scope, desktopShortcut, startMenuShortcut, choices}` (ignored for uninstall) |
+| bootstrapper → worker | `run` | `op`: `"install"` / `"uninstall"` / `"cleanup"` / `"modify"`; `options`: `{installDir, scope, desktopShortcut, startMenuShortcut, choices, variant, removeUserData, inputs}` (`OptionsToJson`; only `removeUserData` is used for uninstall) |
 | bootstrapper → worker | `cancel` | – (sent when the front end cancels, also if cancel was requested before the worker connected) |
 | worker → bootstrapper | `progress` | `progress`: `{state, fraction, detail, cancellable}` (nested, unlike the UI message) |
-| worker → bootstrapper | `done` | `outcome`: `{code, detail, rolledBack, upgrade, leftovers, installDir, mainExecutable, deferred[], warnings[]}` |
+| worker → bootstrapper | `done` | `outcome`: `{code, detail, rolledBack, upgrade, leftovers, installDir, mainExecutable, deferred[], warnings[], rebootRequired}` |
 
 The controller republishes worker progress to the current front end and turns `done` into the front end's `done`
 message. Out-of-range codes in `outcome.code` are mapped to `Internal`.
@@ -327,7 +353,7 @@ Failure handling:
   unexpectedly (exit code …). Its journal will be rolled back the next time setup runs." (see the recovery section in
   `docs/diagnostics.md`).
 * After sending `done`, an uninstall worker with deferred deletions waits (up to 60 s) for the `--wait-pid` process and
-  then deletes the remaining files. Its exit code is the outcome code.
+  then deletes the remaining files. Its exit code is the outcome code, 3010 for a success with `rebootRequired`.
 
 ### 3.4 Sequence: per-machine install via the worker
 
@@ -352,6 +378,37 @@ sequenceDiagram
     B->>U: done {...}
     W-->>W: exit (code = outcome.code)
 ```
+
+### 3.5 Sequence: Apps & features "Modify" (`uninstall.exe /modify`)
+
+```mermaid
+sequenceDiagram
+    participant P1 as uninstall.exe (phase 1, install dir)
+    participant P2 as uninstall.exe copy (phase 2, %TEMP%)
+    participant U as Front end
+    participant S as Setup.exe of the installed version
+    P1->>P2: relocate (closes its own package handle), wait for the exit code
+    P2->>U: hello {mode:"modify", options, inputs, modify:{canRepair}}
+    alt Change
+        U->>P2: start {options}
+        P2->>P2: Engine::Modify (or the worker, op "modify")
+        P2->>U: done {operation:"modify"}
+    else Repair
+        U->>P2: repair
+        P2->>P2: Engine::VerifyFiles
+        opt files missing or damaged
+            P2->>P2: recorded original or update source, verified
+            P2->>S: release the per-app lock, run /passive, wait
+            S-->>P2: exit code
+        end
+        P2->>U: done {operation:"repair", repair}
+    end
+    P2-->>P1: exit code (3010 = success, restart needed)
+```
+
+Phase 1 relocates for `/modify` and `/repair` as it does for an uninstall: a repair reinstalls the same version, which
+replaces `uninstall.exe`. Phase 1 gives up its handle on its own file before it waits, so the reinstall can move the
+running file aside (a running program can be renamed, not written).
 
 ## 4. Versioning
 

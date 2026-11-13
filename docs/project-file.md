@@ -516,6 +516,8 @@ The installed `uninstall.exe` accepts the same switches.
 | `/quiet`, `/verysilent`, `/q`, `/s` | No UI at all. Uses the defaults plus the switches below. A per-machine operation started without administrator rights shows the UAC prompt, as Inno Setup and NSIS do; a declined prompt gives exit code 6. |
 | `/passive`, `/silent` | Progress window only: no questions, starts at once with the defaults and closes itself after a success (a failure stays on screen). This is Inno Setup's `/SILENT`, so in-app updaters written for Inno keep showing progress. |
 | `/uninstall`, `/u` | Remove the installed app instead of installing it. |
+| `/modify` | Change the installed app's choices (Apps & features "Modify", which runs `"<dir>\uninstall.exe" /modify`): the "Change <App>" page with the shortcut and option toggles, the Settings page for inputs, and a Repair button. With `/quiet`: applies the defaults (the installation's current state) plus `/desktop-shortcut`, `/start-menu-shortcut`, `/option` and `/input`, without UI. Needs the installed version's package: `uninstall.exe` always is; a `Setup.exe` of another version refuses it (exit code 3). |
+| `/repair` | Check the installed files against the install record (size and SHA-256) and, if any is missing or damaged, reinstall the same version: from the Setup.exe that installed it (if it is still there unchanged) or from the `update` source (the release of exactly the installed version). Exit code 0 when nothing was damaged or the repair succeeded, 1 when no copy of the installed version's setup is available, 19 when the update source could not be used. Interactive: the "Change" page starts the repair at once; with `/quiet` no UI (the reinstall runs with `/quiet` too). |
 | `/dir <path>`, `/installdir <path>` | Install folder. Honoured only if `allowCustomDir` is true and the app is not yet installed. The engine validates it. |
 | `/scope user\|machine` | Scope. Honoured only if the package allows that scope and the app is not yet installed. |
 | `/desktop-shortcut yes\|no` | Desktop shortcut choice. Honoured only for `optionalOff`/`optionalOn`. |
@@ -527,14 +529,16 @@ The installed `uninstall.exe` accepts the same switches.
 | `/install-update` | Download, verify and install the newest version (see *update*); with `/passive` or `/quiet` without questions. |
 | Inno / NSIS switches | `/VERYSILENT`, `/SILENT` (passive), `/DIR=`, `/LOG=`, `/LANG=english`, `/TASKS=`, `/MERGETASKS=`, `/NOICONS`, `/CURRENTUSER`, `/ALLUSERS`, `/RELAUNCH=1`, `/S`, `/D=path` (last, may contain spaces) are understood; `/SUPPRESSMSGBOXES`, `/NORESTART`, `/CLOSEAPPLICATIONS`, `/SP-`, `/NCRC`, `_?=` are accepted and have no effect. Upgrades also pre-fill choices from an adopted Inno install's saved tasks. |
 | `/option <id>=yes\|no` | Value of a package option. Can be repeated. Ids the package does not define are ignored. |
+| `/input <id>=<value>` | Value of a package input (`inputs`, the Settings page); everything after the first `=` is the value and may be empty. Can be repeated (at most 8 ids). Install and `/modify` only. An id the package does not define is an error (exit code 3); the value is checked like on the Settings page (required, choices, pattern), and a quiet or passive install with a missing or invalid value fails with exit code 3 and the input named in the log. Without `/input` an update uses the value remembered from the previous install (never for passwords), else the default. Quote values with spaces: `"/input=note=two words"`. |
 | `/lang en-US\|zh-CN\|ja-JP\|ko-KR` | UI language. Overrides `ui.defaultLanguage`. |
 | `/log <file>` | Write the log to this absolute file path. Default: `%TEMP%\FluentSetup\<appId>-install-<timestamp>.log` (or `-uninstall-`). |
 | `/ui auto\|winui\|win32` | Front-end selection, for diagnostics. `win32` skips the WinUI front end. |
 | `/help`, `/h`, `/?` | Show usage. |
 
-`yes|no` also accepts `true`/`false` and `1`/`0`. The switches `--worker`, `--pipe`, `--parent-pid`, `--wait-pid`,
-`--origin-dir`, `--phase2`, `--origin-process`, `--result-pipe` and `--ui-simulate` are used internally between
-FluentSetup processes.
+`yes|no` also accepts `true`/`false` and `1`/`0`. `/uninstall`, `/modify` and `/repair` exclude each other. The
+switches `--worker`, `--pipe`, `--parent-pid`, `--wait-pid`, `--origin-dir`, `--phase2`, `--origin-process`,
+`--result-pipe` and `--ui-simulate` are used internally between FluentSetup processes; `--ui-simulate` (and the
+`FLUENTSETUP_TEST_FAULT_AFTER` environment variable) only work in packages built with `fluentsetup build --test-hooks`.
 
 Exit codes (from `src/Common/error.h`):
 
@@ -559,4 +563,5 @@ Exit codes (from `src/Common/error.h`):
 | 16 | AlreadyRunning | Another setup or uninstall of the same app is in progress |
 | 17 | PrerequisiteMissing | A required Windows component is missing |
 | 18 | UpdateAvailable | `/check-update`: a newer version is published (not a failure) |
-| 19 | UpdateFailed | `/check-update`, `/install-update`: the update source could not be read, or the download was refused |
+| 19 | UpdateFailed | `/check-update`, `/install-update`: the update source could not be read, or the download was refused (also `/repair` when the update source could not be used) |
+| 3010 | (ERROR_SUCCESS_REBOOT_REQUIRED) | Success, but files that were in use are replaced or removed when the PC restarts (`install.lockedFiles: reboot`); the result page says so. Deployment tools treat it as success with a pending restart, as for msiexec. |

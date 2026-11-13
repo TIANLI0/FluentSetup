@@ -196,7 +196,10 @@ worker both apply, so a modified unelevated parent cannot bypass them (gap G6, f
 ### 2.7 Single instance
 
 A `Global\FluentSetup-<appId>` mutex allows one setup/uninstall of an app at a time across sessions
-(`main.cpp:197-203`); a second instance exits with `AlreadyRunning` (16). The mutex uses default security (gap G7).
+(`InstanceLock` in `main.cpp`); a second instance exits with `AlreadyRunning` (16). The mutex has an explicit security
+descriptor that lets every authenticated or interactive user wait on it, and a mutex that cannot be created or opened
+counts as held (fail closed; gap G7, fixed). A repair releases it just before it starts the Setup.exe of the installed
+version, which takes it again.
 Individual pipes are single-instance (`FILE_FLAG_FIRST_PIPE_INSTANCE`, one instance, 2.6).
 
 ### 2.8 Integrity of the package (SHA-256)
@@ -349,7 +352,7 @@ access FluentSetup ever makes, and only when that prerequisite is missing on the
   per-machine installs it runs elevated, so the SHA-256 in the (ideally signed) package is what authorises it.
 ## 5. Known gaps and weaknesses
 
-Found while reading the code for this document. G1, G6 and G10 have been fixed since, and G2 partly; the rows say so.
+Found while reading the code for this document. G1, G6, G7, G10 and G11 have been fixed since, and G2 partly; the rows say so.
 
 | Id | Severity (estimate) | Location | Description |
 |---|---|---|---|
@@ -359,11 +362,11 @@ Found while reading the code for this document. G1, G6 and G10 have been fixed s
 | G4 | Low | `src/Install.Core/engine.cpp:343-364`; `src/Install.Core/journal.cpp:161-163` | Recovery runs elevated over `<dir>\.fsetup\journal.jsonl`. If the install directory is user-writable (G2) and a machine-scope pending marker exists (after a crash), a user can edit the journal: rollback stays inside the install directory and shortcut folders, but `reg` entries restore arbitrary values into the app's HKLM ARP key. |
 | G5 | Low-Medium | `src/Archive/container.cpp:258-260, 276-280` | `CERT_E_REVOKED` and `TRUST_E_EXPLICIT_DISTRUST` are classified as `Intact` and accepted; revocation is never checked online. The signature state is not surfaced in the UI, so a revoked publisher certificate installs silently. |
 | G6 | Fixed | `src/Install.Worker/worker.cpp`; `Engine::SanitizeOptions` | *Was:* the worker did not re-apply the package's option policy. *Now:* the worker rejects options that `Engine::SanitizeOptions` refuses (scope, custom folder when `allowCustomDir` is false, undeclared option ids) and forces hidden shortcut offers to their defaults. |
-| G7 | Low | `src/Bootstrapper/main.cpp:198-203` | The `Global\FluentSetup-<appId>` mutex is created with default security. Another user or session can create and hold it (setup then exits with `AlreadyRunning`), and if the existing object denies access, `CreateMutexW` fails and the single-instance check is silently skipped. |
+| G7 | Fixed | `src/Bootstrapper/main.cpp` (`InstanceLock`) | *Was:* the `Global\FluentSetup-<appId>` mutex was created with default security, and if an existing object denied access, `CreateMutexW` failed and the single-instance check was silently skipped. *Now:* it is created with an explicit security descriptor (`D:P(A;;0x001F0001;;;SY)(A;;0x001F0001;;;BA)(A;;0x00100001;;;AU)(A;;0x00100001;;;IU)(A;;0x00100001;;;OW)`: every authenticated or interactive user may wait on it and release it, so setups of different users and sessions see each other; the owner-rights ACE keeps its creator from rewriting that security) and opened with `SYNCHRONIZE \| MUTEX_MODIFY_STATE`. Any failure to create or open it, including access denied or a same-named object of another type, is treated as "another setup is running" (exit code 16, fail closed). A user who creates the mutex first can still make other users' setups of that app wait while their own runs; that is the purpose of the lock. |
 | G8 | Low | `src/Install.Core/engine.cpp:795-798`; `src/Install.Core/extensions.cpp:326-352` | Bundled prerequisite installers are run without the `IsStrictlyUnder`/`HasLinkInPath` check that actions get (`engine.cpp:549`). The action job object has no `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so processes spawned by an action that outlive it keep running (as administrator for per-machine installs). |
 | G9 | Low | `src/Builder.Core/Packaging/Signer.cs:51-56` | The PFX password is passed to `signtool.exe` on its command line (`/p`), visible to other processes on the build machine; it is only masked in the log. |
 | G10 | Fixed | `src/Bootstrapper/main.cpp` (`RunUninstallPhase1`) | A running copy cannot delete itself, so each uninstall removes the `%TEMP%\FluentSetup-u-<random>` copies earlier uninstalls left behind (skipping links and copies still in use). The copy of the most recent uninstall remains until the next one. |
-| G11 | Low | `src/Bootstrapper/controller.cpp:285-289`; `src/Bootstrapper/args.cpp:139-144` | Test hooks are active in release builds: the `FLUENTSETUP_TEST_FAULT_AFTER` environment variable (forces a failure and rollback after N files, in-process installs only) and `--ui-simulate`. |
+| G11 | Fixed | `src/Bootstrapper/controller.cpp` (`Run`); `src/Bootstrapper/main.cpp` | *Was:* test hooks were active in every release package: the `FLUENTSETUP_TEST_FAULT_AFTER` environment variable (forces a failure and rollback after N files, in-process installs only) and `--ui-simulate`. *Now:* both are honoured only by packages built with `fluentsetup build --test-hooks` (header `testHooks: true`, used by the e2e and UI tests); other packages ignore them and log a warning. The parser still accepts `--ui-simulate`, so such a command line is not an error. |
 | G12 | Informational | `src/Bootstrapper/winui_host.cpp:177`; `src/Setup.WinUI/app.manifest` | The UI manifest comment says the UI "never runs elevated", but if `Setup.exe` itself is started elevated the WinUI child inherits the elevated token. |
 | G13 | Informational | `src/Install.Core/extensions.cpp:399-408`; `src/Install.Core/engine.cpp:952-956` | `removeRunValues` deletes from both HKCU and HKLM regardless of scope, and in an over-the-shoulder elevated uninstall HKCU, `{LocalAppData}` and `{AppData}` refer to the administrator's profile, not the user who installed the app. |
 | G14 | Informational | `src/Common/json.cpp:365-371` | Duplicate JSON object keys are accepted (first one wins) rather than rejected. |
