@@ -77,6 +77,87 @@
     },
     "signing": {
       "$ref": "#/$defs/signing"
+    },
+    "shortcuts": {
+      "type": "array",
+      "maxItems": 16,
+      "default": [],
+      "description": "More shortcuts besides the main one (other programs of the app, arguments, the Startup folder). Removed on uninstall.",
+      "items": {
+        "$ref": "#/$defs/shortcut"
+      }
+    },
+    "associations": {
+      "type": "array",
+      "maxItems": 16,
+      "default": [],
+      "description": "File types the app opens (double-click, Open with, Default apps). HKCU for per-user installs, HKLM for per-machine.",
+      "items": {
+        "$ref": "#/$defs/association"
+      }
+    },
+    "protocols": {
+      "type": "array",
+      "maxItems": 16,
+      "default": [],
+      "description": "URL schemes the app handles.",
+      "items": {
+        "$ref": "#/$defs/protocol"
+      }
+    },
+    "registry": {
+      "type": "array",
+      "maxItems": 32,
+      "default": [],
+      "description": "Registry values written on install (journaled: rolled back on failure).",
+      "items": {
+        "$ref": "#/$defs/registryEntry"
+      }
+    },
+    "environment": {
+      "type": "array",
+      "maxItems": 16,
+      "default": [],
+      "description": "Environment variables: per-user for per-user installs, machine-wide for per-machine. Removed on uninstall while unchanged.",
+      "items": {
+        "$ref": "#/$defs/environmentVariable"
+      }
+    },
+    "services": {
+      "type": "array",
+      "maxItems": 8,
+      "default": [],
+      "description": "Windows services (per-machine installs only). Stopped before files are replaced, created or updated after the install, stopped and deleted on uninstall.",
+      "items": {
+        "$ref": "#/$defs/service"
+      }
+    },
+    "firewall": {
+      "type": "array",
+      "maxItems": 16,
+      "default": [],
+      "description": "Windows Defender Firewall allow rules (per-machine installs only); removed on uninstall.",
+      "items": {
+        "$ref": "#/$defs/firewallRule"
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "maxItems": 8,
+      "default": [],
+      "description": "Values the user enters on the installer's Settings page.",
+      "items": {
+        "$ref": "#/$defs/input"
+      }
+    },
+    "configFiles": {
+      "type": "array",
+      "maxItems": 16,
+      "default": [],
+      "description": "JSON or INI files the installer writes values into; other settings in existing files are kept.",
+      "items": {
+        "$ref": "#/$defs/configFile"
+      }
     }
   },
   "$defs": {
@@ -202,6 +283,18 @@
           ],
           "default": "",
           "description": "Relative path of the program inside the installed files (must be among them). Used for shortcuts, \"launch after install\" and the Settings icon. Empty = no shortcuts and no launch (warning)."
+        },
+        "appUserModelId": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9._-]{1,128})?$",
+          "default": "",
+          "description": "AppUserModelID set on the app's Start menu and desktop shortcuts (toast notifications of unpackaged apps need it), e.g. \"Contoso.Notes\"."
+        },
+        "toastActivatorClsid": {
+          "type": "string",
+          "pattern": "^(\\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\})?$",
+          "default": "",
+          "description": "CLSID of the app's toast activator COM server, set on those shortcuts together with appUserModelId."
         }
       }
     },
@@ -558,6 +651,27 @@
             "maxLength": 260
           },
           "description": "Folders of the app (relative; \"\" = the install folder) added to PATH: the user PATH for per-user installs, the machine PATH for per-machine. Added after the install is committed, removed on uninstall; running programs are notified (new terminals see it)."
+        },
+        "appPaths": {
+          "type": "boolean",
+          "default": false,
+          "description": "Register app.mainExecutable under App Paths, so Win+R and other programs find it by its file name."
+        },
+        "restartManager": {
+          "enum": [
+            "auto",
+            "off"
+          ],
+          "default": "auto",
+          "description": "auto: close (and afterwards restart) other programs that use files being replaced or removed (Windows Restart Manager). off: only closeProcesses."
+        },
+        "lockedFiles": {
+          "enum": [
+            "fail",
+            "reboot"
+          ],
+          "default": "fail",
+          "description": "fail: a file still in use stops the installation (rolled back). reboot: per-machine installs replace it at the next restart; Setup.exe then exits with 3010."
         }
       },
       "allOf": [
@@ -775,6 +889,17 @@
             "helpUrl": true,
             "onFailure": true,
             "variants": true
+          }
+        },
+        "vcRedist": {
+          "$ref": "#/$defs/vcRedist"
+        },
+        "custom": {
+          "type": "array",
+          "maxItems": 8,
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/customRequirement"
           }
         }
       }
@@ -1334,6 +1459,11 @@
           "type": "string",
           "default": "",
           "description": "Folder with one <language>.json per language (en-US, zh-CN, ja-JP, ko-KR): {\"options\": {id: text}, \"actions\": {id: text}, \"license\": file, \"strings\": {key: text}}."
+        },
+        "banner": {
+          "type": "string",
+          "default": "",
+          "description": "Image (.png, .jpg or .bmp, up to 1 MB, about 4:1, e.g. 960x240) shown at the top of the installer's first page."
         }
       },
       "if": {
@@ -1445,6 +1575,11 @@
           "type": "string",
           "default": "",
           "description": "Path of signtool.exe; empty = search the Windows 10/11 SDK and PATH."
+        },
+        "signUninstaller": {
+          "type": "boolean",
+          "default": true,
+          "description": "Also sign the uninstall.exe that setup writes into the install folder (UAC and SmartScreen show the publisher when uninstalling)."
         }
       },
       "if": {
@@ -1485,8 +1620,7 @@
     "download": {
       "type": "object",
       "required": [
-        "url",
-        "sha256"
+        "url"
       ],
       "additionalProperties": true,
       "description": "Download from the internet when nothing is bundled. Setup verifies the size and SHA-256 before running the file.",
@@ -1507,6 +1641,12 @@
           "minimum": 0,
           "default": 0,
           "description": "Exact size in bytes; 0 = unknown (downloads are then capped at 512 MiB)."
+        },
+        "signer": {
+          "type": "string",
+          "maxLength": 256,
+          "default": "",
+          "description": "The downloaded file must carry a valid Authenticode signature issued to this name (e.g. \"Microsoft Corporation\"). With a signer, sha256 may be left empty for vendor bootstrappers that change over time."
         }
       }
     },
@@ -1552,6 +1692,15 @@
             "pattern": "^[A-Za-z0-9_-]{1,32}$"
           },
           "description": "Only needed for these variants (empty = always)."
+        },
+        "auto": {
+          "enum": [
+            "",
+            "bundle",
+            "download"
+          ],
+          "default": "",
+          "description": "Microsoft's official installer without adding it yourself. bundle: downloaded when the package is built and stored in Setup.exe (extracted only when needed, never installed into the app folder). download: downloaded by setup when needed; it must carry a valid signature from Microsoft. Not for custom prerequisites."
         }
       }
     },
@@ -1585,6 +1734,628 @@
           "type": "string",
           "minLength": 1,
           "description": "Folder with this build, e.g. a dotnet publish output. files.include/exclude/preserve apply; files.extra is added to every variant."
+        }
+      }
+    },
+    "vcRedist": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/prerequisiteSource"
+        }
+      ],
+      "type": "object",
+      "description": "Microsoft Visual C++ 2015-2022 (v14) Redistributable.",
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "minVersion": {
+          "type": "string",
+          "default": "",
+          "description": "Minimum version, e.g. \"14.40\"; empty = any v14 runtime."
+        },
+        "architecture": {
+          "enum": [
+            "",
+            "x64",
+            "x86",
+            "arm64"
+          ],
+          "default": "",
+          "description": "Empty = the package architecture."
+        }
+      }
+    },
+    "customRequirement": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/prerequisiteSource"
+        }
+      ],
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "detect"
+      ],
+      "description": "Another prerequisite, found through a registry value or a file.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,32}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Shown to the user."
+        },
+        "detect": {
+          "type": "object",
+          "description": "registry or file.",
+          "properties": {
+            "registry": {
+              "$ref": "#/$defs/registryVersionCondition",
+              "description": "Present when this value exists (version empty) or holds at least version."
+            },
+            "file": {
+              "type": "object",
+              "required": [
+                "path"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "^\\{(ProgramFiles|ProgramFilesX86|System|CommonAppData|LocalAppData|AppData)\\}\\\\",
+                  "description": "{ProgramFiles}\\X, {ProgramFilesX86}\\X, {System}\\X, {CommonAppData}\\X, {LocalAppData}\\X or {AppData}\\X."
+                },
+                "version": {
+                  "type": "string",
+                  "default": "",
+                  "description": "Minimum file version; empty = the file only has to exist."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shortcut": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Shortcut name without .lnk."
+        },
+        "target": {
+          "type": "string",
+          "maxLength": 260,
+          "description": "Relative path of a file among the installed files; empty = app.mainExecutable."
+        },
+        "arguments": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "description": "Arguments. Placeholders: {InstallDir}, {MainExecutable}, {AppVersion}, {AppId}, {Input:id}."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 259
+        },
+        "icon": {
+          "type": "string",
+          "description": "Relative path of an .ico, .exe or .dll among the installed files; empty = the target."
+        },
+        "iconIndex": {
+          "type": "integer",
+          "default": 0,
+          "description": "Icon index inside the icon file."
+        },
+        "workingDirectory": {
+          "type": "string",
+          "description": "Relative folder inside the install folder; empty = the target's folder."
+        },
+        "location": {
+          "enum": [
+            "startMenu",
+            "desktop",
+            "startup"
+          ],
+          "default": "startMenu"
+        },
+        "folder": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Start menu sub-folder; empty = install.startMenuFolder."
+        },
+        "ifOption": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "default": "",
+          "description": "Only while this option (options[].id) is selected."
+        },
+        "appUserModelId": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9._-]{1,128})?$",
+          "default": ""
+        }
+      }
+    },
+    "association": {
+      "type": "object",
+      "required": [
+        "extensions",
+        "progId"
+      ],
+      "properties": {
+        "extensions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "pattern": "^\\.[A-Za-z0-9_-]{1,32}$"
+          },
+          "description": "Extensions including the dot, e.g. [\".cnote\"]. Program and shell types (.exe, .lnk, .bat, ...) are refused."
+        },
+        "progId": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z0-9]+)+$",
+          "maxLength": 39,
+          "description": "e.g. \"Contoso.Notes.Document\"."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "File type name shown in Explorer."
+        },
+        "icon": {
+          "type": "string",
+          "description": "Relative path of an .ico, .exe or .dll among the installed files; empty = the target."
+        },
+        "iconIndex": {
+          "type": "integer",
+          "default": 0,
+          "description": "Icon index inside the icon file."
+        },
+        "target": {
+          "type": "string",
+          "maxLength": 260,
+          "description": "Program that opens the files; empty = app.mainExecutable."
+        },
+        "arguments": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "default": [
+            "%1"
+          ],
+          "description": "\"%1\" is the file. Placeholders: {InstallDir}, {MainExecutable}, {AppVersion}, {AppId}, {Input:id}."
+        },
+        "contentType": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional MIME type."
+        },
+        "ifOption": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "default": "",
+          "description": "Only while this option (options[].id) is selected."
+        }
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "required": [
+        "scheme"
+      ],
+      "properties": {
+        "scheme": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9+.-]{1,31}$",
+          "description": "e.g. \"contoso-notes\". Schemes of Windows and browsers (http, file, mailto, ms-*, ...) are refused."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "icon": {
+          "type": "string",
+          "description": "Relative path of an .ico, .exe or .dll among the installed files; empty = the target."
+        },
+        "iconIndex": {
+          "type": "integer",
+          "default": 0,
+          "description": "Icon index inside the icon file."
+        },
+        "target": {
+          "type": "string",
+          "maxLength": 260,
+          "description": "Program that handles the links; empty = app.mainExecutable."
+        },
+        "arguments": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "default": [
+            "%1"
+          ],
+          "description": "\"%1\" is the URL. Placeholders: {InstallDir}, {MainExecutable}, {AppVersion}, {AppId}, {Input:id}."
+        },
+        "ifOption": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "default": "",
+          "description": "Only while this option (options[].id) is selected."
+        }
+      }
+    },
+    "registryValue": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 255,
+          "default": "",
+          "description": "Empty = the key's default value."
+        },
+        "type": {
+          "enum": [
+            "string",
+            "expandString",
+            "dword",
+            "qword",
+            "multiString"
+          ],
+          "default": "string"
+        },
+        "data": {
+          "type": "string",
+          "maxLength": 16384,
+          "default": "",
+          "description": "Text; numbers in decimal or 0x hex; multiString lines separated by \\n. Placeholders: {InstallDir}, {MainExecutable}, {AppVersion}, {AppId}, {Input:id}."
+        }
+      }
+    },
+    "registryEntry": {
+      "type": "object",
+      "required": [
+        "key"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "maxLength": 250,
+          "description": "Below HKCU (per-user) or HKLM (per-machine): Software\\<Vendor>\\... (not Microsoft, Classes, Policies, Wow6432Node, RegisteredApplications, Clients, FluentSetup)."
+        },
+        "values": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/registryValue"
+          }
+        },
+        "uninstall": {
+          "enum": [
+            "values",
+            "key",
+            "keep"
+          ],
+          "default": "values",
+          "description": "values: remove the values written and then the key if empty. key: remove the whole key. keep: leave it."
+        },
+        "ifOption": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "default": "",
+          "description": "Only while this option (options[].id) is selected."
+        }
+      }
+    },
+    "environmentVariable": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_.()-]{0,127}$",
+          "description": "Not Path (use install.addToPath) or a Windows variable such as TEMP or SystemRoot."
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 8192,
+          "description": "Placeholders: {InstallDir}, {MainExecutable}, {AppVersion}, {AppId}, {Input:id}."
+        },
+        "expand": {
+          "type": "boolean",
+          "default": false,
+          "description": "Store as REG_EXPAND_SZ (the value refers to %OTHER% variables)."
+        },
+        "ifOption": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "default": "",
+          "description": "Only while this option (options[].id) is selected."
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "required": [
+        "name",
+        "run"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]{1,80}$"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "run": {
+          "$ref": "#/$defs/relativeExePath",
+          "description": "Service program among the installed files."
+        },
+        "arguments": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "startType": {
+          "enum": [
+            "auto",
+            "delayedAuto",
+            "manual",
+            "disabled"
+          ],
+          "default": "auto"
+        },
+        "account": {
+          "enum": [
+            "localSystem",
+            "localService",
+            "networkService"
+          ],
+          "default": "localSystem"
+        },
+        "start": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start after installing."
+        },
+        "dependencies": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,80}$"
+          }
+        },
+        "restartOnFailure": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "firewallRule": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "program": {
+          "type": "string",
+          "maxLength": 260,
+          "description": "Program; empty = app.mainExecutable."
+        },
+        "direction": {
+          "enum": [
+            "in",
+            "out"
+          ],
+          "default": "in"
+        },
+        "protocol": {
+          "enum": [
+            "any",
+            "tcp",
+            "udp"
+          ],
+          "default": "any"
+        },
+        "localPorts": {
+          "type": "string",
+          "pattern": "^([0-9]{1,5}(-[0-9]{1,5})?(,[0-9]{1,5}(-[0-9]{1,5})?)*)?$",
+          "default": "",
+          "description": "tcp/udp only, e.g. \"8080\" or \"8000-8010,9000\"."
+        },
+        "profiles": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "domain",
+              "private",
+              "public"
+            ]
+          },
+          "default": [],
+          "description": "Empty = all."
+        },
+        "ifOption": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "default": "",
+          "description": "Only while this option (options[].id) is selected."
+        }
+      }
+    },
+    "inputChoice": {
+      "type": "object",
+      "required": [
+        "value"
+      ],
+      "properties": {
+        "value": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "label": {
+          "$ref": "#/$defs/localizedText"
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "id",
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "description": "Referenced as {Input:id}; Setup.exe /input id=value."
+        },
+        "label": {
+          "$ref": "#/$defs/localizedText",
+          "minProperties": 1
+        },
+        "description": {
+          "$ref": "#/$defs/localizedText",
+          "description": "Help text under the field."
+        },
+        "type": {
+          "enum": [
+            "text",
+            "password",
+            "choice"
+          ],
+          "default": "text"
+        },
+        "default": {
+          "type": "string",
+          "maxLength": 4096,
+          "default": ""
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "pattern": {
+          "type": "string",
+          "maxLength": 512,
+          "default": "",
+          "description": "Regular expression the value must match (use ^ and $ to match it whole), e.g. \"^https://\"."
+        },
+        "choices": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/inputChoice"
+          }
+        },
+        "remember": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep the value for updates (never for passwords)."
+        }
+      }
+    },
+    "configValue": {
+      "type": "object",
+      "required": [
+        "key"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "json: dotted path such as \"server.url\". ini: the key."
+        },
+        "section": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "ini only."
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 4096,
+          "description": "Placeholders: {InstallDir}, {MainExecutable}, {AppVersion}, {AppId}, {Input:id}."
+        },
+        "type": {
+          "enum": [
+            "string",
+            "number",
+            "bool"
+          ],
+          "default": "string",
+          "description": "json only."
+        }
+      }
+    },
+    "configFile": {
+      "type": "object",
+      "required": [
+        "path",
+        "values"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative to the install folder, or {LocalAppData}\\X, {AppData}\\X, {CommonAppData}\\X."
+        },
+        "format": {
+          "enum": [
+            "json",
+            "ini"
+          ],
+          "default": "json"
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/configValue"
+          }
+        },
+        "ifOption": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "default": "",
+          "description": "Only while this option (options[].id) is selected."
         }
       }
     }

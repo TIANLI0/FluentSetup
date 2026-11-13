@@ -27,6 +27,21 @@ struct RecordFile {
     bool preserve = false;
 };
 
+// Something the installer wrote into the registry of its scope's hive (HKCU per-user, HKLM per-machine), and how
+// uninstall removes it: the whole key (`tree`), one value (`value`), or a default value only while it still holds
+// `data` (an extension's default ProgID).
+struct RegistryItem {
+    std::wstring key;    // below the hive, e.g. Software\Classes\Contoso.Doc
+    std::wstring value;  // value name ("" = default value); ignored when tree
+    std::wstring data;   // ifEquals: only removed while the value still equals this
+    bool tree = false;   // remove the whole key
+    bool ifEquals = false;
+};
+
+struct EnvironmentItem {
+    std::wstring name, value;  // removed on uninstall while the variable still holds `value`
+};
+
 struct InstallRecord {
     std::wstring appId, name, version, publisher, mainExecutable;
     Scope scope = Scope::User;
@@ -36,6 +51,12 @@ struct InstallRecord {
     std::vector<std::wstring> shortcuts;    // absolute .lnk paths
     bool createdRoot = false;
     std::map<std::string, bool> choices;  // package-defined options as chosen at install time (for beforeUninstall actions)
+    std::map<std::string, std::wstring> inputs;  // remembered input values (never passwords), pre-filled on updates
+    std::wstring sourcePackage;                  // the Setup.exe that installed this version (for Repair), may be gone
+    std::wstring sourcePackageSha256;
+    std::vector<RegistryItem> registry;          // registry keys/values written (removed on uninstall / when gone)
+    std::vector<EnvironmentItem> environment;    // environment variables written
+    std::vector<std::wstring> services;          // services created
 };
 
 std::wstring ArpKeyPath(const std::wstring& appId);

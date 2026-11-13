@@ -63,6 +63,7 @@ struct InstallOptions {
     std::map<std::string, bool> choices;  // package-defined options (id -> selected); missing ids use the default
     std::string variant;                  // package variant to install ("" = the package default)
     bool removeUserData = false;          // uninstall: also delete uninstall.userData
+    std::map<std::string, std::wstring> inputs;  // values of the package's inputs (id -> value), see Package::inputs
 };
 json::Value OptionsToJson(const InstallOptions& o);
 bool OptionsFromJson(const json::Value& v, InstallOptions& o);
@@ -77,6 +78,7 @@ struct Outcome {
     std::wstring mainExecutable;  // absolute, empty if none
     std::vector<std::wstring> deferredDeletes;  // uninstall: delete once the original uninstaller process has exited
     std::vector<std::wstring> warnings;         // non-fatal problems (e.g. an optional step that failed), English
+    bool rebootRequired = false;                // files in use are replaced/removed at the next restart (exit code 3010)
 };
 json::Value OutcomeToJson(const Outcome& o);
 Outcome OutcomeFromJson(const json::Value& v);
@@ -113,6 +115,10 @@ public:
     Outcome Install(const InstallOptions& options, IProgressSink& sink, const std::atomic<bool>& cancel);
     // originDir: directory of the uninstaller that was started (selects the matching installation), may be empty.
     Outcome Uninstall(const std::wstring& originDir, IProgressSink& sink, const std::atomic<bool>& cancel, bool removeUserData = false);
+    // Changes the choices of the existing installation (shortcuts, options, inputs) without its files: ARP "Modify".
+    Outcome Modify(const InstallOptions& options, IProgressSink& sink, const std::atomic<bool>& cancel);
+    // Installed files that are missing or differ from the install record (relative paths); empty = intact.
+    [[nodiscard]] std::vector<std::wstring> VerifyFiles() const;
     // Undoes changes the app made with administrator rights (uninstall.elevated). Needs an elevated process.
     void RunElevatedCleanup(Outcome& out) const;
     // True if the package declares elevated cleanup and one of its ifExists markers is present (empty = always).

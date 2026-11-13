@@ -72,6 +72,9 @@ json::Value OptionsToJson(const InstallOptions& o) {
     v.set("choices", choices);
     v.set("variant", o.variant);
     v.set("removeUserData", o.removeUserData);
+    json::Value inputs = json::Value::MakeObject();
+    for (const auto& [id, value] : o.inputs) inputs.set(id, value);
+    v.set("inputs", inputs);
     return v;
 }
 
@@ -92,6 +95,11 @@ bool OptionsFromJson(const json::Value& v, InstallOptions& o) {
     o.variant = v["variant"].asString();
     o.removeUserData = v["removeUserData"].asBool(false);
     if (o.variant.size() > 32) return false;
+    if (v["inputs"].object().size() > 8) return false;
+    for (const auto& [id, value] : v["inputs"].object()) {
+        if (id.empty() || id.size() > 32 || !value.isString() || value.asString().size() > 4096) return false;
+        o.inputs[id] = value.asWide();
+    }
     return true;
 }
 
@@ -110,6 +118,7 @@ json::Value OutcomeToJson(const Outcome& o) {
     json::Value w = json::Value::MakeArray();
     for (const auto& s : o.warnings) w.push(s);
     v.set("warnings", w);
+    v.set("rebootRequired", o.rebootRequired);
     return v;
 }
 
@@ -125,6 +134,7 @@ Outcome OutcomeFromJson(const json::Value& v) {
     o.mainExecutable = v["mainExecutable"].asWide();
     for (const auto& d : v["deferred"].array()) o.deferredDeletes.push_back(d.asWide());
     for (const auto& w : v["warnings"].array()) o.warnings.push_back(w.asWide().substr(0, 512));
+    o.rebootRequired = v["rebootRequired"].asBool(false);
     return o;
 }
 
@@ -539,6 +549,8 @@ void Engine::WriteUninstaller(const std::wstring& dest) const {
     emptySet.set("files", json::Value::MakeArray());
     emptySet.set("directories", json::Value::MakeArray());
     header.set("payload", emptySet);
+    header.set("redist", json::Value());            // bundled prerequisites stay behind
+    header.set("uninstallerImage", json::Value());  // describes this very file
     if (pkg_.raw["frontend"].isObject()) {
         json::Value frontend = pkg_.raw["frontend"];
         json::Value streams = json::Value::MakeArray();
@@ -1233,6 +1245,52 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
     if (pendingSet && out.rolledBack) ClearPending(pkg_.appId, scope);
     rep.Set(State::Failed, -1, {}, false);
     return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Modify / verify
+
+Outcome Engine::Modify(const InstallOptions& options, IProgressSink& sink, const std::atomic<bool>& cancel) {
+    (void)options;
+    (void)cancel;
+    Reporter rep(sink);
+    Outcome out;
+    out.code = ErrorCode::Failed;
+    out.detail = L"Modify is not available yet";
+    out.rolledBack = true;
+    rep.Set(State::Failed, -1, {}, false);
+    return out;
+}
+
+std::vector<std::wstring> Engine::VerifyFiles() const {
+    std::vector<std::wstring> damaged;
+    const auto product = FindInstalled(pkg_.appId);
+    if (!product) return damaged;
+    InstallRecord record;
+    try {
+        record = LoadVerifiedRecord(*product);
+    } catch (const Failure&) {
+        damaged.emplace_back(kRecordName);
+        return damaged;
+    }
+    std::vector<uint8_t> buffer(1u << 20);
+    for (const auto& f : record.files) {
+        if (f.preserve) continue;  // user data may change
+        const std::wstring p = path::Join(record.installDir, f.path);
+        UniqueHandle h(::CreateFileW(path::Long(p).c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                     FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+        LARGE_INTEGER size{};
+        if (!h || !::GetFileSizeEx(h.get(), &size) || static_cast<uint64_t>(size.QuadPart) != f.size) {
+            damaged.push_back(f.path);
+            continue;
+        }
+        Sha256 hash;
+        DWORD got = 0;
+        while (::ReadFile(h.get(), buffer.data(), static_cast<DWORD>(buffer.size()), &got, nullptr) && got > 0) hash.Update(buffer.data(), got);
+        if (hash.Finish() != f.sha256) damaged.push_back(f.path);
+    }
+    if (!fs::Exists(path::Join(record.installDir, kUninstallerName))) damaged.emplace_back(kUninstallerName);
+    return damaged;
 }
 
 }  // namespace fsetup::install

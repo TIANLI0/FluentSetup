@@ -15,12 +15,18 @@
 #include <shellapi.h>
 #include <evntrace.h>
 #include <sddl.h>
+#include <restartmanager.h>
 
 #include <algorithm>
+#include <cerrno>
+#include <regex>
 #include <unordered_set>
 
 #pragma comment(lib, "taskschd.lib")
 #pragma comment(lib, "winhttp.lib")
+#pragma comment(lib, "rstrtmgr.lib")
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "version.lib")
 
 namespace fsetup::install {
 
@@ -118,7 +124,243 @@ HKEY ParseHive(const std::string& h) {
     return nullptr;
 }
 
+bool IsAsciiAlnum(wchar_t c) { return (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9'); }
+
+// AppUserModelID: up to 128 characters, no spaces (Company.Product[.SubProduct.Version]).
+bool IsAppUserModelId(const std::wstring& id) {
+    return !id.empty() && id.size() <= 128 && std::all_of(id.begin(), id.end(), [](wchar_t c) { return IsAsciiAlnum(c) || c == L'.' || c == L'-' || c == L'_'; });
+}
+
+// Extensions that would hijack how Windows runs programs or opens shell objects are never registered.
+bool IsAssociableExtension(const std::wstring& ext) {
+    if (ext.size() < 2 || ext.size() > 33 || ext.front() != L'.') return false;
+    if (!std::all_of(ext.begin() + 1, ext.end(), [](wchar_t c) { return IsAsciiAlnum(c) || c == L'_' || c == L'-'; })) return false;
+    static const wchar_t* const kReserved[] = {
+        L".exe", L".com", L".bat", L".cmd", L".lnk", L".dll", L".sys", L".msi", L".msp", L".msu", L".ps1", L".psm1", L".psd1",
+        L".vbs", L".vbe", L".js", L".jse", L".wsf", L".wsh", L".scr", L".pif", L".cpl", L".reg", L".url", L".hta", L".inf",
+        L".msc", L".ocx", L".drv", L".appx", L".msix", L".appxbundle", L".msixbundle", L".appinstaller", L".library-ms",
+        L".search-ms", L".settingcontent-ms", L".application", L".jar", L".scf", L".theme", L".themepack", L".diagcab"};
+    return std::none_of(std::begin(kReserved), std::end(kReserved), [&](const wchar_t* r) { return ext == r; });
+}
+
+// "Vendor.App.Type": letters/digits in dot-separated parts, at least one dot, max 39 characters, not Microsoft's.
+bool IsProgId(const std::wstring& id) {
+    if (id.size() < 3 || id.size() > 39 || !((id[0] >= L'a' && id[0] <= L'z') || (id[0] >= L'A' && id[0] <= L'Z'))) return false;
+    bool dot = false, partEmpty = false;
+    for (const wchar_t c : id) {
+        if (c == L'.') {
+            if (partEmpty) return false;
+            dot = partEmpty = true;
+        } else if (IsAsciiAlnum(c)) {
+            partEmpty = false;
+        } else {
+            return false;
+        }
+    }
+    return dot && !partEmpty && !StartsWithIgnoreCase(id, L"Microsoft.") && !StartsWithIgnoreCase(id, L"Windows.") &&
+           !StartsWithIgnoreCase(id, L"AppX");
+}
+
+// A scheme of the app's own: lowercase, 2-32 characters, none of the schemes Windows and browsers rely on.
+bool IsCustomScheme(const std::wstring& s) {
+    if (s.size() < 2 || s.size() > 32 || !(s[0] >= L'a' && s[0] <= L'z')) return false;
+    if (!std::all_of(s.begin(), s.end(), [](wchar_t c) { return (c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9') || c == L'+' || c == L'-' || c == L'.'; })) return false;
+    static const wchar_t* const kReserved[] = {L"http", L"https", L"file", L"ftp", L"ftps", L"mailto", L"news", L"nntp", L"telnet", L"ldap",
+                                                L"tel", L"sms", L"callto", L"javascript", L"vbscript", L"data", L"about", L"res", L"shell",
+                                                L"search", L"its", L"mk", L"hcp", L"read", L"onenote", L"skype", L"zoommtg", L"steam"};
+    if (std::any_of(std::begin(kReserved), std::end(kReserved), [&](const wchar_t* r) { return s == r; })) return false;
+    return s.rfind(L"ms-", 0) != 0 && s.rfind(L"windows", 0) != 0 && s.rfind(L"microsoft", 0) != 0 && s.rfind(L"search-ms", 0) != 0;
+}
+
+// "80", "8000-8010,9000": ports 1-65535.
+bool IsPortList(const std::wstring& list) {
+    if (list.size() > 256) return false;
+    size_t start = 0;
+    while (start <= list.size()) {
+        size_t end = list.find(L',', start);
+        if (end == std::wstring::npos) end = list.size();
+        const std::wstring part = list.substr(start, end - start);
+        const size_t dash = part.find(L'-');
+        for (const std::wstring& n : {part.substr(0, dash), dash == std::wstring::npos ? std::wstring(L"1") : part.substr(dash + 1)}) {
+            if (n.empty() || n.size() > 5 || n.find_first_not_of(L"0123456789") != std::wstring::npos) return false;
+            const unsigned long v = wcstoul(n.c_str(), nullptr, 10);
+            if (v < 1 || v > 65535) return false;
+        }
+        start = end + 1;
+    }
+    return true;
+}
+
 }  // namespace
+
+bool ParseRegistryNumber(const std::wstring& text, bool qword, uint64_t& out) {
+    if (text.empty() || text.size() > 20) return false;
+    const bool hex = text.size() > 2 && text[0] == L'0' && (text[1] == L'x' || text[1] == L'X');
+    const std::wstring digits = hex ? text.substr(2) : text;
+    if (digits.empty() || digits.find_first_not_of(hex ? L"0123456789abcdefABCDEF" : L"0123456789") != std::wstring::npos) return false;
+    errno = 0;
+    out = wcstoull(digits.c_str(), nullptr, hex ? 16 : 10);
+    if (errno == ERANGE) return false;
+    return qword || out <= 0xFFFFFFFFull;
+}
+
+std::wstring ExpandSystemTemplate(const std::wstring& tpl) {
+    struct Root {
+        const wchar_t* token;
+        REFKNOWNFOLDERID id;
+    };
+    static const Root kRoots[] = {{L"{ProgramFiles}\\", FOLDERID_ProgramFiles},     {L"{ProgramFilesX86}\\", FOLDERID_ProgramFilesX86},
+                                  {L"{System}\\", FOLDERID_System},                 {L"{CommonAppData}\\", FOLDERID_ProgramData},
+                                  {L"{LocalAppData}\\", FOLDERID_LocalAppData},     {L"{AppData}\\", FOLDERID_RoamingAppData}};
+    for (const auto& r : kRoots) {
+        const size_t len = wcslen(r.token);
+        if (tpl.compare(0, len, r.token) != 0) continue;
+        std::wstring rel;
+        if (!path::ValidateRelative(tpl.substr(len), rel)) return {};
+        const std::wstring base = path::KnownFolder(r.id);
+        return base.empty() ? std::wstring() : path::Join(base, rel);
+    }
+    return {};
+}
+
+bool OptionSelected(const Extensions& e, const std::string& ifOption, const std::map<std::string, bool>& choices) {
+    if (ifOption.empty()) return true;
+    bool selected = false, required = false;
+    for (const auto& o : e.options) {
+        if (o.id == ifOption) selected = o.defaultValue, required = o.required;
+    }
+    if (auto it = choices.find(ifOption); it != choices.end() && !required) selected = it->second;
+    return selected;
+}
+
+std::wstring CheckInputValue(const InputDef& input, const std::wstring& value) {
+    if (value.size() > 4096) return L"too long";
+    if (value.empty()) return input.required ? L"required" : std::wstring();
+    if (input.type == InputDef::Type::Choice &&
+        std::none_of(input.choices.begin(), input.choices.end(), [&](const InputChoice& c) { return c.value == value; })) {
+        return L"not one of the choices";
+    }
+    if (!input.pattern.empty()) {
+        try {
+            if (!std::regex_search(value, std::wregex(input.pattern, std::regex_constants::ECMAScript))) return L"does not match the expected format";
+        } catch (const std::regex_error&) {
+            return L"does not match the expected format";
+        }
+    }
+    return {};
+}
+
+std::wstring ExpandPlaceholders(const std::wstring& text, const PlaceholderContext& ctx) {
+    std::wstring out;
+    out.reserve(text.size());
+    for (size_t i = 0; i < text.size();) {
+        if (text[i] == L'{') {
+            const size_t close = text.find(L'}', i);
+            if (close != std::wstring::npos) {
+                const std::wstring token = text.substr(i + 1, close - i - 1);
+                const std::wstring* value = nullptr;
+                std::wstring input;
+                if (token == L"InstallDir") value = &ctx.installDir;
+                else if (token == L"MainExecutable") value = &ctx.mainExecutable;
+                else if (token == L"AppVersion") value = &ctx.appVersion;
+                else if (token == L"AppId") value = &ctx.appId;
+                else if (token.rfind(L"Input:", 0) == 0 && ctx.inputs) {
+                    if (auto it = ctx.inputs->find(WideToUtf8(token.substr(6))); it != ctx.inputs->end()) input = it->second;
+                    value = &input;
+                }
+                if (value) {
+                    out += *value;
+                    i = close + 1;
+                    continue;
+                }
+            }
+        }
+        out.push_back(text[i++]);
+    }
+    return out;
+}
+
+bool IsEnvironmentName(const std::wstring& name) {
+    if (name.empty() || name.size() > 128 || !((name[0] >= L'A' && name[0] <= L'Z') || (name[0] >= L'a' && name[0] <= L'z') || name[0] == L'_')) return false;
+    if (!std::all_of(name.begin(), name.end(), [](wchar_t c) { return IsAsciiAlnum(c) || c == L'_' || c == L'.' || c == L'-' || c == L'(' || c == L')'; })) return false;
+    static const wchar_t* const kReserved[] = {
+        L"Path", L"PATHEXT", L"SystemRoot", L"windir", L"TEMP", L"TMP", L"ComSpec", L"USERPROFILE", L"APPDATA", L"LOCALAPPDATA",
+        L"ProgramData", L"ProgramFiles", L"ProgramFiles(x86)", L"ProgramW6432", L"OS", L"NUMBER_OF_PROCESSORS", L"PSModulePath",
+        L"USERNAME", L"USERDOMAIN", L"HOMEDRIVE", L"HOMEPATH", L"PUBLIC", L"ALLUSERSPROFILE", L"SystemDrive", L"CommonProgramFiles",
+        L"CommonProgramFiles(x86)", L"CommonProgramW6432", L"DriverData", L"COMPUTERNAME", L"LOGONSERVER", L"SESSIONNAME"};
+    if (std::any_of(std::begin(kReserved), std::end(kReserved), [&](const wchar_t* r) { return EqualsIgnoreCase(name, r); })) return false;
+    return !StartsWithIgnoreCase(name, L"PROCESSOR_");
+}
+
+bool IsServiceName(const std::wstring& name) {
+    return !name.empty() && name.size() <= 80 &&
+           std::all_of(name.begin(), name.end(), [](wchar_t c) { return IsAsciiAlnum(c) || c == L'_' || c == L'.' || c == L'-'; });
+}
+
+bool IsOwnedRegistryKey(const std::wstring& key, bool tree) {
+    if (key.empty() || key.size() > 255 || key.front() == L'\\' || key.back() == L'\\') return false;
+    std::vector<std::wstring> parts;
+    for (size_t start = 0; start <= key.size();) {
+        size_t end = key.find(L'\\', start);
+        if (end == std::wstring::npos) end = key.size();
+        parts.push_back(key.substr(start, end - start));
+        start = end + 1;
+    }
+    for (const auto& p : parts) {
+        if (p.empty() || p.size() > 128 || std::any_of(p.begin(), p.end(), [](wchar_t c) { return c < 0x20; })) return false;
+    }
+    if (parts.size() < 2 || !EqualsIgnoreCase(parts[0], L"Software")) return false;
+    if (EqualsIgnoreCase(parts[1], L"Classes")) {
+        if (parts.size() < 3) return false;
+        const std::wstring& name = parts[2];
+        if (name.front() == L'.') return !tree && IsAssociableExtension(ToLower(name));  // shared: values only
+        if (!IsProgId(name) && !IsCustomScheme(name)) return false;
+        return !tree || parts.size() == 3;
+    }
+    if (EqualsIgnoreCase(parts[1], L"RegisteredApplications")) return parts.size() == 2 && !tree;
+    if (EqualsIgnoreCase(parts[1], L"FluentSetup")) {
+        return parts.size() >= 4 && EqualsIgnoreCase(parts[2], L"Capabilities") && (!tree || parts.size() == 4);
+    }
+    if (EqualsIgnoreCase(parts[1], L"Microsoft")) {
+        // Software\Microsoft\Windows\CurrentVersion\App Paths\<app>.exe
+        return parts.size() == 6 && EqualsIgnoreCase(parts[2], L"Windows") && EqualsIgnoreCase(parts[3], L"CurrentVersion") &&
+               EqualsIgnoreCase(parts[4], L"App Paths") && IsExeName(parts[5]);
+    }
+    return IsRemovableRegistryKey(L"HKCU\\" + key);
+}
+
+std::vector<std::wstring> LockingApps(const std::vector<std::wstring>& files) {
+    std::vector<std::wstring> names;
+    if (files.empty()) return names;
+    DWORD session = 0;
+    WCHAR sessionKey[CCH_RM_SESSION_KEY + 1] = {};
+    if (::RmStartSession(&session, 0, sessionKey) != ERROR_SUCCESS) return names;
+    std::vector<LPCWSTR> list;
+    for (const auto& f : files) list.push_back(f.c_str());
+    for (size_t i = 0; i < list.size(); i += 1000) {
+        const UINT n = static_cast<UINT>(std::min<size_t>(1000, list.size() - i));
+        ::RmRegisterResources(session, n, list.data() + i, 0, nullptr, 0, nullptr);
+    }
+    UINT needed = 0, count = 0;
+    DWORD reasons = 0;
+    std::vector<RM_PROCESS_INFO> info;
+    DWORD rc = ERROR_MORE_DATA;
+    for (int attempt = 0; attempt < 3 && rc == ERROR_MORE_DATA; ++attempt) {
+        info.resize(needed + 8);
+        count = static_cast<UINT>(info.size());
+        rc = ::RmGetList(session, &needed, &count, info.data(), &reasons);
+    }
+    if (rc == ERROR_SUCCESS) {
+        for (UINT i = 0; i < count; ++i) {
+            if (info[i].Process.dwProcessId == ::GetCurrentProcessId()) continue;
+            std::wstring name = info[i].strAppName;
+            if (name.empty()) continue;
+            if (std::none_of(names.begin(), names.end(), [&](const std::wstring& n) { return EqualsIgnoreCase(n, name); })) names.push_back(std::move(name));
+        }
+    }
+    ::RmEndSession(session);
+    return names;
+}
 
 LocalizedText ParseLocalizedText(const json::Value& v) { return ParseText(v); }
 
@@ -185,6 +427,36 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
             const std::wstring channel = r["channel"].asWide();
             if (channel.empty() || channel.size() > 8 || channel.find_first_not_of(L"0123456789.") != std::wstring::npos) Bad(L"invalid Windows App Runtime channel");
             req.runtime = L"Microsoft.WindowsAppRuntime." + channel + L"_8wekyb3d8bbwe";
+        } else if (type == "vcredist") {
+            req.kind = Requirement::Kind::VcRedist;
+            req.architecture = r["architecture"].asWide();
+            if (req.architecture != L"x64" && req.architecture != L"x86" && req.architecture != L"arm64") Bad(L"invalid VC++ redistributable architecture");
+        } else if (type == "custom") {
+            req.kind = Requirement::Kind::Custom;
+            const json::Value& detect = r["detect"];
+            if (const json::Value& reg = detect["registry"]; reg.isObject()) {
+                RegistryVersionCondition c;
+                c.hive = ParseHive(reg["hive"].asString());
+                c.key = reg["key"].asWide();
+                c.value = reg["value"].asWide();
+                c.anyVersion = reg["version"].asString().empty();
+                if (!c.hive || c.key.empty() || c.key.size() > 255 || c.key.front() == L'\\' || c.value.size() > 128 ||
+                    (!c.anyVersion && !Version::Parse(reg["version"].asWide(), c.atLeast))) {
+                    Bad(L"invalid custom requirement registry detection");
+                }
+                req.detectRegistry = c;
+            } else if (const json::Value& file = detect["file"]; file.isObject()) {
+                req.detectFile = file["path"].asWide();
+                if (ExpandSystemTemplate(req.detectFile).empty()) Bad(L"invalid custom requirement file detection: " + req.detectFile);
+                if (!file["version"].asString().empty()) {
+                    Version v;
+                    if (!Version::Parse(file["version"].asWide(), v)) Bad(L"invalid custom requirement file version");
+                    req.detectFileVersion = v;
+                }
+            } else {
+                Bad(L"custom requirement without detection");
+            }
+            if (req.name.empty()) Bad(L"custom requirement without a name");
         } else {
             Bad(L"unknown requirement type");
         }
@@ -202,13 +474,23 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
                 Bad(L"requirement installer must be a payload file");
             }
         }
+        if (r["bundled"].isString()) {
+            // Microsoft's installer stored in the package's redist set (checked against that set by ParsePackage).
+            if (!path::ValidateRelative(r["bundled"].asWide(), req.bundled) || !IsExeName(path::FileName(req.bundled))) Bad(L"invalid bundled prerequisite installer");
+        }
         req.installerArgs = ParseArgs(r["args"]);
         if (const json::Value& d = r["download"]; d.isObject()) {
             req.downloadUrl = d["url"].asString();
             std::vector<uint8_t> digest;
             if (req.downloadUrl.size() > 2048 || req.downloadUrl.rfind("https://", 0) != 0) Bad(L"requirement downloads must use https");
-            if (!FromHex(d["sha256"].asString(), digest) || digest.size() != req.downloadSha256.size()) Bad(L"requirement download needs a sha256");
-            std::copy(digest.begin(), digest.end(), req.downloadSha256.begin());
+            req.downloadSigner = d["signer"].asWide();
+            if (req.downloadSigner.size() > 256) Bad(L"invalid download signer");
+            if (!d["sha256"].asString().empty() || req.downloadSigner.empty()) {
+                // Without a pinned signer the file itself is pinned.
+                if (!FromHex(d["sha256"].asString(), digest) || digest.size() != req.downloadSha256.size()) Bad(L"requirement download needs a sha256 or a signer");
+                std::copy(digest.begin(), digest.end(), req.downloadSha256.begin());
+                req.hasDownloadSha256 = true;
+            }
             req.downloadSize = d["size"].asUint(0);
         }
         req.mustSucceed = r["onFailure"].asString() == "fail";
@@ -220,6 +502,7 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
         if (req.helpUrl.size() > 2048 || (!req.helpUrl.empty() && req.helpUrl.rfind("https://", 0) != 0)) Bad(L"helpUrl must be https");
         if (req.name.empty()) {
             req.name = req.kind == Requirement::Kind::WebView2 ? L"Microsoft Edge WebView2 Runtime"
+                     : req.kind == Requirement::Kind::VcRedist ? L"Microsoft Visual C++ Redistributable (" + req.architecture + L")"
                      : req.kind == Requirement::Kind::DotNet ? (req.runtime == L"Microsoft.WindowsDesktop.App" ? L".NET Desktop Runtime"
                                                                 : req.runtime == L"Microsoft.AspNetCore.App" ? L"ASP.NET Core Runtime" : L".NET Runtime")
                                                              : L".NET Framework";
@@ -298,6 +581,257 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
         e.actions.push_back(std::move(act));
     }
     if (e.actions.size() > 32) Bad(L"too many actions");
+
+    // ---- 1.2 sections ------------------------------------------------------------------------------------------
+    const auto checkOption = [&](const json::Value& v, const wchar_t* what) {
+        std::string id = v["ifOption"].asString();
+        if (!id.empty() && !optionIds.count(id)) Bad(std::wstring(what) + L" refers to an unknown option");
+        return id;
+    };
+    const auto payloadFile = [&](const json::Value& v, const char* key, bool required, const wchar_t* what) {
+        std::wstring rel;
+        const std::wstring raw = v[key].asWide();
+        if (raw.empty() && !required) return rel;
+        if (!path::ValidateRelative(raw, rel) || !payloadHas(rel)) Bad(std::wstring(what) + L" must be a file among the installed files: " + raw);
+        return rel;
+    };
+    const auto text = [&](const json::Value& v, const char* key, size_t max, const wchar_t* what) {
+        std::wstring s = v[key].asWide();
+        if (s.size() > max || std::any_of(s.begin(), s.end(), [](wchar_t c) { return c < 0x20; })) Bad(std::wstring(L"invalid ") + what);
+        return s;
+    };
+    const json::Value& app = root["app"];
+    e.appUserModelId = app["appUserModelId"].asWide();
+    if (!e.appUserModelId.empty() && !IsAppUserModelId(e.appUserModelId)) Bad(L"invalid appUserModelId");
+    e.toastActivatorClsid = app["toastActivatorClsid"].asWide();
+    if (!e.toastActivatorClsid.empty()) {
+        CLSID clsid{};
+        if (e.toastActivatorClsid.size() != 38 || FAILED(::CLSIDFromString(e.toastActivatorClsid.c_str(), &clsid))) Bad(L"invalid toastActivatorClsid");
+    }
+    e.appPaths = inst["appPaths"].asBool(false);
+    e.restartManager = inst["restartManager"].asString() != "off";
+    e.rebootForLockedFiles = inst["lockedFiles"].asString() == "reboot";
+
+    if (root["shortcuts"].array().size() > 16) Bad(L"too many shortcuts");
+    for (const auto& s : root["shortcuts"].array()) {
+        ShortcutDef d;
+        d.name = s["name"].asWide();
+        if (d.name.empty() || d.name.size() > 128 || !path::IsValidComponent(d.name + L".lnk")) Bad(L"invalid shortcut name: " + d.name);
+        d.target = payloadFile(s, "target", true, L"shortcut target");
+        d.args = ParseArgs(s["args"]);
+        d.description = text(s, "description", 259, L"shortcut description");
+        d.icon = payloadFile(s, "icon", false, L"shortcut icon");
+        d.iconIndex = static_cast<int>(std::clamp<int64_t>(s["iconIndex"].asInt(0), -65535, 65535));
+        if (!s["workingDir"].asWide().empty() && !path::ValidateRelative(s["workingDir"].asWide(), d.workingDir)) Bad(L"invalid shortcut working folder");
+        const std::string& location = s["location"].asString();
+        d.location = location == "desktop" ? ShortcutDef::Location::Desktop : location == "startup" ? ShortcutDef::Location::Startup : ShortcutDef::Location::StartMenu;
+        if (location != "desktop" && location != "startup" && location != "startMenu" && !location.empty()) Bad(L"invalid shortcut location");
+        d.folder = s["folder"].asWide();
+        if (!d.folder.empty() && (!path::IsValidComponent(d.folder) || d.folder.size() > 64)) Bad(L"invalid shortcut folder");
+        d.ifOption = checkOption(s, L"shortcut");
+        d.appUserModelId = s["appUserModelId"].asWide();
+        if (!d.appUserModelId.empty() && !IsAppUserModelId(d.appUserModelId)) Bad(L"invalid shortcut appUserModelId");
+        e.shortcuts.push_back(std::move(d));
+    }
+
+    if (root["associations"].array().size() > 16) Bad(L"too many file associations");
+    for (const auto& a : root["associations"].array()) {
+        AssociationDef d;
+        if (a["extensions"].array().empty() || a["extensions"].array().size() > 16) Bad(L"file association without extensions");
+        for (const auto& x : a["extensions"].array()) {
+            const std::wstring ext = ToLower(x.asWide());
+            if (!IsAssociableExtension(ext)) Bad(L"invalid or reserved file extension: " + ext);
+            d.extensions.push_back(ext);
+        }
+        d.progId = a["progId"].asWide();
+        if (!IsProgId(d.progId)) Bad(L"invalid ProgID: " + d.progId);
+        d.description = text(a, "description", 256, L"file type description");
+        d.icon = payloadFile(a, "icon", false, L"file type icon");
+        d.iconIndex = static_cast<int>(std::clamp<int64_t>(a["iconIndex"].asInt(0), -65535, 65535));
+        d.target = payloadFile(a, "target", true, L"file association target");
+        if (!IsExeName(path::FileName(d.target))) Bad(L"file association target must be an .exe");
+        d.args = ParseArgs(a["args"]);
+        d.contentType = a["contentType"].asWide();
+        if (d.contentType.size() > 128 || d.contentType.find_first_not_of(L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$&^_.+-/") != std::wstring::npos) Bad(L"invalid content type");
+        d.ifOption = checkOption(a, L"file association");
+        e.associations.push_back(std::move(d));
+    }
+
+    if (root["protocols"].array().size() > 16) Bad(L"too many protocols");
+    for (const auto& p : root["protocols"].array()) {
+        ProtocolDef d;
+        d.scheme = p["scheme"].asWide();
+        if (!IsCustomScheme(d.scheme)) Bad(L"invalid or reserved URL scheme: " + d.scheme);
+        d.description = text(p, "description", 256, L"protocol description");
+        d.icon = payloadFile(p, "icon", false, L"protocol icon");
+        d.iconIndex = static_cast<int>(std::clamp<int64_t>(p["iconIndex"].asInt(0), -65535, 65535));
+        d.target = payloadFile(p, "target", true, L"protocol target");
+        if (!IsExeName(path::FileName(d.target))) Bad(L"protocol target must be an .exe");
+        d.args = ParseArgs(p["args"]);
+        d.ifOption = checkOption(p, L"protocol");
+        e.protocols.push_back(std::move(d));
+    }
+
+    if (root["registry"].array().size() > 32) Bad(L"too many registry keys");
+    for (const auto& r : root["registry"].array()) {
+        RegistryEntryDef d;
+        d.key = r["key"].asWide();
+        if (!IsRemovableRegistryKey(L"HKCU\\" + d.key) || EqualsIgnoreCase(d.key.substr(0, 21), L"Software\\FluentSetup\\") ||
+            EqualsIgnoreCase(d.key, L"Software\\FluentSetup")) {
+            Bad(L"registry keys must be Software\\<Vendor>\\... : " + d.key);
+        }
+        const std::string& uninstall = r["uninstall"].asString();
+        d.uninstall = uninstall == "key" ? RegistryEntryDef::Uninstall::Key : uninstall == "keep" ? RegistryEntryDef::Uninstall::Keep : RegistryEntryDef::Uninstall::Values;
+        if (r["values"].array().size() > 32) Bad(L"too many registry values");
+        for (const auto& v : r["values"].array()) {
+            RegistryValueDef val;
+            val.name = text(v, "name", 255, L"registry value name");
+            const std::string& t = v["type"].asString();
+            val.type = t == "expandString" ? REG_EXPAND_SZ : t == "dword" ? REG_DWORD : t == "qword" ? REG_QWORD : t == "multiString" ? REG_MULTI_SZ : REG_SZ;
+            if (!t.empty() && t != "string" && val.type == REG_SZ) Bad(L"invalid registry value type");
+            val.data = v["data"].asWide();
+            if (val.data.size() > 16384) Bad(L"registry value too long");
+            if ((val.type == REG_DWORD || val.type == REG_QWORD) && val.data.find(L'{') == std::wstring::npos) {
+                uint64_t n = 0;
+                if (!ParseRegistryNumber(val.data, val.type == REG_QWORD, n)) Bad(L"invalid registry number: " + val.data);
+            }
+            d.values.push_back(std::move(val));
+        }
+        d.ifOption = checkOption(r, L"registry key");
+        e.registry.push_back(std::move(d));
+    }
+
+    if (root["environment"].array().size() > 16) Bad(L"too many environment variables");
+    for (const auto& v : root["environment"].array()) {
+        EnvironmentDef d;
+        d.name = v["name"].asWide();
+        if (!IsEnvironmentName(d.name)) Bad(L"invalid or reserved environment variable: " + d.name);
+        d.value = v["value"].asWide();
+        if (d.value.size() > 8192 || d.value.find(L'\0') != std::wstring::npos) Bad(L"environment value too long");
+        d.expand = v["expand"].asBool(false);
+        d.ifOption = checkOption(v, L"environment variable");
+        e.environment.push_back(std::move(d));
+    }
+
+    if (root["services"].array().size() > 8) Bad(L"too many services");
+    for (const auto& s : root["services"].array()) {
+        ServiceDef d;
+        d.name = s["name"].asWide();
+        if (!IsServiceName(d.name)) Bad(L"invalid service name: " + d.name);
+        d.displayName = text(s, "displayName", 256, L"service display name");
+        if (d.displayName.empty()) d.displayName = d.name;
+        d.description = text(s, "description", 1024, L"service description");
+        d.run = payloadFile(s, "run", true, L"service program");
+        if (!IsExeName(path::FileName(d.run))) Bad(L"service program must be an .exe");
+        d.args = ParseArgs(s["args"]);
+        const std::string& st = s["startType"].asString();
+        d.startType = st == "manual" ? SERVICE_DEMAND_START : st == "disabled" ? SERVICE_DISABLED : SERVICE_AUTO_START;
+        d.delayed = st == "delayedAuto";
+        const std::string& account = s["account"].asString();
+        d.account = account == "localService" ? ServiceDef::Account::LocalService : account == "networkService" ? ServiceDef::Account::NetworkService : ServiceDef::Account::LocalSystem;
+        d.start = s["start"].asBool(true);
+        d.restartOnFailure = s["restartOnFailure"].asBool(true);
+        if (s["dependencies"].array().size() > 16) Bad(L"too many service dependencies");
+        for (const auto& dep : s["dependencies"].array()) {
+            if (!IsServiceName(dep.asWide())) Bad(L"invalid service dependency");
+            d.dependencies.push_back(dep.asWide());
+        }
+        e.services.push_back(std::move(d));
+    }
+
+    if (root["firewall"].array().size() > 16) Bad(L"too many firewall rules");
+    for (const auto& f : root["firewall"].array()) {
+        FirewallRuleDef d;
+        d.name = text(f, "name", 128, L"firewall rule name");
+        if (d.name.empty() || d.name.find(L'|') != std::wstring::npos) Bad(L"invalid firewall rule name");
+        d.program = payloadFile(f, "program", true, L"firewall program");
+        if (!IsExeName(path::FileName(d.program))) Bad(L"firewall program must be an .exe");
+        d.inbound = f["direction"].asString() != "out";
+        const std::string& protocol = f["protocol"].asString();
+        d.protocol = protocol == "tcp" ? 6 : protocol == "udp" ? 17 : 256;
+        d.localPorts = f["localPorts"].asWide();
+        if (!d.localPorts.empty() && (d.protocol == 256 || !IsPortList(d.localPorts))) Bad(L"invalid firewall ports (tcp or udp only): " + d.localPorts);
+        if (f["profiles"].isArray() && !f["profiles"].array().empty()) {
+            d.profiles = 0;
+            for (const auto& p : f["profiles"].array()) {
+                const std::string& name = p.asString();
+                if (name == "domain") d.profiles |= 1;
+                else if (name == "private") d.profiles |= 2;
+                else if (name == "public") d.profiles |= 4;
+                else Bad(L"invalid firewall profile");
+            }
+        }
+        d.ifOption = checkOption(f, L"firewall rule");
+        e.firewall.push_back(std::move(d));
+    }
+
+    std::unordered_set<std::string> inputIds;
+    if (root["inputs"].array().size() > 8) Bad(L"too many inputs");
+    for (const auto& i : root["inputs"].array()) {
+        InputDef d;
+        d.id = i["id"].asString();
+        if (d.id.empty() || d.id.size() > 32 ||
+            !std::all_of(d.id.begin(), d.id.end(), [](char c) { return isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-'; })) {
+            Bad(L"invalid input id");
+        }
+        if (!inputIds.insert(d.id).second) Bad(L"duplicate input id");
+        d.label = ParseText(i["label"]);
+        d.description = ParseText(i["description"]);
+        const std::string& type = i["type"].asString();
+        d.type = type == "password" ? InputDef::Type::Password : type == "choice" ? InputDef::Type::Choice : InputDef::Type::Text;
+        d.defaultValue = i["default"].asWide().substr(0, 4096);
+        d.required = i["required"].asBool(false);
+        d.pattern = i["pattern"].asWide();
+        if (d.pattern.size() > 512) Bad(L"input pattern too long");
+        if (!d.pattern.empty()) {
+            try {
+                std::wregex compiled(d.pattern, std::regex_constants::ECMAScript);
+            } catch (const std::regex_error&) {
+                Bad(L"invalid input pattern");
+            }
+        }
+        d.remember = i["remember"].asBool(true) && d.type != InputDef::Type::Password;
+        if (i["choices"].array().size() > 32) Bad(L"too many input choices");
+        for (const auto& c : i["choices"].array()) {
+            InputChoice choice{c["value"].asWide().substr(0, 1024), ParseText(c["label"])};
+            d.choices.push_back(std::move(choice));
+        }
+        if (d.type == InputDef::Type::Choice && d.choices.empty()) Bad(L"choice input without choices");
+        e.inputs.push_back(std::move(d));
+    }
+
+    if (root["configFiles"].array().size() > 16) Bad(L"too many config files");
+    for (const auto& c : root["configFiles"].array()) {
+        ConfigFileDef d;
+        const std::wstring raw = c["path"].asWide();
+        if (raw.rfind(L'{', 0) == 0) {
+            if (raw.rfind(L"{InstallDir}", 0) == 0 || ExpandDataTemplate(raw).empty()) Bad(L"invalid config file path: " + raw);
+            d.path = raw;
+        } else {
+            if (!path::ValidateRelative(raw, d.path) || EqualsIgnoreCase(d.path.substr(0, d.path.find(L'\\')), kWorkDirName) ||
+                EqualsIgnoreCase(d.path, L"uninstall.exe") || EqualsIgnoreCase(d.path, L"uninstall.json")) {
+                Bad(L"invalid config file path: " + raw);
+            }
+        }
+        d.ini = c["format"].asString() == "ini";
+        if (c["values"].array().empty() || c["values"].array().size() > 64) Bad(L"config file without values");
+        for (const auto& v : c["values"].array()) {
+            ConfigValueDef val;
+            val.key = text(v, "key", 256, L"config key");
+            val.section = text(v, "section", 256, L"config section");
+            if (val.key.empty() || (d.ini && (val.section.empty() || val.key.find(L'=') != std::wstring::npos)) ||
+                (!d.ini && (val.key.front() == L'.' || val.key.back() == L'.' || val.key.find(L"..") != std::wstring::npos))) {
+                Bad(L"invalid config key: " + val.key);
+            }
+            val.value = v["value"].asWide();
+            if (val.value.size() > 4096) Bad(L"config value too long");
+            const std::string& t = v["type"].asString();
+            val.type = t == "number" ? ConfigValueDef::Type::Number : t == "bool" ? ConfigValueDef::Type::Bool : ConfigValueDef::Type::String;
+            d.values.push_back(std::move(val));
+        }
+        d.ifOption = checkOption(c, L"config file");
+        e.configFiles.push_back(std::move(d));
+    }
 
     const json::Value& u = root["uninstall"];
     for (const auto& d : u["removeData"].array()) {
@@ -515,16 +1049,79 @@ std::wstring WindowsAppRuntimeVersion(const Requirement& r) {
     return best;
 }
 
+namespace {
+
+// Visual C++ 2015-2022 (v14) redistributable: VisualStudio\14.0\VC\Runtimes\<arch> with Installed = 1 and
+// Version = "v14.40.33810.00" (registered in the 32-bit view by the x86/x64 installers, native view on ARM64).
+std::wstring VcRedistVersion(const Requirement& r) {
+    const std::wstring key = L"SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\" + r.architecture;
+    for (const DWORD view : {static_cast<DWORD>(RRF_SUBKEY_WOW6432KEY), static_cast<DWORD>(RRF_SUBKEY_WOW6464KEY)}) {
+        DWORD installed = 0, size = sizeof(installed);
+        if (::RegGetValueW(HKEY_LOCAL_MACHINE, key.c_str(), L"Installed", RRF_RT_REG_DWORD | view, nullptr, &installed, &size) != ERROR_SUCCESS ||
+            installed != 1) {
+            continue;
+        }
+        std::wstring v = ReadRegString(HKEY_LOCAL_MACHINE, key, L"Version", view);
+        if (!v.empty() && (v[0] == L'v' || v[0] == L'V')) v.erase(0, 1);
+        return v.empty() ? L"14.0" : v;
+    }
+    return {};
+}
+
+std::wstring FileVersionOf(const std::wstring& file) {
+    DWORD handle = 0;
+    const DWORD size = ::GetFileVersionInfoSizeW(file.c_str(), &handle);
+    if (size == 0) return {};
+    std::vector<uint8_t> data(size);
+    VS_FIXEDFILEINFO* info = nullptr;
+    UINT len = 0;
+    if (!::GetFileVersionInfoW(file.c_str(), 0, size, data.data()) || !::VerQueryValueW(data.data(), L"\\", reinterpret_cast<void**>(&info), &len) ||
+        !info || len < sizeof(VS_FIXEDFILEINFO)) {
+        return {};
+    }
+    return Printf(L"%u.%u.%u.%u", HIWORD(info->dwFileVersionMS), LOWORD(info->dwFileVersionMS), HIWORD(info->dwFileVersionLS), LOWORD(info->dwFileVersionLS));
+}
+
+bool CustomSatisfied(const Requirement& r) {
+    if (r.detectRegistry) {
+        const RegistryVersionCondition& c = *r.detectRegistry;
+        if (!c.anyVersion) return RegistryVersionAtLeast(c);
+        for (const REGSAM view : {static_cast<REGSAM>(KEY_WOW64_64KEY), static_cast<REGSAM>(KEY_WOW64_32KEY)}) {
+            HKEY key = nullptr;
+            if (::RegOpenKeyExW(c.hive, c.key.c_str(), 0, KEY_QUERY_VALUE | view, &key) != ERROR_SUCCESS) continue;
+            const bool found = c.value.empty() || ::RegQueryValueExW(key, c.value.c_str(), nullptr, nullptr, nullptr, nullptr) == ERROR_SUCCESS;
+            ::RegCloseKey(key);
+            if (found) return true;
+        }
+        return false;
+    }
+    const std::wstring file = ExpandSystemTemplate(r.detectFile);
+    if (file.empty() || !fs::Exists(file)) return false;
+    if (!r.detectFileVersion) return true;
+    Version v;
+    return Version::Parse(FileVersionOf(file), v) && Compare(v, *r.detectFileVersion) >= 0;
+}
+
+}  // namespace
+
 std::wstring InstalledRequirementVersion(const Requirement& r) {
     if (r.kind == Requirement::Kind::WindowsAppRuntime) return WindowsAppRuntimeVersion(r);
     if (r.kind == Requirement::Kind::DotNet) return DotNetVersion(r);
     if (r.kind == Requirement::Kind::WebView2) return WebView2Version();
+    if (r.kind == Requirement::Kind::VcRedist) return VcRedistVersion(r);
+    if (r.kind == Requirement::Kind::Custom && !r.detectFile.empty() && r.detectFileVersion) return FileVersionOf(ExpandSystemTemplate(r.detectFile));
     return {};
 }
 
 bool RequirementSatisfied(const Requirement& r) {
     if (r.kind == Requirement::Kind::DotNet) return !DotNetVersion(r).empty();
     if (r.kind == Requirement::Kind::WindowsAppRuntime) return !WindowsAppRuntimeVersion(r).empty();
+    if (r.kind == Requirement::Kind::Custom) return CustomSatisfied(r);
+    if (r.kind == Requirement::Kind::VcRedist) {
+        const std::wstring found = VcRedistVersion(r);
+        Version v;
+        return !found.empty() && (!r.minVersion || (Version::Parse(found, v) && Compare(v, *r.minVersion) >= 0));
+    }
     if (r.kind == Requirement::Kind::NetFramework) {
         for (const DWORD view : {static_cast<DWORD>(RRF_SUBKEY_WOW6464KEY), static_cast<DWORD>(RRF_SUBKEY_WOW6432KEY)}) {
             DWORD release = 0, size = sizeof(release);

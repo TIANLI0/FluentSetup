@@ -31,6 +31,24 @@ public sealed class SetupProject
     public UninstallSettings Uninstall { get; set; } = new();
     /// <summary>Where installed copies find a newer Setup.exe (<c>uninstall.exe /check-update</c> and <c>/install-update</c>).</summary>
     public UpdateSettings Update { get; set; } = new();
+    /// <summary>More shortcuts (other programs of the app, arguments, the Startup folder) besides the main one.</summary>
+    public List<ShortcutSettings> Shortcuts { get; set; } = [];
+    /// <summary>File types the app opens (Explorer double-click, "Open with", Default apps).</summary>
+    public List<FileAssociationSettings> Associations { get; set; } = [];
+    /// <summary>URL schemes the app handles, e.g. "contoso-notes://open?id=1".</summary>
+    public List<ProtocolSettings> Protocols { get; set; } = [];
+    /// <summary>Registry values the installer writes below Software\&lt;Vendor&gt; (HKCU per-user, HKLM per-machine).</summary>
+    public List<RegistryEntrySettings> Registry { get; set; } = [];
+    /// <summary>Environment variables (per-user or machine-wide, following the install scope).</summary>
+    public List<EnvironmentVariableSettings> Environment { get; set; } = [];
+    /// <summary>Windows services of the app (per-machine installs only).</summary>
+    public List<ServiceSettings> Services { get; set; } = [];
+    /// <summary>Windows Defender Firewall allow rules for the app's programs (per-machine installs only).</summary>
+    public List<FirewallRuleSettings> Firewall { get; set; } = [];
+    /// <summary>Values the user enters during setup (a "Settings" page), used as {Input:id} in registry, config files, arguments.</summary>
+    public List<InputSettings> Inputs { get; set; } = [];
+    /// <summary>JSON or INI files the installer writes values into (e.g. a server address entered on the Settings page).</summary>
+    public List<ConfigFileSettings> ConfigFiles { get; set; } = [];
 
     /// <summary>Unknown properties are kept so that newer files survive a round trip through an older tool.</summary>
     [JsonExtensionData]
@@ -49,6 +67,10 @@ public sealed class AppInfo
     public string Icon { get; set; } = "";
     /// <summary>Relative path of the program inside the installed files; used for shortcuts and "launch".</summary>
     public string MainExecutable { get; set; } = "";
+    /// <summary>AppUserModelID set on the app's Start menu and desktop shortcuts (toast notifications of unpackaged apps need it), e.g. "Contoso.Notes".</summary>
+    public string AppUserModelId { get; set; } = "";
+    /// <summary>CLSID of the app's toast activator ("{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}"), set on those shortcuts together with the AppUserModelID.</summary>
+    public string ToastActivatorClsid { get; set; } = "";
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
 }
 
@@ -121,6 +143,12 @@ public sealed class InstallSettings
     public List<string> Ngen { get; set; } = [];
     /// <summary>Leftovers of earlier versions removed during installation (before afterInstall actions run).</summary>
     public InstallCleanupSettings Cleanup { get; set; } = new();
+    /// <summary>Registers app.mainExecutable under App Paths, so Win+R and other programs find it by its file name.</summary>
+    public bool AppPaths { get; set; }
+    /// <summary>auto: close (and afterwards restart) other programs that use files being replaced or removed (Windows Restart Manager) | off: only closeProcesses.</summary>
+    public string RestartManager { get; set; } = "auto";
+    /// <summary>fail: a file that is still in use stops the installation (rolled back) | reboot: per-machine installs replace it at the next restart (exit code 3010).</summary>
+    public string LockedFiles { get; set; } = "fail";
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
 }
 
@@ -147,6 +175,8 @@ public sealed class UiSettings
     public string DefaultLanguage { get; set; } = "auto";
     /// <summary>Per-language overrides of installer strings, e.g. { "zh-CN": { "welcome.body": "…" } }.</summary>
     public Dictionary<string, Dictionary<string, string>> Strings { get; set; } = [];
+    /// <summary>Image (.png, .jpg or .bmp, up to 1 MB; about 4:1, e.g. 960×240) shown at the top of the installer's first page.</summary>
+    public string Banner { get; set; } = "";
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
 }
 
@@ -174,6 +204,8 @@ public sealed class SigningSettings
     public string PasswordEnvironmentVariable { get; set; } = "";
     public string TimestampUrl { get; set; } = "http://timestamp.digicert.com";
     public string SignToolPath { get; set; } = "";
+    /// <summary>Also sign the uninstall.exe that setup writes into the install folder (UAC and SmartScreen then show the publisher when uninstalling).</summary>
+    public bool SignUninstaller { get; set; } = true;
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
 }
 
@@ -188,6 +220,10 @@ public sealed class RequirementSettings
     public List<DotNetRequirement> DotNet { get; set; } = [];
     /// <summary>The Windows App SDK runtime (framework package) a framework-dependent WinUI 3 app needs.</summary>
     public WindowsAppRuntimeRequirement WindowsAppRuntime { get; set; } = new();
+    /// <summary>Microsoft Visual C++ 2015-2022 (v14) Redistributable.</summary>
+    public VcRedistRequirement VcRedist { get; set; } = new();
+    /// <summary>Other prerequisites, detected through a registry value or a file.</summary>
+    public List<CustomRequirement> Custom { get; set; } = [];
 }
 
 /// <summary>How setup obtains a missing prerequisite. Bundled installer first, then the download; neither = setup stops.</summary>
@@ -195,6 +231,12 @@ public class PrerequisiteSource
 {
     /// <summary>Only needed for these variants (files.variants ids); empty = always.</summary>
     public List<string> Variants { get; set; } = [];
+    /// <summary>
+    /// Microsoft's official installer, without adding it yourself: "bundle" = downloaded when the package is built and
+    /// stored in Setup.exe (extracted only if needed, never installed into the app folder); "download" = downloaded by
+    /// setup when needed (it must be signed by Microsoft). "" = use <see cref="Installer"/> / <see cref="Download"/>.
+    /// </summary>
+    public string Auto { get; set; } = "";
     /// <summary>Relative path of an installer inside the installed files (add it with files.extra).</summary>
     public string Installer { get; set; } = "";
     public List<string> Arguments { get; set; } = [];
@@ -213,6 +255,42 @@ public sealed class DownloadSettings
     public string Sha256 { get; set; } = "";
     /// <summary>Exact size in bytes (0 = unknown).</summary>
     public long Size { get; set; }
+    /// <summary>Instead of (or with) the SHA-256: the file must carry a valid Authenticode signature issued to this name, e.g. "Microsoft Corporation" for a vendor bootstrapper that changes over time.</summary>
+    public string Signer { get; set; } = "";
+}
+
+public sealed class VcRedistRequirement : PrerequisiteSource
+{
+    public bool Required { get; set; }
+    /// <summary>Minimum version, e.g. "14.40" (empty = any v14 runtime).</summary>
+    public string MinVersion { get; set; } = "";
+    /// <summary>x64 | x86 | arm64; empty = the package architecture.</summary>
+    public string Architecture { get; set; } = "";
+    public VcRedistRequirement() => Arguments = ["/install", "/quiet", "/norestart"];
+}
+
+public sealed class CustomRequirement : PrerequisiteSource
+{
+    /// <summary>Letters, digits, '-' and '_' (max 32).</summary>
+    public string Id { get; set; } = "";
+    /// <summary>Shown to the user, e.g. "Contoso Driver 2".</summary>
+    public string Name { get; set; } = "";
+    public RequirementDetection Detect { get; set; } = new();
+}
+
+/// <summary>How setup finds out that a custom prerequisite is present: a registry value (with an optional minimum version) or a file.</summary>
+public sealed class RequirementDetection
+{
+    public RegistryVersionCondition? Registry { get; set; }
+    public FileDetection? File { get; set; }
+}
+
+public sealed class FileDetection
+{
+    /// <summary>{ProgramFiles}\X, {ProgramFilesX86}\X, {System}\X, {CommonAppData}\X, {LocalAppData}\X or {AppData}\X.</summary>
+    public string Path { get; set; } = "";
+    /// <summary>Minimum file version (from its version resource); empty = the file only has to exist.</summary>
+    public string Version { get; set; } = "";
 }
 
 public sealed class WebView2Settings : PrerequisiteSource
@@ -403,4 +481,184 @@ public sealed class ServiceAccessSettings
     public string Service { get; set; } = "";
     /// <summary>SDDL rights strings, e.g. "LCRPWP".</summary>
     public List<string> Rights { get; set; } = [];
+}
+
+/// <summary>An additional shortcut. Created and removed like the app's own shortcuts (recorded in the install record).</summary>
+public sealed class ShortcutSettings
+{
+    /// <summary>Shortcut name without ".lnk" (max 128), e.g. "Contoso Notes (Safe mode)".</summary>
+    public string Name { get; set; } = "";
+    /// <summary>Relative path of a file among the installed files; empty = app.mainExecutable.</summary>
+    public string Target { get; set; } = "";
+    public List<string> Arguments { get; set; } = [];
+    public string Description { get; set; } = "";
+    /// <summary>Relative path of an .ico, .exe or .dll among the installed files; empty = the target.</summary>
+    public string Icon { get; set; } = "";
+    public int IconIndex { get; set; }
+    /// <summary>Relative folder inside the install folder; empty = the target's folder.</summary>
+    public string WorkingDirectory { get; set; } = "";
+    /// <summary>startMenu | desktop | startup</summary>
+    public string Location { get; set; } = "startMenu";
+    /// <summary>Start menu sub-folder; empty = install.startMenuFolder.</summary>
+    public string Folder { get; set; } = "";
+    /// <summary>Created only while this option is selected.</summary>
+    public string IfOption { get; set; } = "";
+    /// <summary>AppUserModelID of this shortcut (optional).</summary>
+    public string AppUserModelId { get; set; } = "";
+}
+
+/// <summary>A file type the app opens. Registered per user (HKCU) or for the PC (HKLM), following the install scope.</summary>
+public sealed class FileAssociationSettings
+{
+    /// <summary>File name extensions including the dot, e.g. [".cnote", ".cnotes"].</summary>
+    public List<string> Extensions { get; set; } = [];
+    /// <summary>Programmatic identifier, e.g. "Contoso.Notes.Document" (max 39 characters).</summary>
+    public string ProgId { get; set; } = "";
+    /// <summary>File type name shown in Explorer, e.g. "Contoso Notes document".</summary>
+    public string Description { get; set; } = "";
+    /// <summary>Relative path of an .ico, .exe or .dll among the installed files; empty = the target.</summary>
+    public string Icon { get; set; } = "";
+    public int IconIndex { get; set; }
+    /// <summary>Relative path of the program that opens the files; empty = app.mainExecutable.</summary>
+    public string Target { get; set; } = "";
+    /// <summary>Command-line arguments; "%1" is the file.</summary>
+    public List<string> Arguments { get; set; } = ["%1"];
+    /// <summary>Optional MIME type, e.g. "application/x-contoso-note".</summary>
+    public string ContentType { get; set; } = "";
+    public string IfOption { get; set; } = "";
+}
+
+/// <summary>A URL scheme (protocol) the app handles, e.g. "contoso-notes".</summary>
+public sealed class ProtocolSettings
+{
+    /// <summary>Lowercase scheme without "://", e.g. "contoso-notes".</summary>
+    public string Scheme { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Icon { get; set; } = "";
+    public int IconIndex { get; set; }
+    /// <summary>Relative path of the program that handles the links; empty = app.mainExecutable.</summary>
+    public string Target { get; set; } = "";
+    /// <summary>Command-line arguments; "%1" is the URL.</summary>
+    public List<string> Arguments { get; set; } = ["%1"];
+    public string IfOption { get; set; } = "";
+}
+
+/// <summary>A registry key with values, below HKCU (per-user installs) or HKLM (per-machine installs).</summary>
+public sealed class RegistryEntrySettings
+{
+    /// <summary>Key below the hive, e.g. "Software\Contoso\Notes" (Software\&lt;Vendor&gt; or deeper).</summary>
+    public string Key { get; set; } = "";
+    public List<RegistryValueSettings> Values { get; set; } = [];
+    /// <summary>values: remove the values written (and the key once empty) | key: remove the whole key | keep</summary>
+    public string Uninstall { get; set; } = "values";
+    public string IfOption { get; set; } = "";
+}
+
+public sealed class RegistryValueSettings
+{
+    /// <summary>Value name; empty = the key's default value.</summary>
+    public string Name { get; set; } = "";
+    /// <summary>string | expandString | dword | qword | multiString</summary>
+    public string Type { get; set; } = "string";
+    /// <summary>Text; numbers in decimal or 0x hex; multiString lines separated by "\n". Placeholders: {InstallDir}, {MainExecutable}, {AppVersion}, {AppId}, {Input:id}.</summary>
+    public string Data { get; set; } = "";
+}
+
+public sealed class EnvironmentVariableSettings
+{
+    public string Name { get; set; } = "";
+    /// <summary>Placeholders: {InstallDir}, {MainExecutable}, {AppVersion}, {AppId}, {Input:id}.</summary>
+    public string Value { get; set; } = "";
+    /// <summary>Store as REG_EXPAND_SZ (the value refers to other variables such as %USERPROFILE%).</summary>
+    public bool Expand { get; set; }
+    public string IfOption { get; set; } = "";
+}
+
+/// <summary>A Windows service run from one of the app's programs (per-machine installs only).</summary>
+public sealed class ServiceSettings
+{
+    /// <summary>Service (key) name: letters, digits, '.', '-', '_' (max 80).</summary>
+    public string Name { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string Description { get; set; } = "";
+    /// <summary>Relative path of the service .exe among the installed files.</summary>
+    public string Run { get; set; } = "";
+    public List<string> Arguments { get; set; } = [];
+    /// <summary>auto | delayedAuto | manual | disabled</summary>
+    public string StartType { get; set; } = "auto";
+    /// <summary>localSystem | localService | networkService</summary>
+    public string Account { get; set; } = "localSystem";
+    /// <summary>Start the service after installing.</summary>
+    public bool Start { get; set; } = true;
+    /// <summary>Names of services this one needs.</summary>
+    public List<string> Dependencies { get; set; } = [];
+    /// <summary>Restart the service when it fails (after 5 s, 30 s, 60 s).</summary>
+    public bool RestartOnFailure { get; set; } = true;
+}
+
+/// <summary>A Windows Defender Firewall allow rule for one of the app's programs (per-machine installs only).</summary>
+public sealed class FirewallRuleSettings
+{
+    /// <summary>Rule name shown in the firewall settings.</summary>
+    public string Name { get; set; } = "";
+    /// <summary>Relative path of the program; empty = app.mainExecutable.</summary>
+    public string Program { get; set; } = "";
+    /// <summary>in | out</summary>
+    public string Direction { get; set; } = "in";
+    /// <summary>any | tcp | udp</summary>
+    public string Protocol { get; set; } = "any";
+    /// <summary>tcp/udp only: e.g. "8080" or "8000-8010,9000"; empty = any port.</summary>
+    public string LocalPorts { get; set; } = "";
+    /// <summary>domain, private, public; empty = all.</summary>
+    public List<string> Profiles { get; set; } = [];
+    public string IfOption { get; set; } = "";
+}
+
+/// <summary>A value the user enters on the installer's "Settings" page (or with /input id=value).</summary>
+public sealed class InputSettings
+{
+    /// <summary>Letters, digits, '-' and '_' (max 32); referenced as {Input:id}.</summary>
+    public string Id { get; set; } = "";
+    public Dictionary<string, string> Label { get; set; } = [];
+    /// <summary>Help text under the field.</summary>
+    public Dictionary<string, string> Description { get; set; } = [];
+    /// <summary>text | password | choice</summary>
+    public string Type { get; set; } = "text";
+    public string Default { get; set; } = "";
+    public bool Required { get; set; }
+    /// <summary>Regular expression the whole value must match (e.g. "^https://"); empty = anything.</summary>
+    public string Pattern { get; set; } = "";
+    /// <summary>type choice: the values to choose from.</summary>
+    public List<InputChoiceSettings> Choices { get; set; } = [];
+    /// <summary>Keep the value for updates (never for passwords).</summary>
+    public bool Remember { get; set; } = true;
+}
+
+public sealed class InputChoiceSettings
+{
+    public string Value { get; set; } = "";
+    public Dictionary<string, string> Label { get; set; } = [];
+}
+
+/// <summary>A JSON or INI file the installer writes values into; existing files keep their other settings.</summary>
+public sealed class ConfigFileSettings
+{
+    /// <summary>Relative to the install folder, or {LocalAppData}\X, {AppData}\X, {CommonAppData}\X.</summary>
+    public string Path { get; set; } = "";
+    /// <summary>json | ini</summary>
+    public string Format { get; set; } = "json";
+    public List<ConfigValueSettings> Values { get; set; } = [];
+    public string IfOption { get; set; } = "";
+}
+
+public sealed class ConfigValueSettings
+{
+    /// <summary>json: dotted path such as "server.url"; ini: the key name.</summary>
+    public string Key { get; set; } = "";
+    /// <summary>ini only: the section.</summary>
+    public string Section { get; set; } = "";
+    /// <summary>Placeholders: {InstallDir}, {MainExecutable}, {AppVersion}, {AppId}, {Input:id}.</summary>
+    public string Value { get; set; } = "";
+    /// <summary>json: string | number | bool</summary>
+    public string Type { get; set; } = "string";
 }

@@ -266,6 +266,17 @@ Package ParsePackage(const std::string& headerJson, const std::function<bool(uin
         }
     }
 
+    const auto overlaps = [](const FileSet& x, const FileSet& y) {
+        for (const auto& a : x.streams) {
+            for (const auto& b : y.streams) {
+                if (a.offset < b.offset + b.size && b.offset < a.offset + a.size) return true;
+            }
+        }
+        return false;
+    };
+    const auto inSet = [](const FileSet& set, const std::wstring& rel) {
+        return std::any_of(set.files.begin(), set.files.end(), [&](const FileInfo& f) { return EqualsIgnoreCase(f.path, rel); });
+    };
     const json::Value& fe = root["frontend"];
     if (fe.isObject()) {
         p.frontend = ParseFileSet(fe, L"frontend", rangeCheck, false);
@@ -275,12 +286,36 @@ Package ParsePackage(const std::string& headerJson, const std::function<bool(uin
         }
         if (fe["icon"].isString() && !path::ValidateRelative(fe["icon"].asWide(), p.iconFile, &why)) Bad(L"unsafe icon path");
         // The UI streams must not overlap the payload streams.
-        for (const auto& a : p.frontend.streams) {
-            for (const auto& b : p.payload.streams) {
-                if (a.offset < b.offset + b.size && b.offset < a.offset + a.size) Bad(L"frontend overlaps payload");
-            }
-        }
+        if (overlaps(p.frontend, p.payload)) Bad(L"frontend overlaps payload");
     }
+    if (const json::Value& banner = p.ui["banner"]; banner.isString() && !banner.asString().empty()) {
+        if (!path::ValidateRelative(banner.asWide(), p.bannerFile) || !inSet(p.frontend, p.bannerFile)) Bad(L"banner is not part of the frontend set");
+    }
+
+    const json::Value& redist = root["redist"];
+    if (redist.isObject() && !p.IsUninstaller()) {
+        p.redist = ParseFileSet(redist, L"redist", rangeCheck, false);
+        if (overlaps(p.redist, p.payload) || overlaps(p.redist, p.frontend)) Bad(L"redist overlaps other streams");
+    }
+    for (const auto& req : p.ext.requirements) {
+        if (!req.bundled.empty() && !p.IsUninstaller() && !inSet(p.redist, req.bundled)) Bad(L"bundled prerequisite missing from the package: " + req.bundled);
+    }
+    if (p.scopeMode == ScopeMode::UserOnly && (!p.ext.services.empty() || !p.ext.firewall.empty())) {
+        Bad(L"services and firewall rules need a per-machine install");
+    }
+
+    if (const json::Value& image = root["uninstallerImage"]; image.isObject() && !p.IsUninstaller()) {
+        std::vector<uint8_t> header, certificates;
+        if (!FromBase64(image["header"].asString(), header) || header.empty() || header.size() > (64u << 20) ||
+            !FromBase64(image["certificates"].asString(), certificates) || certificates.size() < 8 || certificates.size() > (1u << 20) ||
+            !ParseDigest(image["sha256"], p.uninstallerImage.sha256)) {
+            Bad(L"invalid uninstallerImage");
+        }
+        p.uninstallerImage.header.assign(header.begin(), header.end());
+        p.uninstallerImage.certificates = std::move(certificates);
+        p.uninstallerImage.checksum = static_cast<uint32_t>(image["checksum"].asUint(0));
+    }
+    p.testHooks = root["testHooks"].asBool(false);
     return p;
 }
 

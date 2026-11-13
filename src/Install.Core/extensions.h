@@ -30,8 +30,15 @@ struct LocalizedText {
     [[nodiscard]] std::wstring Get(const std::wstring& language, const std::wstring& fallback) const;
 };
 
+struct RegistryVersionCondition {
+    HKEY hive = nullptr;
+    std::wstring key, value;
+    Version atLeast;
+    bool anyVersion = false;  // custom requirements: the value only has to exist
+};
+
 struct Requirement {
-    enum class Kind { NetFramework, DotNet, WebView2, WindowsAppRuntime } kind = Kind::NetFramework;
+    enum class Kind { NetFramework, DotNet, WebView2, WindowsAppRuntime, VcRedist, Custom } kind = Kind::NetFramework;
     std::wstring name;            // shown to the user
     uint32_t minRelease = 0;      // .NET Framework "Release" value
     std::wstring runtime;         // .NET: Microsoft.NETCore.App | Microsoft.WindowsDesktop.App | Microsoft.AspNetCore.App
@@ -42,16 +49,23 @@ struct Requirement {
     enum class RollForward { Patch, Minor, Major } rollForward = RollForward::Minor;  // which newer .NET versions count
     // Where to get it when missing (bundled installer first, then the download); neither = setup stops.
     std::wstring installer;       // relative payload path
+    std::wstring bundled;         // relative path in the package's redist set (never installed), extracted when needed
     std::vector<std::wstring> installerArgs;
     std::string downloadUrl;      // https only
     Sha256Digest downloadSha256{};
+    bool hasDownloadSha256 = false;
+    std::wstring downloadSigner;  // the download must carry a valid Authenticode signature issued to this name
     uint64_t downloadSize = 0;    // exact size in bytes, 0 = unknown (then capped at 512 MiB)
     std::string helpUrl;          // shown when missing and not installable
     std::vector<std::string> variants;  // only needed for these package variants (empty = always)
+    std::wstring architecture;    // VC++ redistributable: x64 | x86 | arm64
+    std::optional<RegistryVersionCondition> detectRegistry;  // custom
+    std::wstring detectFile;      // custom: template ({ProgramFiles}\...)
+    std::optional<Version> detectFileVersion;
     [[nodiscard]] bool AppliesTo(const std::string& variant) const {
         return variants.empty() || std::find(variants.begin(), variants.end(), variant) != variants.end();
     }
-    [[nodiscard]] bool Installable() const noexcept { return !installer.empty() || !downloadUrl.empty(); }
+    [[nodiscard]] bool Installable() const noexcept { return !installer.empty() || !bundled.empty() || !downloadUrl.empty(); }
 };
 
 struct UserOption {
@@ -69,12 +83,6 @@ struct UserOption {
     [[nodiscard]] bool HasDetection() const noexcept { return !detectRunValue.empty() || !detectScheduledTask.empty() || !startupName.empty(); }
     // Value in quiet and passive installs that are not updates (Inno Setup "skipifsilent"); unset = defaultValue.
     std::optional<bool> quietDefault;
-};
-
-struct RegistryVersionCondition {
-    HKEY hive = nullptr;
-    std::wstring key, value;
-    Version atLeast;
 };
 
 struct Action {
@@ -130,6 +138,99 @@ struct UserData {
     bool removeByDefault = false;
 };
 
+// ---- 1.2 sections (see docs/project-file.md) ----------------------------------------------------------------------
+
+struct ShortcutDef {
+    enum class Location { StartMenu, Desktop, Startup } location = Location::StartMenu;
+    std::wstring name;        // without .lnk
+    std::wstring target;      // relative payload path
+    std::vector<std::wstring> args;
+    std::wstring description;
+    std::wstring icon;        // relative payload path ("" = target)
+    int iconIndex = 0;
+    std::wstring workingDir;  // relative ("" = the target's folder)
+    std::wstring folder;      // Start menu sub-folder ("" = Programs)
+    std::string ifOption;
+    std::wstring appUserModelId;
+};
+
+struct AssociationDef {
+    std::vector<std::wstring> extensions;  // ".ext", lowercase
+    std::wstring progId, description, icon, target, contentType;
+    int iconIndex = 0;
+    std::vector<std::wstring> args;
+    std::string ifOption;
+};
+
+struct ProtocolDef {
+    std::wstring scheme, description, icon, target;
+    int iconIndex = 0;
+    std::vector<std::wstring> args;
+    std::string ifOption;
+};
+
+struct RegistryValueDef {
+    std::wstring name;
+    DWORD type = REG_SZ;  // REG_SZ, REG_EXPAND_SZ, REG_DWORD, REG_QWORD, REG_MULTI_SZ
+    std::wstring data;    // text with placeholders (numbers already validated)
+};
+struct RegistryEntryDef {
+    enum class Uninstall { Values, Key, Keep } uninstall = Uninstall::Values;
+    std::wstring key;  // below the scope's hive
+    std::vector<RegistryValueDef> values;
+    std::string ifOption;
+};
+
+struct EnvironmentDef {
+    std::wstring name, value;
+    bool expand = false;
+    std::string ifOption;
+};
+
+struct ServiceDef {
+    std::wstring name, displayName, description, run;
+    std::vector<std::wstring> args;
+    DWORD startType = SERVICE_AUTO_START;
+    bool delayed = false;
+    enum class Account { LocalSystem, LocalService, NetworkService } account = Account::LocalSystem;
+    bool start = true;
+    bool restartOnFailure = true;
+    std::vector<std::wstring> dependencies;
+};
+
+struct FirewallRuleDef {
+    std::wstring name, program, localPorts;
+    bool inbound = true;
+    int protocol = 256;    // NET_FW_IP_PROTOCOL_ANY; 6 = TCP, 17 = UDP
+    long profiles = 0x7FFFFFFF;  // NET_FW_PROFILE2_ALL
+    std::string ifOption;
+};
+
+struct InputChoice {
+    std::wstring value;
+    LocalizedText label;
+};
+struct InputDef {
+    enum class Type { Text, Password, Choice } type = Type::Text;
+    std::string id;
+    LocalizedText label, description;
+    std::wstring defaultValue, pattern;
+    bool required = false;
+    bool remember = true;  // never for passwords
+    std::vector<InputChoice> choices;
+};
+
+struct ConfigValueDef {
+    std::wstring key, section, value;
+    enum class Type { String, Number, Bool } type = Type::String;
+};
+struct ConfigFileDef {
+    std::wstring path;  // relative to the install folder, or a {LocalAppData}|{AppData}|{CommonAppData} template
+    bool ini = false;
+    std::vector<ConfigValueDef> values;
+    std::string ifOption;
+};
+
 struct Extensions {
     std::vector<std::wstring> closeProcesses;
     // Asks the installed app to exit cleanly before files are replaced or removed (e.g. "App.exe --exit").
@@ -148,7 +249,55 @@ struct Extensions {
     std::vector<UserOption> options;
     std::vector<Action> actions;
     UninstallCleanup cleanup;
+    // 1.2
+    std::wstring appUserModelId, toastActivatorClsid;  // on the app's own shortcuts
+    bool appPaths = false;
+    bool restartManager = true;
+    bool rebootForLockedFiles = false;
+    std::vector<ShortcutDef> shortcuts;
+    std::vector<AssociationDef> associations;
+    std::vector<ProtocolDef> protocols;
+    std::vector<RegistryEntryDef> registry;
+    std::vector<EnvironmentDef> environment;
+    std::vector<ServiceDef> services;
+    std::vector<FirewallRuleDef> firewall;
+    std::vector<InputDef> inputs;
+    std::vector<ConfigFileDef> configFiles;
+    [[nodiscard]] const InputDef* FindInput(const std::string& id) const noexcept {
+        for (const auto& i : inputs) {
+            if (i.id == id) return &i;
+        }
+        return nullptr;
+    }
 };
+
+// Whether an option-gated item applies: no option, or the option is selected (required options always are).
+bool OptionSelected(const Extensions& e, const std::string& ifOption, const std::map<std::string, bool>& choices);
+
+// Checks a value for an input (required, choices, pattern). Empty message = fine; else an English reason.
+std::wstring CheckInputValue(const InputDef& input, const std::wstring& value);
+
+// Expands {InstallDir}, {MainExecutable}, {AppVersion}, {AppId} and {Input:id} in a string.
+struct PlaceholderContext {
+    std::wstring installDir, mainExecutable, appVersion, appId;
+    const std::map<std::string, std::wstring>* inputs = nullptr;
+};
+std::wstring ExpandPlaceholders(const std::wstring& text, const PlaceholderContext& ctx);
+
+// Registry keys the installer may create, write and remove (journal rollback and install record are confined to them):
+// Software\Classes\<one name> and below, App Paths\<x.exe>, Software\FluentSetup\Capabilities\<appId>,
+// Software\RegisteredApplications (values) and Software\<Vendor>\... (not a shared tree). `tree`: only keys whose whole
+// tree setup may delete (classes it registered, App Paths, Capabilities, vendor keys).
+bool IsOwnedRegistryKey(const std::wstring& key, bool tree = false);
+bool IsEnvironmentName(const std::wstring& name);
+bool IsServiceName(const std::wstring& name);
+// Decimal or 0x hex; dword values must fit in 32 bits.
+bool ParseRegistryNumber(const std::wstring& text, bool qword, uint64_t& out);
+// {ProgramFiles}|{ProgramFilesX86}|{System}|{CommonAppData}|{LocalAppData}|{AppData}\<relative>; empty if invalid.
+std::wstring ExpandSystemTemplate(const std::wstring& tpl);
+
+// Display names of programs that use files of the installation (Windows Restart Manager), for the first page.
+std::vector<std::wstring> LockingApps(const std::vector<std::wstring>& files);
 
 // "text" or { "en-US": "text", ... } (each up to 256 characters).
 LocalizedText ParseLocalizedText(const json::Value& v);

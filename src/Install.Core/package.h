@@ -81,7 +81,19 @@ struct Package {
     std::vector<Variant> variants;  // empty = a single build
     FileSet frontend;
     std::wstring frontendEntry;
-    std::wstring iconFile;  // inside the frontend set
+    std::wstring iconFile;    // inside the frontend set
+    std::wstring bannerFile;  // inside the frontend set (ui.banner), "" if none
+    FileSet redist;           // bundled prerequisite installers: extracted to a private temp folder when needed
+
+    // A pre-signed uninstaller (signing.signUninstaller): the exact header of uninstall.exe and the certificate table
+    // and PE checksum of its signed form. Empty header = setup writes an unsigned uninstaller.
+    struct UninstallerImage {
+        std::string header;              // uninstaller header JSON bytes
+        std::vector<uint8_t> certificates;  // WIN_CERTIFICATE table
+        uint32_t checksum = 0;
+        Sha256Digest sha256{};           // of the finished file
+    } uninstallerImage;
+    bool testHooks = false;  // built with --test-hooks: FLUENTSETUP_TEST_FAULT_AFTER and --ui-simulate are honoured
 
     Extensions ext;   // close processes, requirements, options, actions, uninstall cleanup
     json::Value raw;  // the full header, used to derive the uninstaller header

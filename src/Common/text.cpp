@@ -76,6 +76,41 @@ bool FromHex(std::string_view hex, std::vector<uint8_t>& out) {
     return true;
 }
 
+bool FromBase64(std::string_view text, std::vector<uint8_t>& out) {
+    const auto sextet = [](char c) -> int {
+        if (c >= 'A' && c <= 'Z') return c - 'A';
+        if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+        if (c >= '0' && c <= '9') return c - '0' + 52;
+        if (c == '+') return 62;
+        if (c == '/') return 63;
+        return -1;
+    };
+    out.clear();
+    if (text.size() % 4 != 0) return false;
+    out.reserve(text.size() / 4 * 3);
+    for (size_t i = 0; i < text.size(); i += 4) {
+        const bool last = i + 4 == text.size();
+        int v[4];
+        int pad = 0;
+        for (int k = 0; k < 4; ++k) {
+            const char c = text[i + k];
+            if (c == '=' && last && k >= 2) {
+                v[k] = 0;
+                ++pad;
+            } else {
+                if (pad) return false;  // data after padding
+                v[k] = sextet(c);
+                if (v[k] < 0) return false;
+            }
+        }
+        const uint32_t n = (static_cast<uint32_t>(v[0]) << 18) | (static_cast<uint32_t>(v[1]) << 12) | (static_cast<uint32_t>(v[2]) << 6) | static_cast<uint32_t>(v[3]);
+        out.push_back(static_cast<uint8_t>(n >> 16));
+        if (pad < 2) out.push_back(static_cast<uint8_t>(n >> 8));
+        if (pad < 1) out.push_back(static_cast<uint8_t>(n));
+    }
+    return true;
+}
+
 std::wstring FormatIndexed(std::wstring_view pattern, std::initializer_list<std::wstring_view> args) {
     std::wstring out;
     out.reserve(pattern.size() + 32);

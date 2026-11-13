@@ -162,6 +162,39 @@ json::Value RecordToJson(const InstallRecord& r) {
     json::Value choices = json::Value::MakeObject();
     for (const auto& [id, on] : r.choices) choices.set(id, on);
     v.set("choices", choices);
+    json::Value inputs = json::Value::MakeObject();
+    for (const auto& [id, value] : r.inputs) inputs.set(id, value);
+    v.set("inputs", inputs);
+    if (!r.sourcePackage.empty()) {
+        json::Value source;
+        source.set("path", r.sourcePackage);
+        source.set("sha256", r.sourcePackageSha256);
+        v.set("sourcePackage", source);
+    }
+    json::Value registry = json::Value::MakeArray();
+    for (const auto& item : r.registry) {
+        json::Value e;
+        e.set("key", item.key);
+        if (item.tree) {
+            e.set("tree", true);
+        } else {
+            e.set("value", item.value);
+            if (item.ifEquals) e.set("ifEquals", item.data);
+        }
+        registry.push(e);
+    }
+    v.set("registry", registry);
+    json::Value env = json::Value::MakeArray();
+    for (const auto& item : r.environment) {
+        json::Value e;
+        e.set("name", item.name);
+        e.set("value", item.value);
+        env.push(e);
+    }
+    v.set("environment", env);
+    json::Value services = json::Value::MakeArray();
+    for (const auto& s : r.services) services.push(s);
+    v.set("services", services);
     return v;
 }
 
@@ -205,6 +238,41 @@ InstallRecord RecordFromJson(const json::Value& v) {
     }
     for (const auto& [id, on] : v["choices"].object()) {  // absent in records written before 1.0
         if (id.size() <= 32 && r.choices.size() < 16) r.choices[id] = on.asBool();
+    }
+    // Absent in records written before 1.2.
+    for (const auto& [id, value] : v["inputs"].object()) {
+        if (id.size() <= 32 && r.inputs.size() < 8 && value.isString()) r.inputs[id] = value.asWide().substr(0, 4096);
+    }
+    if (const json::Value& source = v["sourcePackage"]; source.isObject()) {
+        std::wstring p;
+        if (path::ValidateAbsoluteSyntax(source["path"].asWide(), p) == path::Problem::None) {
+            r.sourcePackage = p;
+            r.sourcePackageSha256 = source["sha256"].asWide().substr(0, 64);
+        }
+    }
+    if (v["registry"].array().size() > 1024) throw bad(L"registry");
+    for (const auto& e : v["registry"].array()) {
+        RegistryItem item;
+        item.key = e["key"].asWide();
+        if (!IsOwnedRegistryKey(item.key)) throw bad(L"registry key " + item.key);
+        item.tree = e["tree"].asBool();
+        item.value = e["value"].asWide().substr(0, 256);
+        item.ifEquals = e["ifEquals"].isString();
+        item.data = e["ifEquals"].asWide().substr(0, 1024);
+        // A whole tree is only ever one of the keys setup creates itself (never a vendor's key it shares).
+        if (item.tree && !IsOwnedRegistryKey(item.key, true)) throw bad(L"registry tree " + item.key);
+        r.registry.push_back(std::move(item));
+    }
+    if (v["environment"].array().size() > 16) throw bad(L"environment");
+    for (const auto& e : v["environment"].array()) {
+        EnvironmentItem item{e["name"].asWide(), e["value"].asWide()};
+        if (!IsEnvironmentName(item.name)) throw bad(L"environment variable " + item.name);
+        r.environment.push_back(std::move(item));
+    }
+    if (v["services"].array().size() > 8) throw bad(L"services");
+    for (const auto& s : v["services"].array()) {
+        if (!IsServiceName(s.asWide())) throw bad(L"service " + s.asWide());
+        r.services.push_back(s.asWide());
     }
     return r;
 }

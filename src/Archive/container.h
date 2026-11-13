@@ -121,10 +121,22 @@ std::string DecodeAll(const uint8_t* data, size_t size, uint64_t rawSize);
 enum class SignatureState {
     Unsigned,
     Valid,        // chain trusted
-    Intact,       // hash matches but chain not trusted (self-signed / test certificate)
+    Intact,       // hash matches but chain not trusted (self-signed / test certificate, expired)
     Tampered,     // signature present but the file hash does not match
+    Distrusted,   // the certificate is revoked (as far as the local cache knows) or explicitly distrusted: refused
 };
 // WinVerifyTrust on the file, offline (no revocation network fetch).
 SignatureState CheckSignature(const std::wstring& path, long* status = nullptr);
+
+// Subject name (simple display name) of the certificate that signed the file, if the signature is valid and its chain
+// trusted; "" otherwise.
+std::wstring TrustedSignerName(const std::wstring& path);
+
+// For the first page: whether the file is signed by a trusted publisher, and that publisher's name.
+struct SignerInfo {
+    SignatureState state = SignatureState::Unsigned;
+    std::wstring publisher;  // only when state == Valid
+};
+SignerInfo GetSignerInfo(const std::wstring& path);
 
 }  // namespace fsetup::archive

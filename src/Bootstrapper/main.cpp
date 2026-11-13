@@ -147,6 +147,9 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         if (signature == archive::SignatureState::Tampered) {
             throw Failure(ErrorCode::PackageCorrupt, Printf(L"The digital signature does not match the file (0x%08lX)", signatureStatus));
         }
+        if (signature == archive::SignatureState::Distrusted) {
+            throw Failure(ErrorCode::PackageCorrupt, Printf(L"The publisher's certificate has been revoked or is explicitly distrusted (0x%08lX)", signatureStatus));
+        }
         pkg = install::ParsePackage(container->HeaderJson(),
                                     [&](uint64_t offset, uint64_t size) { return container->StreamRangeValid(offset, size); });
     } catch (const Failure& f) {

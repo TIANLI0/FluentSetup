@@ -13,6 +13,8 @@
 
 #pragma comment(lib, "wintrust.lib")
 
+#pragma comment(lib, "crypt32.lib")
+
 namespace fsetup::archive {
 
 namespace {
@@ -273,12 +275,53 @@ SignatureState CheckSignature(const std::wstring& path, long* status) {
     if (result == TRUST_E_BAD_DIGEST || result == CRYPT_E_BAD_MSG) return SignatureState::Tampered;
     // Untrusted root, expired certificate, explicit distrust, ...: the bytes are intact but the publisher is not
     // trusted on this machine. Integrity is what the installer has to enforce; trust is the user's/SmartScreen's call.
-    if (result == CERT_E_UNTRUSTEDROOT || result == CERT_E_CHAINING || result == CERT_E_EXPIRED ||
-        result == TRUST_E_EXPLICIT_DISTRUST || result == CERT_E_UNTRUSTEDTESTROOT || result == TRUST_E_CERT_SIGNATURE ||
-        result == CERT_E_REVOKED || result == CRYPT_E_REVOCATION_OFFLINE) {
+    // A certificate the PC knows to be revoked, or one the user/administrator explicitly distrusted, is refused.
+    if (result == CERT_E_REVOKED || result == TRUST_E_EXPLICIT_DISTRUST) return SignatureState::Distrusted;
+    if (result == CERT_E_UNTRUSTEDROOT || result == CERT_E_CHAINING || result == CERT_E_EXPIRED || result == CERT_E_UNTRUSTEDTESTROOT ||
+        result == TRUST_E_CERT_SIGNATURE || result == CRYPT_E_REVOCATION_OFFLINE) {
         return SignatureState::Intact;
     }
     return SignatureState::Tampered;
+}
+
+std::wstring TrustedSignerName(const std::wstring& path) {
+    WINTRUST_FILE_INFO info{};
+    info.cbStruct = sizeof(info);
+    info.pcwszFilePath = path.c_str();
+    GUID action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+    WINTRUST_DATA data{};
+    data.cbStruct = sizeof(data);
+    data.dwUIChoice = WTD_UI_NONE;
+    data.fdwRevocationChecks = WTD_REVOKE_NONE;
+    data.dwUnionChoice = WTD_CHOICE_FILE;
+    data.pFile = &info;
+    data.dwStateAction = WTD_STATEACTION_VERIFY;
+    data.dwProvFlags = WTD_CACHE_ONLY_URL_RETRIEVAL;
+    std::wstring name;
+    if (::WinVerifyTrust(static_cast<HWND>(INVALID_HANDLE_VALUE), &action, &data) == ERROR_SUCCESS) {
+        if (CRYPT_PROVIDER_DATA* provider = ::WTHelperProvDataFromStateData(data.hWVTStateData)) {
+            CRYPT_PROVIDER_SGNR* signer = ::WTHelperGetProvSignerFromChain(provider, 0, FALSE, 0);
+            if (signer && signer->csCertChain > 0 && signer->pasCertChain && signer->pasCertChain[0].pCert) {
+                wchar_t buffer[512] = {};
+                if (::CertGetNameStringW(signer->pasCertChain[0].pCert, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, nullptr, buffer, ARRAYSIZE(buffer)) > 1) {
+                    name = buffer;
+                }
+            }
+        }
+    }
+    data.dwStateAction = WTD_STATEACTION_CLOSE;
+    ::WinVerifyTrust(static_cast<HWND>(INVALID_HANDLE_VALUE), &action, &data);
+    return name;
+}
+
+SignerInfo GetSignerInfo(const std::wstring& path) {
+    SignerInfo info;
+    info.state = CheckSignature(path);
+    if (info.state == SignatureState::Valid) {
+        info.publisher = TrustedSignerName(path);
+        if (info.publisher.empty()) info.state = SignatureState::Intact;
+    }
+    return info;
 }
 
 }  // namespace fsetup::archive

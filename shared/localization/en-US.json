@@ -188,5 +188,28 @@
   "update.checkFailed": "Couldn't check for updates",
   "update.failed": "The update didn't finish",
 
+  "welcome.verifiedPublisher": "Verified publisher: {0}",
+  "welcome.unknownPublisher": "Unknown publisher",
+  "welcome.lockingApps": "These programs use files of {0} and will be closed when you continue: {1}",
+  "inputs.title": "Settings",
+  "inputs.subtitle": "{0} needs a few settings before it is installed.",
+  "inputs.required": "This field is required.",
+  "inputs.invalid": "This value is not valid.",
+  "inputs.next": "Next",
+  "modify.title": "Change {0}",
+  "modify.subtitle": "Change the options of {0} {1}, or repair it if it doesn't work properly.",
+  "modify.change": "Change",
+  "modify.repair": "Repair",
+  "modify.repairBody": "Repair checks the installed files and restores missing or damaged ones.",
+  "modify.repairing": "Repairing {0}…",
+  "modify.repairNoSource": "Some files of {0} are missing or damaged. Run its setup program again to repair it.",
+  "modify.noProblems": "No problems found: every file of {0} is intact.",
+  "progress.title.modify": "Changing {0}",
+  "result.success.title.modify": "{0} was changed",
+  "result.success.body.modify": "Your changes to {0} have been applied.",
+  "result.failed.title.modify": "The changes couldn't be applied",
+  "result.rebootRequired": "Restart your PC to finish: some files that were in use will be replaced then.",
+  "prereq.officialDownload": "{0} is needed and will be downloaded from Microsoft and installed.",
+
   "usage": "Usage: Setup.exe [options]\n\n/quiet  Install without any user interface\n/passive  Show progress only, ask nothing\n/uninstall  Remove the installed app\n/dir <path>  Install location\n/scope user|machine  Install for the current user or for all users\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Turn a package-defined option on or off\n/variant <id>  Package variant (e.g. shared or self-contained runtimes)\n/remove-user-data  Uninstall: also delete settings and data\n/relaunch  Start the app after a quiet install (in-app updaters)\n/check-update  Exit code 18 if a newer version is published, 0 if not\n/install-update  Download, check and install the newest version (with /passive or /quiet: no questions)\nInno Setup and NSIS switches (/VERYSILENT, /SUPPRESSMSGBOXES, /DIR=, /TASKS=, /D=...) are accepted.\n/log <file>  Write the log to this file\n/lang en-US|zh-CN|ja-JP|ko-KR  Interface language\n/ui auto|winui|win32  Interface technology (diagnostics)\n\nExit code 0 means success; see the documentation for the other codes."
 }

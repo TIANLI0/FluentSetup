@@ -20,6 +20,7 @@ std::wstring_view Trim(std::wstring_view s) noexcept;
 
 std::string ToHex(std::span<const uint8_t> bytes);
 bool FromHex(std::string_view hex, std::vector<uint8_t>& out);
+bool FromBase64(std::string_view text, std::vector<uint8_t>& out);  // standard alphabet with '=' padding
 
 // Replaces every "{0}", "{1}" ... with the matching argument.
 std::wstring FormatIndexed(std::wstring_view pattern, std::initializer_list<std::wstring_view> args);

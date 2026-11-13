@@ -343,44 +343,13 @@ void Discard(Downloaded& d) {
     d.path.clear();
 }
 
-// Subject name of the certificate that signed the file, if the signature is valid and its chain trusted ("" otherwise).
-std::wstring TrustedSignerName(const std::wstring& file) {
-    WINTRUST_FILE_INFO info{};
-    info.cbStruct = sizeof(info);
-    info.pcwszFilePath = file.c_str();
-    GUID action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
-    WINTRUST_DATA data{};
-    data.cbStruct = sizeof(data);
-    data.dwUIChoice = WTD_UI_NONE;
-    data.fdwRevocationChecks = WTD_REVOKE_NONE;
-    data.dwUnionChoice = WTD_CHOICE_FILE;
-    data.pFile = &info;
-    data.dwStateAction = WTD_STATEACTION_VERIFY;
-    data.dwProvFlags = WTD_CACHE_ONLY_URL_RETRIEVAL;
-    std::wstring name;
-    if (::WinVerifyTrust(static_cast<HWND>(INVALID_HANDLE_VALUE), &action, &data) == ERROR_SUCCESS) {
-        if (CRYPT_PROVIDER_DATA* provider = ::WTHelperProvDataFromStateData(data.hWVTStateData)) {
-            CRYPT_PROVIDER_SGNR* signer = ::WTHelperGetProvSignerFromChain(provider, 0, FALSE, 0);
-            if (signer && signer->csCertChain > 0 && signer->pasCertChain && signer->pasCertChain[0].pCert) {
-                wchar_t buffer[512] = {};
-                if (::CertGetNameStringW(signer->pasCertChain[0].pCert, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, nullptr, buffer, ARRAYSIZE(buffer)) > 1) {
-                    name = buffer;
-                }
-            }
-        }
-    }
-    data.dwStateAction = WTD_STATEACTION_CLOSE;
-    ::WinVerifyTrust(static_cast<HWND>(INVALID_HANDLE_VALUE), &action, &data);
-    return name;
-}
-
 // `appId`, `architecture`: of the installed package.
 bool VerifyPackage(const std::wstring& file, const std::wstring& appId, const std::wstring& architecture, const Release& r, const Source& s,
                    std::wstring& error) {
     try {
         const auto container = archive::Container::Open(file);
         long status = 0;
-        if (archive::CheckSignature(file, &status) == archive::SignatureState::Tampered) {
+        if (const auto state = archive::CheckSignature(file, &status); state == archive::SignatureState::Tampered || state == archive::SignatureState::Distrusted) {
             error = Printf(L"The digital signature of the download does not match the file (0x%08lX)", status);
             return false;
         }
@@ -400,7 +369,7 @@ bool VerifyPackage(const std::wstring& file, const std::wstring& appId, const st
         return false;
     }
     if (!s.signer.empty()) {
-        const std::wstring signer = TrustedSignerName(file);
+        const std::wstring signer = archive::TrustedSignerName(file);
         if (signer.empty()) {
             error = L"The download does not carry a valid, trusted signature (update.signer is set)";
             return false;
