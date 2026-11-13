@@ -1466,6 +1466,7 @@ void Window::LoadBanner() {
     }
     bannerSrcW_ = w;
     bannerSrcH_ = h;
+    log::Info(L"Banner %s: %ux%u", file.c_str(), w, h);
 }
 
 void Window::RenderBanner() {

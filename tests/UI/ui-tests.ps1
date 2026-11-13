@@ -121,13 +121,17 @@ function Invoke-Quiet([string] $exe, [string[]] $arguments) {
     return (Start-Process -FilePath $exe -ArgumentList $arguments -Wait -PassThru).ExitCode
 }
 
-# Until the builder writes "inputs" into the package header (FluentSetup 1.2 header writer), add them the way it will:
-# the test package is unsigned, so its header can be replaced by an uncompressed one with a new footer.
+# Until the builder writes "inputs" and "ui.banner" into the package header (FluentSetup 1.2 header writer), add them
+# the way it will: the test package is unsigned, so its header can be replaced by an uncompressed one with a new footer.
+# The banner must be a file of the frontend set; the app icon stands in for banner.png until the builder adds it.
 function Add-HeaderInputs([string] $exe, $inputs) {
     $info = & $cli inspect $exe --json | Out-String | ConvertFrom-Json
     $header = $info.header
     if ($header.PSObject.Properties['inputs'] -and @($header.inputs).Count -gt 0) { return $false }
     $header | Add-Member -NotePropertyName inputs -NotePropertyValue $inputs -Force
+    if (-not $header.ui.PSObject.Properties['banner'] -and $header.frontend -and $header.frontend.icon) {
+        $header.ui | Add-Member -NotePropertyName banner -NotePropertyValue $header.frontend.icon -Force
+    }
     $bytes = [IO.File]::ReadAllBytes($exe)
     $f = $bytes.Length - 80
     if ([Text.Encoding]::ASCII.GetString($bytes, $f, 7) -ne 'FLSETUP') { throw 'No footer at the end of the test package' }
@@ -181,6 +185,16 @@ $project | Add-Member -NotePropertyName configFiles -NotePropertyValue @(
     [ordered]@{ path = 'settings.json'; format = 'json'; values = @(
             [ordered]@{ key = 'server.url'; value = '{Input:serverUrl}'; type = 'string' },
             [ordered]@{ key = 'edition'; value = '{Input:edition}'; type = 'string' }) }) -Force
+# A banner for the first page (ui.banner).
+Add-Type -AssemblyName System.Drawing
+$bannerImage = New-Object System.Drawing.Bitmap 640, 120
+$graphics = [System.Drawing.Graphics]::FromImage($bannerImage)
+$brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.Rectangle 0, 0, 640, 120), [System.Drawing.Color]::FromArgb(255, 0, 95, 184), [System.Drawing.Color]::FromArgb(0, 0, 95, 184), 0.0)
+$graphics.FillRectangle($brush, 0, 0, 640, 120)
+$graphics.Dispose(); $brush.Dispose()
+$bannerImage.Save((Join-Path $work 'banner.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+$bannerImage.Dispose()
+$project.ui | Add-Member -NotePropertyName banner -NotePropertyValue 'banner.png' -Force
 $projectPath = Join-Path $work 'project.json'
 [IO.File]::WriteAllText($projectPath, ($project | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
 & $cli build $projectPath | Out-Null
@@ -243,6 +257,7 @@ foreach ($ui in $FrontEnds) {
     $logText = Read-Log $log
     Check "${ui}: input values reached setup (log)" { $logText.Contains("Input serverUrl = `"$serverUrl`"") -and $logText.Contains('Input edition = "pro"') }
     Check "${ui}: the password is not written to the log" { $logText.Contains('Input token: (6 characters)') -and -not $logText.Contains('s3cret') }
+    if ($ui -eq 'win32') { Check "${ui}: the banner was read from the package and decoded" { $logText -match 'Banner [^ ]+: [0-9]+x[0-9]+' -and -not $logText.Contains('The banner') } }
     $record = Get-Record
     if ($record.PSObject.Properties['inputs'] -and $record.inputs.PSObject.Properties['serverUrl']) {
         Check "${ui}: input values remembered in the install record (not the password)" { $record.inputs.serverUrl -eq $serverUrl -and $record.inputs.edition -eq 'pro' -and -not $record.inputs.PSObject.Properties['token'] }
