@@ -713,7 +713,9 @@ void Controller::RunRepair() {
     // The setup takes the per-app lock itself; it reinstalls the same version with the recorded choices.
     if (releaseLock_) releaseLock_();
     DWORD exitCode = 0;
-    if (!RunSetup(source.path, args_.quiet, strings_.Language(), exitCode, error)) {
+    const bool started = RunSetup(source.path, args_.quiet, strings_.Language(), exitCode, error);
+    if (reacquireLock_ && !reacquireLock_()) log::Warn(L"Repair: another setup of %s took the single-instance lock", pkg_.appId.c_str());
+    if (!started) {
         out.code = ErrorCode::Internal;
         out.detail = error;
         out.rolledBack = true;

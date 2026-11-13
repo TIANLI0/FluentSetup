@@ -67,8 +67,11 @@ public:
     // Modify mode: verifies the installed files and, if any is missing or damaged, runs the same version's Setup.exe
     // (recorded original or update source) with /passive (/quiet in quiet mode). Asynchronous like Start.
     void Repair(HWND owner);
-    // Called before a repair hands over to another Setup.exe, which needs the per-app single-instance lock.
-    void SetLockRelease(std::function<void()> release) { releaseLock_ = std::move(release); }
+    // The per-app single-instance lock: a repair releases it for the Setup.exe it runs and takes it back afterwards.
+    void SetInstanceLock(std::function<void()> release, std::function<bool()> reacquire) {
+        releaseLock_ = std::move(release);
+        reacquireLock_ = std::move(reacquire);
+    }
     void Cancel();
     [[nodiscard]] bool Started() const;
     [[nodiscard]] bool Running() const;
@@ -109,6 +112,7 @@ private:
     std::wstring logPath_;
     install::Existing existing_;
     std::function<void()> releaseLock_;
+    std::function<bool()> reacquireLock_;
     mutable std::once_flag signerOnce_;
     mutable archive::SignerInfo signer_;
 

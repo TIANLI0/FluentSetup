@@ -92,7 +92,7 @@ public:
         }
         std::promise<bool> owned;
         std::future<bool> result = owned.get_future();
-        thread_ = std::thread([this, &owned] {
+        thread_ = std::thread([this, owned = std::move(owned)]() mutable {
             const DWORD wait = ::WaitForSingleObject(mutex_.get(), 0);
             const bool mine = wait == WAIT_OBJECT_0 || wait == WAIT_ABANDONED;  // abandoned: the previous owner died
             owned.set_value(mine);
@@ -108,7 +108,7 @@ public:
         return mine;
     }
 
-    // Any thread; idempotent.
+    // Any thread; idempotent. Acquire may be called again afterwards.
     void Release() {
         std::lock_guard lock(releaseMutex_);
         if (release_) ::SetEvent(release_.get());
@@ -301,7 +301,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
 
     // One setup/uninstall per app at a time (across users and sessions).
     InstanceLock instance;
-    if (DWORD lockError = 0; !instance.Acquire(L"Global\\FluentSetup-" + pkg.appId, lockError)) {
+    const std::wstring lockName = L"Global\\FluentSetup-" + pkg.appId;
+    if (DWORD lockError = 0; !instance.Acquire(lockName, lockError)) {
         if (lockError == ERROR_ALREADY_EXISTS) log::Error(L"Another setup of %s is running", pkg.appId.c_str());
         else log::Error(L"The single-instance lock of %s cannot be opened (%s); assuming another setup is running", pkg.appId.c_str(), Win32Message(lockError).c_str());
         if (!quiet) ShowError(appName, strings.Fmt("error.AlreadyRunning", {appName}), {});
@@ -310,7 +311,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
 
     const boot::Mode mode = uninstallMode ? boot::Mode::Uninstall : modifyMode ? boot::Mode::Modify : boot::Mode::Install;
     boot::Controller controller(pkg, *container, mode, strings, args, logPath);
-    controller.SetLockRelease([&instance] { instance.Release(); });
+    controller.SetInstanceLock([&instance] { instance.Release(); },
+                               [&instance, &lockName] {
+                                   DWORD error = 0;
+                                   return instance.Acquire(lockName, error);
+                               });
     const auto& existing = controller.existing();
     if ((mode == boot::Mode::Uninstall && !existing.product) || (mode == boot::Mode::Modify && (!existing.product || existing.foreign))) {
         log::Error(L"%s is not installed%s", pkg.appId.c_str(), existing.product ? L" by FluentSetup (no install record)" : L"");
