@@ -289,6 +289,9 @@ std::wstring ExpandPlaceholders(const std::wstring& text, const PlaceholderConte
 // Software\RegisteredApplications (values) and Software\<Vendor>\... (not a shared tree). `tree`: only keys whose whole
 // tree setup may delete (classes it registered, App Paths, Capabilities, vendor keys).
 bool IsOwnedRegistryKey(const std::wstring& key, bool tree = false);
+// A key setup may create and, on rollback, delete again because it did not exist before: the owned trees, plus
+// Software\Classes\<.ext> of a file type (extension keys are shared, so they are never recorded for uninstall).
+bool IsCreatableRegistryKey(const std::wstring& key);
 bool IsEnvironmentName(const std::wstring& name);
 bool IsServiceName(const std::wstring& name);
 // Decimal or 0x hex; dword values must fit in 32 bits.
@@ -322,6 +325,10 @@ std::wstring InstalledRequirementVersion(const Requirement& r);
 bool Download(const std::string& url, const std::wstring& dest, const Sha256Digest& sha256, uint64_t expectedSize,
               const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress, std::wstring& error);
 
+// Same, with the SHA-256 optional (nullptr: the caller verifies the file another way, e.g. its signature).
+bool DownloadFile(const std::string& url, const std::wstring& dest, const Sha256Digest* sha256, uint64_t expectedSize,
+                  const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress, std::wstring& error);
+
 // GETs an https URL into memory (at most maxBytes). `headers`: extra request headers ("Name: value\r\n...") or null.
 // False with `error` on a transport failure or any status but 200 (`status` keeps the code, 0 if none came).
 bool HttpGetText(const std::string& url, const wchar_t* headers, size_t maxBytes, std::string& body, unsigned long& status,
@@ -337,7 +344,10 @@ struct ActionResult {
 };
 // Runs `exe` (absolute, already validated to be inside the install directory) with `args`; kills the process tree on
 // timeout. No shell, no PATH lookup.
-ActionResult RunProgram(const std::wstring& exe, const std::vector<std::wstring>& args, uint32_t timeoutSeconds, bool visible = false);
+// endChildren: processes the program started and left running are ended when it exits (actions; not vendor installers,
+// whose updaters keep running on purpose).
+ActionResult RunProgram(const std::wstring& exe, const std::vector<std::wstring>& args, uint32_t timeoutSeconds, bool visible = false,
+                        bool endChildren = false);
 
 // Expands {CommonAppData}/{LocalAppData}/{AppData}/{InstallDir} in a removeData template; empty if invalid (or
 // {InstallDir} without an install folder). Never anything inside the installer's own work folder.

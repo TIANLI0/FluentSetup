@@ -74,7 +74,8 @@ function New-Package([string] $version, [scriptblock] $populate, [hashtable] $ov
     foreach ($k in $rootProps.Keys) { $project | Add-Member -NotePropertyName $k -NotePropertyValue $rootProps[$k] -Force }
     $projectPath = Join-Path $work "project-$version.json"
     [IO.File]::WriteAllText($projectPath, ($project | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
-    & $cli build $projectPath --report (Join-Path $work "report-$version.json") | Out-Null
+    # --test-hooks: the packages honour FLUENTSETUP_TEST_FAULT_AFTER (used below to inject a failure).
+    & $cli build $projectPath --test-hooks --report (Join-Path $work "report-$version.json") | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Packaging $version failed" }
     return (Join-Path $work "dist\$appName-$version-Setup.exe")
 }
@@ -588,6 +589,98 @@ if ($r.Code -eq 19 -and $r.Log -match $offline) {
             $r.Code -eq 19 -and $r.Log -match 'another app: FluentSetup' }
     }
 }
+Write-Host '==> 1.2: shortcuts, file types, URL scheme, App Paths, registry, environment, inputs, config files, rollback' -ForegroundColor Cyan
+Remove-Existing
+$ext = '.fse2e'
+$progId = 'FluentSetup.E2E.Doc'
+$scheme = 'fluentsetup-e2e'
+$classes = 'HKCU:\Software\Classes'
+$vendorKey = 'HKCU:\Software\FluentSetupE2E\App'
+$appPathsKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\DemoApp.exe'
+$programs = [Environment]::GetFolderPath('Programs')
+$safeLink = Join-Path $programs 'FluentSetup E2E Safe.lnk'
+$startupLink = Join-Path ([Environment]::GetFolderPath('Startup')) 'FluentSetup E2E Agent.lnk'
+$extraLink = Join-Path ([Environment]::GetFolderPath('Desktop')) 'FluentSetup E2E Extra.lnk'
+# Keys a failed earlier run may have left behind (test names only).
+foreach ($k in "$classes\.fse2e", "$classes\.fse2ex", "$classes\$progId", "$classes\FluentSetup.E2E.Other", "$classes\$scheme", 'HKCU:\Software\FluentSetupE2E', $appPathsKey) { Remove-Item -Recurse -Force $k -ErrorAction SilentlyContinue }
+$integration = @{
+    options = @(@{ id = 'extras'; label = @{ 'en-US' = 'Extras' }; default = $false })
+    shortcuts = @(
+        @{ name = 'FluentSetup E2E Safe'; arguments = @('--safe', '{Input:server}'); location = 'startMenu'; appUserModelId = 'FluentSetup.E2E.Safe' },
+        @{ name = 'FluentSetup E2E Agent'; arguments = @('--background'); location = 'startup' },
+        @{ name = 'FluentSetup E2E Extra'; location = 'desktop'; ifOption = 'extras' })
+    associations = @(@{ extensions = @($ext); progId = $progId; description = 'FluentSetup E2E document'; contentType = 'application/x-fse2e' })
+    protocols = @(@{ scheme = $scheme; description = 'FluentSetup E2E link' })
+    registry = @(@{ key = 'Software\FluentSetupE2E\App'; values = @(
+        @{ name = 'Server'; data = '{Input:server}' },
+        @{ name = 'Count'; type = 'dword'; data = '0x10' },
+        @{ name = 'Home'; type = 'expandString'; data = '{InstallDir}' },
+        @{ name = 'List'; type = 'multiString'; data = "a`nb" }) })
+    environment = @(@{ name = 'FLUENTSETUP_E2E_HOME'; value = '{InstallDir}' })
+    inputs = @(
+        @{ id = 'server'; label = @{ 'en-US' = 'Server' }; default = 'https://default.example'; required = $true; pattern = '^https://' },
+        @{ id = 'mode'; type = 'choice'; label = @{ 'en-US' = 'Mode' }; default = 'fast'; choices = @(@{ value = 'fast' }, @{ value = 'safe' }) })
+    configFiles = @(
+        @{ path = 'settings.json'; values = @(@{ key = 'server.url'; value = '{Input:server}' }, @{ key = 'server.port'; value = '8443'; type = 'number' }) },
+        @{ path = 'conf\app.ini'; format = 'ini'; values = @(@{ section = 'Main'; key = 'Mode'; value = '{Input:mode}' }) })
+}
+$pkg12 = New-Package '13.0.0' { param($s) '{ "keep": 1, "server": { "url": "old" } }' | Set-Content "$s\settings.json" -Encoding UTF8 } @{ appPaths = $true } $integration
+$code = Run-Setup $pkg12 @('/quiet') 'v12-install'
+$shell = New-Object -ComObject WScript.Shell
+Check '1.2: install exit 0' { $code -eq 0 }
+Check '1.2: extra Start menu shortcut with expanded arguments' { (Test-Path $safeLink) -and $shell.CreateShortcut($safeLink).Arguments -eq '--safe https://default.example' }
+Check '1.2: Startup folder shortcut' { (Test-Path $startupLink) -and $shell.CreateShortcut($startupLink).Arguments -eq '--background' }
+Check '1.2: shortcut gated by an unselected option is not created' { -not (Test-Path $extraLink) }
+Check '1.2: file type: extension points at the ProgID, Open with lists it' {
+    (Get-ItemProperty "$classes\$ext").'(default)' -eq $progId -and (Get-ItemProperty "$classes\$ext\OpenWithProgids").PSObject.Properties.Name -contains $progId }
+Check '1.2: file type: open command quotes the program and %1' {
+    (Get-ItemProperty "$classes\$progId\shell\open\command").'(default)' -eq "`"$installDir\DemoApp.exe`" `"%1`"" -and (Get-ItemProperty "$classes\$ext").'Content Type' -eq 'application/x-fse2e' }
+Check '1.2: URL scheme registered' { (Get-ItemProperty "$classes\$scheme").PSObject.Properties.Name -contains 'URL Protocol' -and (Get-ItemProperty "$classes\$scheme\shell\open\command").'(default)' -like '*DemoApp.exe" "%1"' }
+Check '1.2: Default apps capabilities registered' { (Get-ItemProperty 'HKCU:\Software\RegisteredApplications').$appId -eq "Software\FluentSetup\Capabilities\$appId" -and (Get-ItemProperty "HKCU:\Software\FluentSetup\Capabilities\$appId\FileAssociations").$ext -eq $progId }
+Check '1.2: App Paths' { (Get-ItemProperty $appPathsKey).'(default)' -eq "$installDir\DemoApp.exe" -and (Get-ItemProperty $appPathsKey).Path -eq $installDir }
+Check '1.2: registry values (string from an input, dword, expandString, multiString)' {
+    $v = Get-ItemProperty $vendorKey
+    $v.Server -eq 'https://default.example' -and $v.Count -eq 16 -and $v.Home -eq $installDir -and ($v.List -join '|') -eq 'a|b' }
+Check '1.2: user environment variable' { [Environment]::GetEnvironmentVariable('FLUENTSETUP_E2E_HOME', 'User') -eq $installDir }
+Check '1.2: JSON config file updated in place (other settings kept)' {
+    $j = Get-Content "$installDir\settings.json" -Raw | ConvertFrom-Json
+    $j.keep -eq 1 -and $j.server.url -eq 'https://default.example' -and $j.server.port -eq 8443 }
+Check '1.2: INI config file written' { (Get-Content "$installDir\conf\app.ini" -Raw) -match 'Mode=fast' }
+Check '1.2: input values remembered in the install record' { (Get-Content "$installDir\uninstall.json" -Raw | ConvertFrom-Json).inputs.server -eq 'https://default.example' }
+Check '1.2: Modify offered in Apps & features' { (Get-ItemProperty $arpKey).ModifyPath -eq "`"$installDir\uninstall.exe`" /modify" -and (Get-ItemProperty $arpKey).NoModify -eq 0 }
+
+# A failing step after the registry was changed rolls everything back to 13.0.0.
+$broken = $integration.Clone()
+$broken.associations = @(@{ extensions = @('.fse2ex'); progId = 'FluentSetup.E2E.Other'; description = 'other' })
+$broken.registry = @(@{ key = 'Software\FluentSetupE2E\App'; values = @(@{ name = 'Server'; data = 'changed' }) })
+$broken.actions = @(@{ when = 'afterInstall'; run = 'DemoApp.exe'; arguments = @('--exit-code', '5'); onFailure = 'fail' })
+$pkgBroken = New-Package '13.1.0' { param($s) '{ "keep": 1 }' | Set-Content "$s\settings.json" -Encoding UTF8 } @{ appPaths = $true } $broken
+$code = Run-Setup $pkgBroken @('/quiet') 'v12-rollback'
+Check '1.2: failing action fails the update (exit 1)' { $code -eq 1 }
+Check '1.2: rollback restored registry values and removed the new file type' {
+    (Get-ItemProperty $vendorKey).Server -eq 'https://default.example' -and -not (Test-Path "$classes\FluentSetup.E2E.Other") -and -not (Test-Path "$classes\.fse2ex") -and
+    (Get-ItemProperty "$classes\$ext").'(default)' -eq $progId -and (Get-ItemProperty $arpKey).DisplayVersion -eq '13.0.0' }
+Check '1.2: rollback restored the edited config file' { (Get-Content "$installDir\settings.json" -Raw | ConvertFrom-Json).server.url -eq 'https://default.example' }
+
+# An update without the file type and the environment variable removes them.
+$smaller = $integration.Clone()
+$smaller.associations = @()
+$smaller.environment = @()
+$pkgSmaller = New-Package '13.2.0' { param($s) '{ "keep": 1 }' | Set-Content "$s\settings.json" -Encoding UTF8 } @{} $smaller
+$code = Run-Setup $pkgSmaller @('/quiet') 'v12-smaller'
+Check '1.2: update removes what the new version no longer declares' {
+    $code -eq 0 -and -not (Test-Path "$classes\$progId") -and -not (Test-Path "$classes\$ext") -and -not (Test-Path $appPathsKey) -and
+    $null -eq [Environment]::GetEnvironmentVariable('FLUENTSETUP_E2E_HOME', 'User') -and (Test-Path "$classes\$scheme") }
+
+$uninstaller = Join-Path $installDir 'uninstall.exe'
+$p = Start-Process $uninstaller -ArgumentList '/uninstall', '/quiet' -Wait -PassThru
+Check '1.2: uninstall exit 0' { $p.ExitCode -eq 0 }
+Check '1.2: uninstall removed shortcuts, scheme, capabilities and registry values' {
+    -not (Test-Path $safeLink) -and -not (Test-Path $startupLink) -and -not (Test-Path "$classes\$scheme") -and -not (Test-Path $vendorKey) -and
+    -not (Test-Path 'HKCU:\Software\FluentSetupE2E') -and $null -eq (Get-ItemProperty 'HKCU:\Software\RegisteredApplications' -ErrorAction SilentlyContinue).$appId -and
+    -not (Test-Path "HKCU:\Software\FluentSetup\Capabilities\$appId") }
+Remove-Item -Recurse -Force $installDir -ErrorAction SilentlyContinue
+
 Remove-Existing
 Check 'environment restored (no ARP entry)' { -not (Test-Path $arpKey) }
 

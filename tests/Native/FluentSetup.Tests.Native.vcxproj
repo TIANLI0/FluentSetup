@@ -19,6 +19,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="core_tests.cpp" />
     <ClCompile Include="security_tests.cpp" />
+    <ClCompile Include="integration_tests.cpp" />
     <!-- argument parser lives in the bootstrapper; compile it here as well -->
     <ClCompile Include="..\..\src\Bootstrapper\args.cpp" />
   </ItemGroup>

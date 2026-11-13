@@ -169,6 +169,14 @@ bool IsCustomScheme(const std::wstring& s) {
                                                 L"tel", L"sms", L"callto", L"javascript", L"vbscript", L"data", L"about", L"res", L"shell",
                                                 L"search", L"its", L"mk", L"hcp", L"read", L"onenote", L"skype", L"zoommtg", L"steam"};
     if (std::any_of(std::begin(kReserved), std::end(kReserved), [&](const wchar_t* r) { return s == r; })) return false;
+    // Shell classes live in the same registry tree (HKCU\Software\Classes overrides HKLM): never one of those.
+    static const wchar_t* const kShellClasses[] = {
+        L"exefile", L"batfile", L"cmdfile", L"comfile", L"lnkfile", L"piffile", L"scrfile", L"regfile", L"htafile", L"vbsfile", L"vbefile",
+        L"jsfile", L"jsefile", L"wsffile", L"wshfile", L"cplfile", L"dllfile", L"sysfile", L"inffile", L"mscfile", L"folder", L"directory",
+        L"drive", L"allfilesystemobjects", L"clsid", L"interface", L"typelib", L"appid", L"systemfileassociations", L"applications",
+        L"unknown", L"protocols", L"mime", L"network", L"printers", L"installer", L"msi.package", L"msi.patch", L"desktopbackground",
+        L"librarylocation", L"launchinghost", L"txtfile", L"inifile", L"jpegfile", L"pngfile", L"htmlfile", L"urlfile", L"xmlfile"};
+    if (std::any_of(std::begin(kShellClasses), std::end(kShellClasses), [&](const wchar_t* c) { return s == c; })) return false;
     return s.rfind(L"ms-", 0) != 0 && s.rfind(L"windows", 0) != 0 && s.rfind(L"microsoft", 0) != 0 && s.rfind(L"search-ms", 0) != 0;
 }
 
@@ -327,6 +335,14 @@ bool IsOwnedRegistryKey(const std::wstring& key, bool tree) {
                EqualsIgnoreCase(parts[4], L"App Paths") && IsExeName(parts[5]);
     }
     return IsRemovableRegistryKey(L"HKCU\\" + key);
+}
+
+bool IsCreatableRegistryKey(const std::wstring& key) {
+    if (IsOwnedRegistryKey(key, true)) return true;
+    static constexpr wchar_t kClasses[] = L"Software\\Classes\\";
+    if (!StartsWithIgnoreCase(key, kClasses)) return false;
+    const std::wstring name = key.substr(wcslen(kClasses));
+    return name.find(L'\\') == std::wstring::npos && IsAssociableExtension(ToLower(name));
 }
 
 std::vector<std::wstring> LockingApps(const std::vector<std::wstring>& files) {
@@ -1210,6 +1226,11 @@ bool StartHttpsGet(const std::string& url, const wchar_t* headers, HttpsGet& r, 
 
 bool Download(const std::string& url, const std::wstring& dest, const Sha256Digest& sha256, uint64_t expectedSize,
               const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress, std::wstring& error) {
+    return DownloadFile(url, dest, &sha256, expectedSize, cancel, progress, error);
+}
+
+bool DownloadFile(const std::string& url, const std::wstring& dest, const Sha256Digest* sha256, uint64_t expectedSize,
+                  const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress, std::wstring& error) {
     const auto fail = [&](const wchar_t* what) {
         error = std::wstring(what) + L": " + Win32Message(::GetLastError());
         return false;
@@ -1244,7 +1265,7 @@ bool Download(const std::string& url, const std::wstring& dest, const Sha256Dige
         if (!::WriteFile(file.get(), buffer.data(), got, &written, nullptr) || written != got) return fail(L"Cannot write the download");
         if (progress) progress(total, expectedSize);
     }
-    if ((expectedSize && total != expectedSize) || hash.Finish() != sha256) {
+    if ((expectedSize && total != expectedSize) || (sha256 && hash.Finish() != *sha256)) {
         error = L"The downloaded file does not match the expected SHA-256";
         return false;
     }
@@ -1289,12 +1310,19 @@ bool RegistryVersionAtLeast(const RegistryVersionCondition& c) {
 
 // ---- actions -------------------------------------------------------------------------------------------------------
 
-ActionResult RunProgram(const std::wstring& exe, const std::vector<std::wstring>& args, uint32_t timeoutSeconds, bool visible) {
+ActionResult RunProgram(const std::wstring& exe, const std::vector<std::wstring>& args, uint32_t timeoutSeconds, bool visible,
+                        bool endChildren) {
     ActionResult r;
     std::wstring cmd = Quote(exe);
     for (const auto& a : args) cmd += L" " + Quote(a);
     // Job object so a timeout can end the whole process tree.
     UniqueHandle job(::CreateJobObjectW(nullptr, nullptr));
+    if (job && endChildren) {
+        // Nothing an action started keeps running (with administrator rights, for per-machine installs) after it.
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        ::SetInformationJobObject(job.get(), JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+    }
     STARTUPINFOW si{sizeof(si)};
     if (!visible) {
         si.dwFlags = STARTF_USESHOWWINDOW;

@@ -57,6 +57,7 @@ struct InstallRecord {
     std::vector<RegistryItem> registry;          // registry keys/values written (removed on uninstall / when gone)
     std::vector<EnvironmentItem> environment;    // environment variables written
     std::vector<std::wstring> services;          // services created
+    bool firewall = false;                       // firewall rules of the group "FluentSetup:<appId>" were added
 };
 
 std::wstring ArpKeyPath(const std::wstring& appId);
@@ -85,6 +86,8 @@ std::vector<std::wstring> ShortcutFolders(Scope scope);
 // A .lnk directly in one of ShortcutFolders(scope), or one folder level below the Start menu Programs folder
 // (install.startMenuFolder, e.g. "Programs\App\App.lnk").
 bool IsAllowedShortcutPath(const std::wstring& p, Scope scope);
+// The Startup folder of a scope (shortcuts[].location "startup").
+std::wstring StartupFolder(Scope scope);
 // After a shortcut in a Start menu sub-folder was removed: removes that sub-folder if it is now empty.
 void RemoveEmptyShortcutFolder(const std::wstring& linkPath, Scope scope);
 
@@ -94,12 +97,14 @@ void RestoreArp(const std::wstring& appId, Scope scope, const json::Value& snaps
 
 struct ArpEntry {
     std::wstring displayName, displayVersion, publisher, displayIcon, installLocation, uninstallString,
-        quietUninstallString, urlInfoAbout, comments, recordSha256, variant;
+        quietUninstallString, urlInfoAbout, comments, recordSha256, variant, modifyPath;
     uint32_t estimatedSizeKb = 0;
     uint32_t versionMajor = 0, versionMinor = 0;
 };
 void WriteArp(const std::wstring& appId, Scope scope, const ArpEntry& e);  // throws Failure(RegistryError)
 void DeleteArp(const std::wstring& appId, Scope scope);
+// Modify rewrites the install record: the ARP key keeps everything else.
+void UpdateArpRecordHash(const std::wstring& appId, Scope scope, const std::wstring& recordSha256);
 
 // Pending-operation marker (Software\FluentSetup\Pending\<appId>) pointing at the journal of an unfinished operation.
 void SetPending(const std::wstring& appId, Scope scope, const std::wstring& installDir);

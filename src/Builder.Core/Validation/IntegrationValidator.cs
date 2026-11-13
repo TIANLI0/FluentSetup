@@ -33,6 +33,12 @@ public static partial class IntegrationValidator
     {
         "http", "https", "file", "ftp", "ftps", "mailto", "news", "nntp", "telnet", "ldap", "tel", "sms", "callto", "javascript", "vbscript",
         "data", "about", "res", "shell", "search", "its", "mk", "hcp", "read", "onenote", "skype", "zoommtg", "steam",
+        // shell classes share the registry tree
+        "exefile", "batfile", "cmdfile", "comfile", "lnkfile", "piffile", "scrfile", "regfile", "htafile", "vbsfile", "vbefile", "jsfile",
+        "jsefile", "wsffile", "wshfile", "cplfile", "dllfile", "sysfile", "inffile", "mscfile", "folder", "directory", "drive",
+        "allfilesystemobjects", "clsid", "interface", "typelib", "appid", "systemfileassociations", "applications", "unknown", "protocols",
+        "mime", "network", "printers", "installer", "msi.package", "msi.patch", "desktopbackground", "librarylocation", "launchinghost",
+        "txtfile", "inifile", "jpegfile", "pngfile", "htmlfile", "urlfile", "xmlfile",
     };
     private static readonly HashSet<string> ReservedEnvironment = new(StringComparer.OrdinalIgnoreCase)
     {

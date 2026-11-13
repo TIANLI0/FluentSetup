@@ -2,6 +2,7 @@
 
 #include "Common/text.h"
 
+#include <unordered_set>
 #include <charconv>
 #include <cmath>
 #include <cstdio>
@@ -227,6 +228,7 @@ private:
     bool ParseObject(Value& out, size_t depth) {
         ++p_;
         Object obj;
+        std::unordered_set<std::string> keys;  // only filled for large objects
         SkipWs();
         if (p_ < end_ && *p_ == '}') {
             ++p_;
@@ -243,6 +245,17 @@ private:
             ++p_;
             Value v;
             if (!ParseValue(v, depth + 1)) return false;
+            // Duplicate keys are ambiguous (readers disagree on which one wins): refuse them.
+            if (obj.size() < 32) {
+                for (const auto& m : obj) {
+                    if (m.first == key) return Fail("duplicate object key");
+                }
+            } else {
+                if (keys.empty()) {
+                    for (const auto& m : obj) keys.insert(m.first);
+                }
+                if (!keys.insert(key).second) return Fail("duplicate object key");
+            }
             obj.emplace_back(std::move(key), std::move(v));
             SkipWs();
             if (p_ >= end_) return Fail("unterminated object");

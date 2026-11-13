@@ -12,10 +12,12 @@
 #include "Common/path.h"
 #include "Install.Core/installed.h"
 #include "Install.Core/package.h"
+#include "Install.Core/shortcuts.h"
 
 #include <atomic>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -128,13 +130,30 @@ public:
     void SetFaultAfterFiles(unsigned n) noexcept { faultAfter_ = n; }
 
 private:
+    struct ShortcutPlan {
+        std::wstring link;
+        ShortcutSpec spec;
+    };
     void RecoverPending(Scope scope) const;
+    // Values for the package's inputs: options, else the previous install's, else the defaults; all checked.
+    [[nodiscard]] std::map<std::string, std::wstring> EffectiveInputs(const InstallOptions& o, const InstallRecord* previous) const;
+    // The app's own shortcuts (offers) and shortcuts[] whose option is selected.
+    [[nodiscard]] std::vector<ShortcutPlan> PlanShortcuts(const std::wstring& dir, Scope scope, bool startMenu, bool desktop,
+                                                          const std::map<std::string, bool>& choices, const PlaceholderContext& ctx) const;
+    // configFiles[] whose option is selected: inside the install folder (journaled, before the commit) or in data
+    // folders (after the commit; failures become warnings).
+    void WriteConfigFiles(bool insideInstallDir, const std::wstring& dir, const std::map<std::string, bool>& choices, const PlaceholderContext& ctx,
+                          class Journal* journal, const std::wstring& backup, std::vector<RecordFile>* recordFiles, Outcome& out) const;
+    void WriteUninstallerFile(const std::wstring& dest, const std::string* fixedHeader) const;
+    void WriteSignedUninstaller(const std::wstring& dest) const;
     void InstallPayload(const std::wstring& dir, const std::wstring& backup, class Journal& journal, class Reporter& rep,
                         const std::atomic<bool>& cancel, std::vector<RecordFile>& recordFiles);
     void WriteUninstaller(const std::wstring& dest) const;
     void RunCloseCommand(const std::wstring& dir) const;
     // Runs the package's actions for `when` (payload executables only). Fail-policy errors throw; others become warnings.
-    void RunActions(Action::When when, const std::wstring& dir, const std::map<std::string, bool>& choices, Outcome& out) const;
+    // onlyOptions: run only actions gated by one of these options (Modify: options that were just turned on).
+    void RunActions(Action::When when, const std::wstring& dir, const std::map<std::string, bool>& choices, Outcome& out,
+                    const std::set<std::string>* onlyOptions = nullptr, const PlaceholderContext* ctx = nullptr) const;
     // Our own installation, or (if the package adopts it) one made by a previous installer under the same uninstall key.
     [[nodiscard]] std::optional<InstalledProduct> FindExisting(bool* foreign = nullptr) const;
 
@@ -142,6 +161,9 @@ private:
     const archive::Container& container_;
     unsigned faultAfter_ = 0;
     std::string variant_;  // variant being installed (Install sets it from the options)
+    // install.lockedFiles "reboot": files moved into place (new, target) or deleted at the next restart.
+    std::vector<std::pair<std::wstring, std::wstring>> pendingReplace_;
+    std::vector<std::wstring> pendingDelete_;
     [[nodiscard]] bool Selected(const FileInfo& f) const { return f.variant.empty() || f.variant == variant_; }
 };
 

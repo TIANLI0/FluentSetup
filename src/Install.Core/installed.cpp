@@ -195,6 +195,7 @@ json::Value RecordToJson(const InstallRecord& r) {
     json::Value services = json::Value::MakeArray();
     for (const auto& s : r.services) services.push(s);
     v.set("services", services);
+    if (r.firewall) v.set("firewall", true);
     return v;
 }
 
@@ -274,6 +275,7 @@ InstallRecord RecordFromJson(const json::Value& v) {
         if (!IsServiceName(s.asWide())) throw bad(L"service " + s.asWide());
         r.services.push_back(s.asWide());
     }
+    r.firewall = v["firewall"].asBool(false);
     return r;
 }
 
@@ -310,6 +312,10 @@ std::vector<std::wstring> ShortcutFolders(Scope scope) {
     return {path::KnownFolder(FOLDERID_Programs), path::KnownFolder(FOLDERID_Desktop)};
 }
 
+std::wstring StartupFolder(Scope scope) {
+    return path::KnownFolder(scope == Scope::Machine ? FOLDERID_CommonStartup : FOLDERID_Startup);
+}
+
 bool IsAllowedShortcutPath(const std::wstring& p, Scope scope) {
     if (p.size() < 5 || !EqualsIgnoreCase(std::wstring_view(p).substr(p.size() - 4), L".lnk")) return false;
     std::wstring normalized;
@@ -319,6 +325,7 @@ bool IsAllowedShortcutPath(const std::wstring& p, Scope scope) {
     for (const auto& folder : folders) {
         if (!folder.empty() && EqualsIgnoreCase(parent, folder)) return true;
     }
+    if (const std::wstring startup = StartupFolder(scope); !startup.empty() && EqualsIgnoreCase(parent, startup)) return true;
     // install.startMenuFolder: exactly one level below the Start menu Programs folder.
     return !folders.empty() && !folders[0].empty() && EqualsIgnoreCase(path::Parent(parent), folders[0]) &&
            path::IsValidComponent(path::FileName(parent));
@@ -394,12 +401,26 @@ void WriteArp(const std::wstring& appId, Scope scope, const ArpEntry& e) {
     SetDword(key.get(), L"EstimatedSize", e.estimatedSizeKb);
     SetDword(key.get(), L"VersionMajor", e.versionMajor);
     SetDword(key.get(), L"VersionMinor", e.versionMinor);
-    SetDword(key.get(), L"NoModify", 1);
+    // "Modify" in Settings starts uninstall.exe /modify (change options, repair).
+    if (!e.modifyPath.empty()) {
+        SetString(key.get(), L"ModifyPath", e.modifyPath);
+        SetDword(key.get(), L"NoModify", 0);
+    } else {
+        ::RegDeleteValueW(key.get(), L"ModifyPath");
+        SetDword(key.get(), L"NoModify", 1);
+    }
     SetDword(key.get(), L"NoRepair", 1);
     SetDword(key.get(), kMarkerValue, 1);
     SetString(key.get(), L"FluentSetupRecordSha256", e.recordSha256);
     if (!e.variant.empty()) SetString(key.get(), L"FluentSetupVariant", e.variant);
     else ::RegDeleteValueW(key.get(), L"FluentSetupVariant");
+}
+
+void UpdateArpRecordHash(const std::wstring& appId, Scope scope, const std::wstring& recordSha256) {
+    UniqueHkey key;
+    const LSTATUS st = ::RegOpenKeyExW(RootFor(scope), ArpKeyPath(appId).c_str(), 0, KEY_SET_VALUE | KEY_QUERY_VALUE | kView, key.put());
+    if (st != ERROR_SUCCESS || ReadDword(key.get(), kMarkerValue) != 1) throw Failure(ErrorCode::RegistryError, L"Cannot open the uninstall registry key", st);
+    SetString(key.get(), L"FluentSetupRecordSha256", recordSha256);
 }
 
 void DeleteArp(const std::wstring& appId, Scope scope) {

@@ -15,6 +15,7 @@
     <ClInclude Include="engine.h" />
     <ClInclude Include="extensions.h" />
     <ClInclude Include="installed.h" />
+    <ClInclude Include="integration.h" />
     <ClInclude Include="journal.h" />
     <ClInclude Include="package.h" />
     <ClInclude Include="shortcuts.h" />
@@ -23,6 +24,7 @@
     <ClCompile Include="engine.cpp" />
     <ClCompile Include="extensions.cpp" />
     <ClCompile Include="installed.cpp" />
+    <ClCompile Include="integration.cpp" />
     <ClCompile Include="journal.cpp" />
     <ClCompile Include="package.cpp" />
     <ClCompile Include="shortcuts.cpp" />

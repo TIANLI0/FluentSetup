@@ -5,6 +5,7 @@
 #include "Common/security.h"
 #include "Common/text.h"
 #include "Common/version.h"
+#include "Install.Core/integration.h"
 #include "Install.Core/journal.h"
 #include "Install.Core/shortcuts.h"
 
@@ -248,6 +249,45 @@ bool IsProtectedLocation(const std::wstring& dir) {
     return false;
 }
 
+// Decodes one file of a file set (the redist set of bundled prerequisite installers) into `dest` (created new),
+// verifying the stream and the file hash.
+void ExtractSetFile(const archive::Container& container, const FileSet& set, const std::wstring& rel, const std::wstring& dest) {
+    const auto it = std::find_if(set.files.begin(), set.files.end(), [&](const FileInfo& f) { return EqualsIgnoreCase(f.path, rel); });
+    if (it == set.files.end()) throw Failure(ErrorCode::PackageCorrupt, L"Bundled file missing: " + rel);
+    const StreamInfo& si = set.streams[it->stream];
+    archive::StreamReader reader(container, si.offset, si.size, si.rawSize, si.sha256);
+    std::vector<uint8_t> buffer(1u << 20);
+    for (uint64_t skip = it->offset; skip > 0;) {
+        const size_t n = reader.Read(buffer.data(), static_cast<size_t>(std::min<uint64_t>(skip, buffer.size())));
+        if (n == 0) throw Failure(ErrorCode::PackageCorrupt, L"Stream ended early before " + rel);
+        skip -= n;
+    }
+    UniqueHandle h(::CreateFileW(path::Long(dest).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!h) ThrowWin32(L"Cannot create " + dest);
+    Sha256 hash;
+    for (uint64_t left = it->size; left > 0;) {
+        const size_t n = reader.Read(buffer.data(), static_cast<size_t>(std::min<uint64_t>(left, buffer.size())));
+        if (n == 0) throw Failure(ErrorCode::PackageCorrupt, L"Stream ended early in " + rel);
+        hash.Update(buffer.data(), n);
+        DWORD written = 0;
+        if (!::WriteFile(h.get(), buffer.data(), static_cast<DWORD>(n), &written, nullptr) || written != n) ThrowWin32(L"Cannot write " + dest);
+        left -= n;
+    }
+    if (hash.Finish() != it->sha256) throw Failure(ErrorCode::PackageCorrupt, L"Checksum mismatch for " + rel);
+}
+
+bool InUse(DWORD e) { return e == ERROR_SHARING_VIOLATION || e == ERROR_LOCK_VIOLATION || e == ERROR_USER_MAPPED_FILE || e == ERROR_ACCESS_DENIED; }
+
+// Covered by an item of the new set: the same item, or inside a tree the new set writes.
+bool StillWritten(const RegistryItem& old, const std::vector<RegistryItem>& now) {
+    for (const auto& n : now) {
+        if (SameRegistryItem(old, n)) return true;
+        if (n.tree && (EqualsIgnoreCase(old.key, n.key) || StartsWithIgnoreCase(old.key, n.key + L"\\"))) return true;
+        if (old.tree && (EqualsIgnoreCase(n.key, old.key) || StartsWithIgnoreCase(n.key, old.key + L"\\"))) return true;
+    }
+    return false;
+}
+
 bool ProbeWritable(const std::wstring& dir) {
     std::wstring probe = dir;
     while (!probe.empty() && !fs::IsDirectory(probe)) {
@@ -325,6 +365,10 @@ bool Engine::SanitizeOptions(InstallOptions& o) const {
     for (const auto& opt : pkg_.ext.options) {
         if (opt.required) choices[opt.id] = true;  // locked on, whatever the UI or /option says
     }
+    for (const auto& [id, value] : o.inputs) {
+        const InputDef* input = pkg_.ext.FindInput(id);
+        if (!input || !CheckInputValue(*input, value).empty()) return false;  // unknown input or a value it does not accept
+    }
     if (pkg_.variants.empty()) o.variant.clear();
     else if (o.variant.empty()) o.variant = pkg_.DefaultVariant();
     else if (!pkg_.FindVariant(o.variant)) return false;
@@ -401,6 +445,7 @@ void Engine::RecoverPending(Scope scope) const {
             const auto stats = Rollback(entries, dir, scope, pkg_.appId);
             log::Info(L"Recovery rollback: %u undone, %u failed", stats.undone, stats.failed);
             clean = stats.failed == 0;
+            if (!clean) RewriteJournal(path::Join(workDir, L"journal.jsonl"), stats.remaining);
         }
     }
     if (clean && fs::IsDirectory(workDir) && !fs::IsLinkLike(workDir)) fs::DeleteTree(workDir);
@@ -460,6 +505,7 @@ void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup,
             if (!dirIsSafe(path::Parent(target))) throw Failure(ErrorCode::UnsafePath, L"Link inside the install directory: " + f.path);
 
             bool discard = false;  // preserved user data that already exists: decode (to verify) but keep the user's copy
+            std::wstring writePath = target;  // a file still in use is written next to it and moved over it at the next restart
             const DWORD attrs = fs::Attributes(target);
             if (attrs != INVALID_FILE_ATTRIBUTES) {
                 if (f.preserve) {
@@ -472,13 +518,18 @@ void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup,
                     fs::CreateDirectories(path::Parent(saved));
                     journal.Backup(target, saved);
                     if (attrs & FILE_ATTRIBUTE_READONLY) ::SetFileAttributesW(path::Long(target).c_str(), attrs & ~FILE_ATTRIBUTE_READONLY);
-                    if (const DWORD e = fs::Move(target, saved)) ThrowMove(e, L"Cannot replace " + target);
+                    if (const DWORD e = fs::Move(target, saved)) {
+                        if (!InUse(e) || !pkg_.ext.rebootForLockedFiles || !security::IsElevated()) ThrowMove(e, L"Cannot replace " + target);
+                        writePath = target + L".fsetup-" + RandomToken().substr(0, 8);
+                        pendingReplace_.emplace_back(writePath, target);
+                        log::Warn(L"%s is in use; it is replaced at the next restart", target.c_str());
+                    }
                 }
             }
             UniqueHandle h;
             if (!discard) {
-                journal.Place(target);
-                h.reset(::CreateFileW(path::Long(target).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                journal.Place(writePath);
+                h.reset(::CreateFileW(path::Long(writePath).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
                                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
                 if (!h) ThrowWin32(L"Cannot create " + target);
                 if (f.size > (8u << 20)) {
@@ -511,7 +562,7 @@ void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup,
             }
             h.reset();
             if (hash.Finish() != f.sha256) throw Failure(ErrorCode::PackageCorrupt, L"Checksum mismatch for " + f.path);
-            if (!discard && f.attributes) ::SetFileAttributesW(path::Long(target).c_str(), f.attributes);
+            if (!discard && f.attributes) ::SetFileAttributesW(path::Long(writePath).c_str(), f.attributes);
             recordFiles.push_back({f.path, f.size, f.sha256, f.preserve});
             if (!discard && faultAfter_ != 0 && ++placed >= faultAfter_) throw Failure(ErrorCode::IoError, L"Injected fault (test hook)");
         }
@@ -520,6 +571,58 @@ void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup,
     }
 }
 void Engine::WriteUninstaller(const std::wstring& dest) const {
+    if (!pkg_.uninstallerImage.header.empty()) {
+        try {
+            WriteSignedUninstaller(dest);
+            return;
+        } catch (const Failure& f) {
+            log::Warn(L"The signed uninstaller could not be reproduced (%s); writing an unsigned one", f.detail().c_str());
+        }
+    }
+    WriteUninstallerFile(dest, nullptr);
+}
+
+void Engine::WriteSignedUninstaller(const std::wstring& dest) const {
+    // Same bytes as the builder signed: stub + front-end streams + the stored header + footer. Then the checksum and the
+    // security directory are set and the certificate table is appended; the result must hash to the recorded value.
+    WriteUninstallerFile(dest, &pkg_.uninstallerImage.header);
+    UniqueHandle h(::CreateFileW(path::Long(dest).c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!h) ThrowWin32(L"Cannot open the uninstaller");
+    LARGE_INTEGER size{};
+    if (!::GetFileSizeEx(h.get(), &size) || size.QuadPart > 0xFFFFFFFFLL || size.QuadPart % 8 != 0) throw Failure(ErrorCode::Internal, L"Unexpected uninstaller size");
+    uint8_t head[4096] = {};
+    DWORD got = 0;
+    if (!::ReadFile(h.get(), head, sizeof(head), &got, nullptr) || got < 512) ThrowWin32(L"Cannot read the uninstaller");
+    const uint32_t peOffset = *reinterpret_cast<const uint32_t*>(head + 0x3C);
+    if (peOffset < 0x40 || peOffset > got - 24 - 2 - 160 || memcmp(head + peOffset, "PE\0\0", 4) != 0) throw Failure(ErrorCode::Internal, L"Uninstaller is not a PE file");
+    const uint32_t optional = peOffset + 24;
+    const uint16_t magic = *reinterpret_cast<const uint16_t*>(head + optional);
+    const uint32_t security = optional + (magic == 0x20B ? 112u : 96u) + 4 * 8;
+    if ((magic != 0x20B && magic != 0x10B) || security + 8 > got) throw Failure(ErrorCode::Internal, L"Unknown PE optional header");
+    const uint32_t checksum = pkg_.uninstallerImage.checksum;
+    const uint32_t dir[2] = {static_cast<uint32_t>(size.QuadPart), static_cast<uint32_t>(pkg_.uninstallerImage.certificates.size())};
+    const auto writeAt = [&](uint64_t offset, const void* data, DWORD bytes) {
+        LARGE_INTEGER at{};
+        at.QuadPart = static_cast<LONGLONG>(offset);
+        DWORD written = 0;
+        if (!::SetFilePointerEx(h.get(), at, nullptr, FILE_BEGIN) || !::WriteFile(h.get(), data, bytes, &written, nullptr) || written != bytes) {
+            ThrowWin32(L"Cannot write the uninstaller");
+        }
+    };
+    writeAt(optional + 64, &checksum, sizeof(checksum));
+    writeAt(security, dir, sizeof(dir));
+    writeAt(static_cast<uint64_t>(size.QuadPart), pkg_.uninstallerImage.certificates.data(), static_cast<DWORD>(pkg_.uninstallerImage.certificates.size()));
+    ::FlushFileBuffers(h.get());
+    LARGE_INTEGER start{};
+    ::SetFilePointerEx(h.get(), start, nullptr, FILE_BEGIN);
+    Sha256 hash;
+    std::vector<uint8_t> buffer(1u << 20);
+    while (::ReadFile(h.get(), buffer.data(), static_cast<DWORD>(buffer.size()), &got, nullptr) && got > 0) hash.Update(buffer.data(), got);
+    if (hash.Finish() != pkg_.uninstallerImage.sha256) throw Failure(ErrorCode::Internal, L"checksum mismatch");
+    log::Info(L"Wrote the signed uninstaller");
+}
+
+void Engine::WriteUninstallerFile(const std::wstring& dest, const std::string* fixedHeader) const {
     UniqueHandle h(::CreateFileW(path::Long(dest).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                                  FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!h) ThrowWin32(L"Cannot create uninstaller");
@@ -574,7 +677,7 @@ void Engine::WriteUninstaller(const std::wstring& dest) const {
         header.set("frontend", frontend);
     }
 
-    const std::string json = json::Serialize(header);
+    const std::string json = fixedHeader ? *fixedHeader : json::Serialize(header);
     archive::Footer footer{};
     memcpy(footer.magic, archive::kMagic, sizeof(footer.magic));
     footer.version = archive::kFormatVersion;
@@ -590,6 +693,171 @@ void Engine::WriteUninstaller(const std::wstring& dest) const {
     write(&footer, sizeof(footer));
     ::FlushFileBuffers(h.get());
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// 1.2 helpers
+
+std::map<std::string, std::wstring> Engine::EffectiveInputs(const InstallOptions& o, const InstallRecord* previous) const {
+    for (const auto& [id, value] : o.inputs) {
+        if (!pkg_.ext.FindInput(id)) throw Failure(ErrorCode::InvalidArguments, L"Unknown input " + Utf8ToWide(id));
+    }
+    std::map<std::string, std::wstring> values;
+    for (const auto& input : pkg_.ext.inputs) {
+        std::wstring value = input.defaultValue;
+        if (previous) {
+            if (auto it = previous->inputs.find(input.id); it != previous->inputs.end()) value = it->second;
+        }
+        if (auto it = o.inputs.find(input.id); it != o.inputs.end()) value = it->second;
+        if (const std::wstring problem = CheckInputValue(input, value); !problem.empty()) {
+            throw Failure(ErrorCode::InvalidArguments, input.label.Get(L"en-US", Utf8ToWide(input.id)) + L": " + problem);
+        }
+        values[input.id] = value;
+    }
+    return values;
+}
+
+std::vector<Engine::ShortcutPlan> Engine::PlanShortcuts(const std::wstring& dir, Scope scope, bool startMenu, bool desktop,
+                                                        const std::map<std::string, bool>& choices, const PlaceholderContext& ctx) const {
+    std::vector<ShortcutPlan> plans;
+    const auto folders = ShortcutFolders(scope);  // [0] = Start menu programs, [1] = desktop
+    const auto add = [&](std::wstring link, ShortcutSpec spec) {
+        if (!IsAllowedShortcutPath(link, scope)) {
+            log::Warn(L"Shortcut %s is not in an allowed folder; skipped", link.c_str());
+            return;
+        }
+        // A later definition with the same path wins.
+        plans.erase(std::remove_if(plans.begin(), plans.end(), [&](const ShortcutPlan& p) { return EqualsIgnoreCase(p.link, link); }), plans.end());
+        plans.push_back({std::move(link), std::move(spec)});
+    };
+    if (!pkg_.mainExecutable.empty()) {
+        ShortcutSpec main;
+        main.target = path::Join(dir, pkg_.mainExecutable);
+        main.workingDir = dir;
+        main.description = pkg_.description;
+        main.appUserModelId = pkg_.ext.appUserModelId;
+        main.toastActivatorClsid = pkg_.ext.toastActivatorClsid;
+        const std::wstring linkName = ShortcutName(pkg_);
+        // install.startMenuFolder: "Programs\<Folder>\<App>.lnk", like installers that create a program group.
+        const std::wstring startFolder = folders[0].empty() || pkg_.ext.startMenuFolder.empty() ? folders[0] : path::Join(folders[0], pkg_.ext.startMenuFolder);
+        if (startMenu && !startFolder.empty()) add(path::Join(startFolder, linkName), main);
+        if (desktop && !folders[1].empty()) add(path::Join(folders[1], linkName), main);
+    }
+    for (const auto& s : pkg_.ext.shortcuts) {
+        if (!OptionSelected(pkg_.ext, s.ifOption, choices)) continue;
+        std::wstring folder;
+        switch (s.location) {
+            case ShortcutDef::Location::StartMenu: folder = folders[0].empty() || s.folder.empty() ? folders[0] : path::Join(folders[0], s.folder); break;
+            case ShortcutDef::Location::Desktop: folder = folders[1]; break;
+            case ShortcutDef::Location::Startup: folder = StartupFolder(scope); break;
+        }
+        if (folder.empty()) continue;
+        ShortcutSpec spec;
+        spec.target = path::Join(dir, s.target);
+        spec.arguments = QuoteArguments(s.args, ctx);
+        spec.workingDir = s.workingDir.empty() ? path::Parent(spec.target) : path::Join(dir, s.workingDir);
+        spec.description = s.description.empty() ? pkg_.description : s.description;
+        if (!s.icon.empty()) spec.icon = path::Join(dir, s.icon);
+        spec.iconIndex = s.iconIndex;
+        spec.appUserModelId = s.appUserModelId;
+        add(path::Join(folder, s.name + L".lnk"), std::move(spec));
+    }
+    return plans;
+}
+
+void Engine::WriteConfigFiles(bool insideInstallDir, const std::wstring& dir, const std::map<std::string, bool>& choices, const PlaceholderContext& ctx,
+                              Journal* journal, const std::wstring& backup, std::vector<RecordFile>* recordFiles, Outcome& out) const {
+    int index = 0;
+    for (const auto& c : pkg_.ext.configFiles) {
+        if (!OptionSelected(pkg_.ext, c.ifOption, choices)) continue;
+        const bool inside = c.path.empty() || c.path.front() != L'{';
+        if (inside != insideInstallDir) continue;
+        if (!inside) {
+            // App data folders: after the commit, not journaled; a failure leaves the app installed with a warning.
+            const std::wstring file = ExpandDataTemplate(c.path);
+            try {
+                if (file.empty()) throw Failure(ErrorCode::UnsafePath, L"invalid path " + c.path);
+                WriteConfigFile(c, file, ctx);
+            } catch (const Failure& f) {
+                out.warnings.push_back(L"Could not write " + c.path + L": " + f.detail());
+            }
+            continue;
+        }
+        const std::wstring file = path::Join(dir, c.path);
+        if (!path::IsStrictlyUnder(file, dir) || fs::HasLinkInPath(path::Parent(file))) throw Failure(ErrorCode::UnsafePath, L"Config file outside the install folder: " + c.path);
+        if (fs::Exists(file)) {
+            const std::wstring saved = path::Join(backup, L"~config" + std::to_wstring(index++) + L".bak");
+            journal->Backup(file, saved);
+            if (!::CopyFileW(path::Long(file).c_str(), path::Long(saved).c_str(), TRUE)) ThrowWin32(L"Cannot back up " + file);
+        } else {
+            journal->Place(file);
+        }
+        WriteConfigFile(c, file, ctx);
+        if (recordFiles) {
+            // A payload file that was edited is recorded as it is now (Repair compares against this).
+            for (auto& rf : *recordFiles) {
+                if (!EqualsIgnoreCase(rf.path, c.path)) continue;
+                const std::vector<uint8_t> bytes = fs::ReadAll(file, 64u << 20);
+                rf.size = bytes.size();
+                rf.sha256 = Sha256::Of(bytes);
+            }
+        }
+    }
+}
+
+namespace {
+
+// install.lockedFiles "reboot": hands the files still in use to Windows to replace or delete at the next restart.
+void ScheduleRebootOperations(const std::vector<std::pair<std::wstring, std::wstring>>& replace, const std::vector<std::wstring>& remove,
+                              const std::wstring& root, Outcome& out) {
+    for (const auto& [from, to] : replace) {
+        if (::MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_DELAY_UNTIL_REBOOT)) {
+            out.rebootRequired = true;
+        } else {
+            out.warnings.push_back(L"Could not schedule " + to + L" to be replaced at the next restart");
+        }
+    }
+    std::vector<std::wstring> dirs;
+    for (const auto& file : remove) {
+        if (!::MoveFileExW(file.c_str(), nullptr, MOVEFILE_DELAY_UNTIL_REBOOT)) continue;
+        out.rebootRequired = true;
+        for (std::wstring d = path::Parent(file); !d.empty() && path::IsSameOrUnder(d, root); d = path::Parent(d)) {
+            if (std::none_of(dirs.begin(), dirs.end(), [&](const std::wstring& x) { return EqualsIgnoreCase(x, d); })) dirs.push_back(d);
+            if (EqualsIgnoreCase(d, root)) break;
+        }
+    }
+    // Folders after their files, deepest first (removed at boot only if they are empty by then).
+    std::sort(dirs.begin(), dirs.end(), [](const std::wstring& a, const std::wstring& b) { return a.size() > b.size(); });
+    for (const auto& d : dirs) ::MoveFileExW(d.c_str(), nullptr, MOVEFILE_DELAY_UNTIL_REBOOT);
+    if (out.rebootRequired) log::Warn(L"Some files are replaced or removed at the next restart");
+}
+
+std::vector<EnvironmentItem> PlannedEnvironment(const Package& pkg, const std::map<std::string, bool>& choices, const PlaceholderContext& ctx) {
+    std::vector<EnvironmentItem> items;
+    for (const auto& d : pkg.ext.environment) {
+        if (OptionSelected(pkg.ext, d.ifOption, choices)) items.push_back({d.name, ExpandPlaceholders(d.value, ctx)});
+    }
+    return items;
+}
+
+std::map<std::string, std::wstring> Remembered(const Package& pkg, const std::map<std::string, std::wstring>& inputs) {
+    std::map<std::string, std::wstring> out;
+    for (const auto& i : pkg.ext.inputs) {
+        if (i.remember && i.type != InputDef::Type::Password) {
+            if (auto it = inputs.find(i.id); it != inputs.end()) out[i.id] = it->second;
+        }
+    }
+    return out;
+}
+
+std::vector<FirewallRule> PlannedFirewall(const Package& pkg, const std::wstring& dir, const std::map<std::string, bool>& choices) {
+    std::vector<FirewallRule> rules;
+    for (const auto& f : pkg.ext.firewall) {
+        if (OptionSelected(pkg.ext, f.ifOption, choices)) rules.push_back({f, path::Join(dir, f.program)});
+    }
+    return rules;
+}
+
+}  // namespace
 
 // ---------------------------------------------------------------------------------------------------------------
 // Actions
@@ -620,17 +888,12 @@ void Engine::RunCloseCommand(const std::wstring& dir) const {
     const ActionResult r = RunProgram(exe, pkg_.ext.closeCommandArgs, 30);
     if (!r.ok) log::Warn(L"%s", r.detail.c_str());
 }
-void Engine::RunActions(Action::When when, const std::wstring& dir, const std::map<std::string, bool>& choices, Outcome& out) const {
+void Engine::RunActions(Action::When when, const std::wstring& dir, const std::map<std::string, bool>& choices, Outcome& out,
+                        const std::set<std::string>* onlyOptions, const PlaceholderContext* ctx) const {
     for (const Action& a : pkg_.ext.actions) {
         if (a.when != when) continue;
-        if (!a.ifOption.empty()) {
-            bool selected = false, required = false;
-            for (const auto& o : pkg_.ext.options) {
-                if (o.id == a.ifOption) selected = o.defaultValue, required = o.required;
-            }
-            if (auto it = choices.find(a.ifOption); it != choices.end() && !required) selected = it->second;
-            if (!selected) continue;
-        }
+        if (onlyOptions && (a.ifOption.empty() || !onlyOptions->count(a.ifOption))) continue;
+        if (!OptionSelected(pkg_.ext, a.ifOption, choices)) continue;
         if (a.skipIfInstalled && RegistryVersionAtLeast(*a.skipIfInstalled)) {
             log::Info(L"Skipping %s: the required version is already installed", a.run.c_str());
             continue;
@@ -643,12 +906,18 @@ void Engine::RunActions(Action::When when, const std::wstring& dir, const std::m
         const auto succeeded = [&](const ActionResult& res) {
             return res.ok && std::find(a.successExitCodes.begin(), a.successExitCodes.end(), res.exitCode) != a.successExitCodes.end();
         };
-        ActionResult r = RunProgram(exe, a.args, a.timeoutSeconds);
+        const auto expand = [&](std::vector<std::wstring> args) {
+            if (ctx) {
+                for (auto& x : args) x = ExpandPlaceholders(x, *ctx);
+            }
+            return args;
+        };
+        ActionResult r = RunProgram(exe, expand(a.args), a.timeoutSeconds, false, true);
         if (!succeeded(r) && a.fallbackArgs) {
             // e.g. a driver installer whose silent mode failed: give the user its own (visible) UI.
             log::Warn(L"%s did not succeed (%s); retrying with its fallback arguments", a.run.c_str(),
                       r.ok ? Printf(L"exit code %lld", static_cast<long long>(r.exitCode)).c_str() : r.detail.c_str());
-            r = RunProgram(exe, *a.fallbackArgs, 1800, true);
+            r = RunProgram(exe, expand(*a.fallbackArgs), 1800, true, true);
         }
         if (!succeeded(r) && !a.fallbackRunValue.empty()) {
             if (WriteRunValue(a.fallbackRunValue, exe, a.fallbackRunArgs)) {
@@ -680,6 +949,9 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
     std::wstring dir, workDir;
     bool pendingSet = false;
     Existing existing;
+    RestartManagerSession restart;  // programs closed because they used the app's files are restarted afterwards
+    pendingReplace_.clear();
+    pendingDelete_.clear();
 
     variant_ = pkg_.variants.empty() ? std::string() : options.variant.empty() ? pkg_.DefaultVariant() : options.variant;
     try {
@@ -748,17 +1020,35 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
                     throw Failure(ErrorCode::IoError, L"Cannot create a download folder", e);
                 }
             }
+            // Keep the installer's own file name: some installers behave differently when renamed.
+            const std::wstring dest = path::Join(downloadDir, Printf(L"%zu-", downloaded.size() + 1) +
+                                                                 (req->bundled.empty() ? std::wstring(L"setup.exe") : path::FileName(req->bundled)));
+            if (!req->bundled.empty()) {
+                // Microsoft's installer stored in the package (redist set): decoded and verified, never installed.
+                rep.Set(State::Preparing, -1, req->name);
+                log::Info(L"Extracting the bundled installer of %s", req->name.c_str());
+                ExtractSetFile(container_, pkg_.redist, req->bundled, dest);
+                downloaded[req] = dest;
+                continue;
+            }
             rep.Set(State::Downloading, 0.0, req->name);
-            const std::wstring dest = path::Join(downloadDir, Printf(L"prerequisite-%zu.exe", downloaded.size() + 1));
             std::wstring error;
             log::Info(L"Downloading %s from %S", req->name.c_str(), req->downloadUrl.c_str());
-            const bool ok = Download(req->downloadUrl, dest, req->downloadSha256, req->downloadSize, cancel,
-                                     [&](uint64_t done, uint64_t total) {
-                                         rep.Update(total ? static_cast<double>(done) / static_cast<double>(total) : -1.0,
-                                                    req->name + L" (" + FormatBytes(done) + L")");
-                                     }, error);
+            const bool ok = DownloadFile(req->downloadUrl, dest, req->hasDownloadSha256 ? &req->downloadSha256 : nullptr, req->downloadSize, cancel,
+                                         [&](uint64_t done, uint64_t total) {
+                                             rep.Update(total ? static_cast<double>(done) / static_cast<double>(total) : -1.0,
+                                                        req->name + L" (" + FormatBytes(done) + L")");
+                                         }, error);
             ThrowIfCancelled(cancel);
             if (!ok) throw Failure(ErrorCode::PrerequisiteMissing, req->name + L": " + error);
+            if (!req->downloadSigner.empty()) {
+                // Vendor links that always serve the newest installer are pinned by their signature, not by a hash.
+                const std::wstring signer = archive::TrustedSignerName(dest);
+                if (signer != req->downloadSigner) {
+                    throw Failure(ErrorCode::PrerequisiteMissing, req->name + L": the download is not signed by " + req->downloadSigner +
+                                                                  (signer.empty() ? std::wstring(L" (no trusted signature)") : L" (signed by " + signer + L")"));
+                }
+            }
             downloaded[req] = dest;
         }
 
@@ -773,6 +1063,10 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
                 log::Warn(L"Previous install record unusable, files of the old version may remain: %s", f.detail().c_str());
             }
         }
+        const std::map<std::string, std::wstring> inputs = EffectiveInputs(options, oldRecord ? &*oldRecord : nullptr);
+        const std::wstring mainExe = pkg_.mainExecutable.empty() ? std::wstring() : path::Join(dir, pkg_.mainExecutable);
+        const PlaceholderContext ctx{dir, mainExe, pkg_.version, pkg_.appId, &inputs};
+        const bool machineAdmin = scope == Scope::Machine && security::IsElevated();
         ThrowIfCancelled(cancel);
 
         // ---- Preparing --------------------------------------------------------------------------------------
@@ -822,6 +1116,42 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         const std::wstring backup = path::Join(workDir, L"b-" + RandomToken().substr(0, 10));
         fs::CreateDirectories(backup);
 
+        std::vector<std::wstring> wasRunning;  // services that ran before this update
+        if (existing.product) {
+            // The app's services are stopped before their files are replaced (a rollback starts them again).
+            std::vector<std::wstring> services;
+            for (const auto& s : pkg_.ext.services) services.push_back(s.name);
+            if (oldRecord) services.insert(services.end(), oldRecord->services.begin(), oldRecord->services.end());
+            for (const auto& name : services) {
+                if (!machineAdmin || !ServiceRunning(name) ||
+                    std::any_of(wasRunning.begin(), wasRunning.end(), [&](const std::wstring& n) { return EqualsIgnoreCase(n, name); })) {
+                    continue;
+                }
+                journal->ServiceStopped(name);
+                wasRunning.push_back(name);
+                if (!StopServiceByName(name, 30000)) log::Warn(L"Service %s could not be stopped", name.c_str());
+            }
+            // Other programs that use files about to be replaced (Explorer extensions, editors, the app itself).
+            if (pkg_.ext.restartManager) {
+                std::vector<std::wstring> files;
+                std::unordered_set<std::wstring> seen;
+                const auto addFile = [&](const std::wstring& rel) {
+                    const std::wstring f = path::Join(dir, rel);
+                    if (seen.insert(ToLower(f)).second && fs::Exists(f)) files.push_back(f);
+                };
+                for (const auto& f : pkg_.payload.files) {
+                    if (Selected(f)) addFile(f.path);
+                }
+                if (oldRecord) {
+                    for (const auto& f : oldRecord->files) addFile(f.path);
+                }
+                addFile(kUninstallerName);
+                if (restart.Start(files)) {
+                    for (const auto& name : restart.Shutdown()) log::Warn(L"%s still uses the app's files", name.c_str());
+                }
+            }
+        }
+
         // ---- Installing (decode + verify + place, journaled) ------------------------------------------------
         rep.Set(State::Installing, 0.02);
         std::vector<RecordFile> recordFiles;
@@ -848,7 +1178,10 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
                 const std::wstring saved = path::Join(backup, f.path);
                 fs::CreateDirectories(path::Parent(saved));
                 journal->Backup(target, saved);
-                if (const DWORD e = fs::Move(target, saved)) ThrowMove(e, L"Cannot remove obsolete file " + target);
+                if (const DWORD e = fs::Move(target, saved)) {
+                    if (!InUse(e) || !pkg_.ext.rebootForLockedFiles || !security::IsElevated()) ThrowMove(e, L"Cannot remove obsolete file " + target);
+                    pendingDelete_.push_back(target);
+                }
             }
         }
         // install.cleanup.removeFiles: leftovers no install record knows about, e.g. the uninstaller of the Inno Setup
@@ -885,27 +1218,15 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         journal->Place(uninstaller);
         if (const DWORD e = fs::Move(uninstallerNew, uninstaller)) ThrowMove(e, L"Cannot place the uninstaller");
 
-        // Shortcuts.
-        std::vector<std::wstring> shortcuts;
-        const std::wstring mainExe = pkg_.mainExecutable.empty() ? std::wstring() : path::Join(dir, pkg_.mainExecutable);
+        // Shortcuts: the app's own (offers) and shortcuts[]; those of the previous version that are no longer wanted go.
         out.mainExecutable = mainExe;
-        const auto folders = ShortcutFolders(scope);  // [0] = Start menu programs, [1] = desktop
-        const auto wantShortcut = [&](Offer offer, bool chosen) {
-            return offer == Offer::On || (OfferVisible(offer) && chosen);
-        };
-        const bool wantStart = !mainExe.empty() && wantShortcut(pkg_.startMenuShortcut, options.startMenuShortcut);
-        const bool wantDesktop = !mainExe.empty() && wantShortcut(pkg_.desktopShortcut, options.desktopShortcut);
-        const std::wstring linkName = ShortcutName(pkg_);
-        // install.startMenuFolder: "Programs\<Folder>\<App>.lnk", like installers that create a program group.
-        const std::wstring startFolder = folders[0].empty() || pkg_.ext.startMenuFolder.empty() ? folders[0]
-                                                                                                 : path::Join(folders[0], pkg_.ext.startMenuFolder);
-        const std::wstring startLink = startFolder.empty() ? std::wstring() : path::Join(startFolder, linkName);
-        const std::wstring desktopLink = folders[1].empty() ? std::wstring() : path::Join(folders[1], linkName);
-        std::vector<std::wstring> desired;
-        if (wantStart && !startLink.empty()) desired.push_back(startLink);
-        if (wantDesktop && !desktopLink.empty()) desired.push_back(desktopLink);
+        const auto wantShortcut = [&](Offer offer, bool chosen) { return offer == Offer::On || (OfferVisible(offer) && chosen); };
+        const auto plans = PlanShortcuts(dir, scope, wantShortcut(pkg_.startMenuShortcut, options.startMenuShortcut),
+                                         wantShortcut(pkg_.desktopShortcut, options.desktopShortcut), options.choices, ctx);
+        std::vector<std::wstring> shortcuts;
         int linkIndex = 0;
-        for (const auto& link : desired) {
+        for (const auto& plan : plans) {
+            const std::wstring& link = plan.link;
             std::wstring saved;
             if (fs::Exists(link)) {
                 saved = path::Join(backup, L"link" + std::to_wstring(linkIndex++) + L".lnk");
@@ -915,18 +1236,33 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
                 journal->Shortcut(link, L"");
             }
             if (!fs::IsDirectory(path::Parent(link))) fs::CreateDirectories(path::Parent(link));  // a Start menu folder
-            CreateShortcut(link, mainExe, dir, pkg_.description);
+            CreateShortcut(link, plan.spec);
             shortcuts.push_back(link);
         }
         if (oldRecord) {
             for (const auto& old : oldRecord->shortcuts) {
-                const bool kept = std::any_of(desired.begin(), desired.end(), [&](const std::wstring& d) { return EqualsIgnoreCase(d, old); });
+                const bool kept = std::any_of(shortcuts.begin(), shortcuts.end(), [&](const std::wstring& d) { return EqualsIgnoreCase(d, old); });
                 if (kept || !fs::Exists(old)) continue;
                 const std::wstring saved = path::Join(backup, L"link" + std::to_wstring(linkIndex++) + L".lnk");
                 journal->Backup(old, saved);
                 fs::Move(old, saved);
             }
         }
+
+        // Registry: file types, URL schemes, App Paths and the package's registry values (journaled); what the previous
+        // version wrote and this one no longer does is removed.
+        RegistryWriter writer(RootFor(scope), journal.get());
+        const RegistrationContext rctx{&pkg_, dir, scope, &options.choices, ctx};
+        const std::vector<RegistryItem> registry = ApplyRegistration(rctx, writer);
+        if (oldRecord) {
+            std::vector<RegistryItem> obsolete;
+            for (const auto& old : oldRecord->registry) {
+                if (!StillWritten(old, registry)) obsolete.push_back(old);
+            }
+            RemoveRegistryItems(obsolete, writer);
+        }
+        // Config files in the install folder (journaled; edited payload files are recorded with their new hash).
+        WriteConfigFiles(true, dir, options.choices, ctx, journal.get(), backup, &recordFiles, out);
 
         // Install record.
         InstallRecord record;
@@ -943,6 +1279,16 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         record.directories = ImpliedDirectories(relFiles, pkg_.payload.directories);
         record.shortcuts = shortcuts;
         record.choices = options.choices;
+        record.inputs = Remembered(pkg_, inputs);
+        record.sourcePackage = path::ModulePath();
+        record.sourcePackageSha256 = container_.HeaderDigestHex();
+        record.registry = registry;
+        record.environment = PlannedEnvironment(pkg_, options.choices, ctx);
+        const std::vector<FirewallRule> firewall = machineAdmin ? PlannedFirewall(pkg_, dir, options.choices) : std::vector<FirewallRule>();
+        if (machineAdmin) {
+            for (const auto& svc : pkg_.ext.services) record.services.push_back(svc.name);
+            record.firewall = !firewall.empty();
+        }
         record.createdRoot = std::any_of(created.begin(), created.end(), [&](const std::wstring& c) { return EqualsIgnoreCase(c, dir); }) ||
                              (oldRecord && oldRecord->createdRoot);
         const std::string recordJson = json::Serialize(RecordToJson(record), 2);
@@ -961,6 +1307,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         arp.installLocation = dir;
         arp.uninstallString = L"\"" + uninstaller + L"\" /uninstall";
         arp.quietUninstallString = L"\"" + uninstaller + L"\" /uninstall /quiet";
+        arp.modifyPath = L"\"" + uninstaller + L"\" /modify";
         arp.urlInfoAbout = pkg_.website;
         arp.comments = pkg_.description;
         arp.variant = Utf8ToWide(variant_);
@@ -978,6 +1325,9 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         if (!installLater.empty()) rep.Set(State::InstallingPrerequisites, -1, {}, false);
         for (const Requirement* req : installLater) {
             const std::wstring exe = !req->installer.empty() ? path::Join(dir, req->installer) : downloaded[req];
+            if (!req->installer.empty() && (!path::IsStrictlyUnder(exe, dir) || fs::HasLinkInPath(path::Parent(exe)))) {
+                throw Failure(ErrorCode::UnsafePath, L"Prerequisite installer is not a file inside the install directory: " + req->installer);
+            }
             rep.Update(-1, req->name);
             log::Info(L"Installing prerequisite %s from %s", req->name.c_str(), exe.c_str());
             const ActionResult r = RunProgram(exe, req->installerArgs, 1800);
@@ -1011,7 +1361,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         if (security::IsElevated()) {
             for (const auto& a : pkg_.ext.ngen) RunNGen(path::Join(dir, a), true);  // queued: compiled when the PC is idle
         }
-        RunActions(Action::When::AfterInstall, dir, options.choices, out);
+        RunActions(Action::When::AfterInstall, dir, options.choices, out, nullptr, &ctx);
 
         // ---- Finalizing: point of no return -----------------------------------------------------------------
         rep.Set(State::Finalizing, 0.99, {}, false);
@@ -1033,6 +1383,36 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
             RemoveEmptyDirectories(dir, ImpliedDirectories(oldFiles, oldRecord->directories));
             for (const auto& old : oldRecord->shortcuts) RemoveEmptyShortcutFolder(old, scope);  // startMenuFolder changed
         }
+        // After the commit (like PATH): environment variables, services, firewall rules, config files in app data
+        // folders, files in use that are replaced at the next restart. Failures here are warnings.
+        ApplyEnvironment(rctx, oldRecord ? oldRecord->environment : std::vector<EnvironmentItem>(), out.warnings);
+        if (machineAdmin) {
+            for (const auto& svc : pkg_.ext.services) {
+                std::wstring error;
+                if (!InstallService(svc, path::Join(dir, svc.run), error)) {
+                    out.warnings.push_back(error);
+                    continue;
+                }
+                const bool ranBefore = std::any_of(wasRunning.begin(), wasRunning.end(), [&](const std::wstring& n) { return EqualsIgnoreCase(n, svc.name); });
+                if ((svc.start || ranBefore) && svc.startType != SERVICE_DISABLED && !StartServiceByName(svc.name, &error)) {
+                    out.warnings.push_back(L"Service " + svc.name + L" did not start: " + error);
+                }
+            }
+            if (oldRecord) {
+                for (const auto& name : oldRecord->services) {
+                    const bool kept = std::any_of(pkg_.ext.services.begin(), pkg_.ext.services.end(), [&](const ServiceDef& d) { return EqualsIgnoreCase(d.name, name); });
+                    if (!kept) DeleteServiceByName(name);
+                }
+            }
+            if (!firewall.empty() || (oldRecord && oldRecord->firewall)) {
+                std::wstring error;
+                if (!ReplaceFirewallRules(L"FluentSetup:" + pkg_.appId, firewall, error)) out.warnings.push_back(error);
+            }
+        }
+        WriteConfigFiles(false, dir, options.choices, ctx, nullptr, {}, nullptr, out);
+        if (!registry.empty() || (oldRecord && !oldRecord->registry.empty())) NotifyAssociationsChanged();
+        ScheduleRebootOperations(pendingReplace_, pendingDelete_, dir, out);
+        restart.Restart();
         journal.reset();
         if (!fs::DeleteTree(workDir)) log::Warn(L"Could not fully remove %s", workDir.c_str());
         ClearPending(pkg_.appId, scope);
@@ -1060,12 +1440,14 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
             log::Info(L"Rollback: %u undone, %u failed", stats.undone, stats.failed);
             out.rolledBack = stats.failed == 0;
             if (stats.failed == 0) fs::DeleteTree(workDir);
+            else RewriteJournal(path::Join(workDir, L"journal.jsonl"), stats.remaining);
             if (fs::IsDirectory(dir) && fs::IsDirectoryEmpty(dir)) ::RemoveDirectoryW(path::Long(dir).c_str());
         }
     } else {
         out.rolledBack = true;  // nothing was changed yet
     }
     if (pendingSet && out.rolledBack) ClearPending(pkg_.appId, scope);
+    restart.Restart();  // the previous version is back in place
     rep.Set(State::Failed, -1, {}, false);
     return out;
 }
@@ -1081,6 +1463,9 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
     std::wstring dir, workDir;
     Scope scope = Scope::User;
     bool pendingSet = false;
+    RestartManagerSession restart;
+    pendingReplace_.clear();
+    pendingDelete_.clear();
 
     try {
         rep.Set(State::Validating, -1);
@@ -1124,9 +1509,28 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
 
         RunCloseCommand(dir);
         for (const auto& still : CloseProcesses(pkg_.ext.closeProcesses)) log::Warn(L"%s could not be closed", still.c_str());
-        RunActions(Action::When::BeforeUninstall, dir, record.choices, out);
+        const std::wstring mainExe = record.mainExecutable.empty() ? std::wstring() : path::Join(dir, record.mainExecutable);
+        const PlaceholderContext ctx{dir, mainExe, record.version, pkg_.appId, &record.inputs};
+        RunActions(Action::When::BeforeUninstall, dir, record.choices, out, nullptr, &ctx);
         if (security::IsElevated()) {
             for (const auto& a : pkg_.ext.ngen) RunNGen(path::Join(dir, a), false);  // drop native images before the files go
+        }
+        const bool machineAdmin = scope == Scope::Machine && security::IsElevated();
+        for (const auto& name : record.services) {
+            if (!machineAdmin || !ServiceRunning(name)) continue;
+            journal->ServiceStopped(name);
+            if (!StopServiceByName(name, 30000)) log::Warn(L"Service %s could not be stopped", name.c_str());
+        }
+        if (pkg_.ext.restartManager) {
+            // Programs that hold the app's files open (not uninstall.exe: the original uninstaller still waits on it).
+            std::vector<std::wstring> files;
+            for (const auto& f : record.files) {
+                const std::wstring t = path::Join(dir, f.path);
+                if (!f.preserve && fs::Exists(t)) files.push_back(t);
+            }
+            if (restart.Start(files)) {
+                for (const auto& name : restart.Shutdown()) log::Warn(L"%s still uses the app's files", name.c_str());
+            }
         }
         rep.Set(State::Removing, 0.0);
         size_t i = 0;
@@ -1153,7 +1557,10 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
             fs::CreateDirectories(path::Parent(saved));
             journal->Backup(target, saved);
             if (attrs & FILE_ATTRIBUTE_READONLY) ::SetFileAttributesW(path::Long(target).c_str(), attrs & ~FILE_ATTRIBUTE_READONLY);
-            if (const DWORD e = fs::Move(target, saved)) ThrowMove(e, L"Cannot remove " + target);
+            if (const DWORD e = fs::Move(target, saved)) {
+                if (!InUse(e) || !pkg_.ext.rebootForLockedFiles || !security::IsElevated()) ThrowMove(e, L"Cannot remove " + target);
+                pendingDelete_.push_back(target);  // deleted at the next restart
+            }
             rep.Update(0.9 * static_cast<double>(i) / static_cast<double>(std::max<size_t>(record.files.size(), 1)), f.path);
         }
         int linkIndex = 0;
@@ -1169,6 +1576,11 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
         ThrowIfCancelled(cancel);
 
         rep.Set(State::Registering, 0.95, {}, false);
+        {
+            // File types, URL schemes, App Paths and registry values the installation wrote (journaled).
+            RegistryWriter writer(RootFor(scope), journal.get());
+            RemoveRegistryItems(record.registry, writer);
+        }
         journal->Registry(SnapshotArp(pkg_.appId, scope));
         DeleteArp(pkg_.appId, scope);
 
@@ -1185,6 +1597,12 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
         for (const auto& link : record.shortcuts) RemoveEmptyShortcutFolder(link, scope);  // install.startMenuFolder
         for (const auto& k : pkg_.ext.cleanup.removeRegistryKeys) DeleteRegistryKey(k);
         for (const auto& rel : pkg_.ext.addToPath) RemoveFromPath(rel.empty() ? dir : path::Join(dir, rel), scope == Scope::Machine);
+        RemoveEnvironment(record.environment, scope == Scope::Machine);
+        if (machineAdmin) {
+            for (const auto& name : record.services) DeleteServiceByName(name);
+            if (record.firewall) RemoveFirewallRules(L"FluentSetup:" + pkg_.appId);
+        }
+        if (!record.registry.empty()) NotifyAssociationsChanged();
         // Elevated leftovers first: their markers may live in the user data removed next.
         if (security::IsElevated() && ElevatedCleanupApplies()) RunElevatedCleanup(out);
         if (removeUserData) {
@@ -1218,6 +1636,7 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
                 } while (!out.leftovers && ::FindNextFileW(f.get(), &fd));
             }
         }
+        ScheduleRebootOperations({}, pendingDelete_, dir, out);
         ::SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, path::Parent(dir).c_str(), nullptr);
         rep.Set(State::Completed, 1.0, {}, false);
         log::Info(L"Uninstall completed");
@@ -1236,13 +1655,16 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
         journal.reset();
         if (!JournalCommitted(entries)) {
             const auto stats = Rollback(entries, dir, scope, pkg_.appId);
+            log::Info(L"Rollback: %u undone, %u failed", stats.undone, stats.failed);
             out.rolledBack = stats.failed == 0;
             if (stats.failed == 0) fs::DeleteTree(workDir);
+            else RewriteJournal(path::Join(workDir, L"journal.jsonl"), stats.remaining);
         }
     } else {
         out.rolledBack = true;
     }
     if (pendingSet && out.rolledBack) ClearPending(pkg_.appId, scope);
+    restart.Restart();
     rep.Set(State::Failed, -1, {}, false);
     return out;
 }
@@ -1251,13 +1673,174 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
 // Modify / verify
 
 Outcome Engine::Modify(const InstallOptions& options, IProgressSink& sink, const std::atomic<bool>& cancel) {
-    (void)options;
-    (void)cancel;
-    Reporter rep(sink);
     Outcome out;
-    out.code = ErrorCode::Failed;
-    out.detail = L"Modify is not available yet";
-    out.rolledBack = true;
+    Reporter rep(sink);
+    ComScope com;
+    std::unique_ptr<Journal> journal;
+    std::wstring dir, workDir;
+    Scope scope = Scope::User;
+    bool pendingSet = false;
+    out.upgrade = true;  // a rollback restores the previous state
+
+    try {
+        rep.Set(State::Validating, -1);
+        const auto product = FindInstalled(pkg_.appId);
+        if (!product) throw Failure(ErrorCode::NotInstalled, L"No installation of " + pkg_.appId + L" was found");
+        scope = product->scope;
+        log::Info(L"Modify %s %s (%s scope)", pkg_.appId.c_str(), product->version.c_str(), ScopeName(scope));
+        if (scope == Scope::Machine && !security::IsElevated()) {
+            throw Failure(ErrorCode::ElevationRequired, L"Changing a per-machine installation requires administrator rights");
+        }
+        RecoverPending(scope);
+        InstallRecord record = LoadVerifiedRecord(*product);
+        dir = record.installDir;
+        out.installDir = dir;
+        if (fs::HasLinkInPath(dir)) throw Failure(ErrorCode::UnsafePath, L"Install directory goes through a link");
+
+        // New choices: the recorded ones, changed by the options (defined ids only); required options stay on.
+        std::map<std::string, bool> choices;
+        for (const auto& opt : pkg_.ext.options) {
+            const auto it = record.choices.find(opt.id);
+            choices[opt.id] = opt.required || (it != record.choices.end() ? it->second : opt.defaultValue);
+        }
+        for (const auto& [id, on] : options.choices) {
+            if (!choices.count(id)) throw Failure(ErrorCode::InvalidArguments, L"Unknown option " + Utf8ToWide(id));
+            choices[id] = on;
+        }
+        std::set<std::string> turnedOn;
+        for (const auto& opt : pkg_.ext.options) {
+            const auto before = record.choices.find(opt.id);
+            if (opt.required) choices[opt.id] = true;
+            if (choices[opt.id] && (before == record.choices.end() || !before->second)) turnedOn.insert(opt.id);
+        }
+        const std::map<std::string, std::wstring> inputs = EffectiveInputs(options, &record);
+        const std::wstring mainExe = record.mainExecutable.empty() ? std::wstring() : path::Join(dir, record.mainExecutable);
+        const PlaceholderContext ctx{dir, mainExe, record.version, pkg_.appId, &inputs};
+        const bool machineAdmin = scope == Scope::Machine && security::IsElevated();
+        ThrowIfCancelled(cancel);
+
+        rep.Set(State::Preparing, -1);
+        SetPending(pkg_.appId, scope, dir);
+        pendingSet = true;
+        workDir = path::Join(dir, kWorkDirName);
+        if (fs::Exists(workDir)) {
+            if (fs::IsLinkLike(workDir)) throw Failure(ErrorCode::UnsafePath, L"Work directory is a link");
+            fs::DeleteTree(workDir);
+        }
+        fs::CreateDirectories(workDir);
+        ::SetFileAttributesW(path::Long(workDir).c_str(), FILE_ATTRIBUTE_HIDDEN);
+        journal = std::make_unique<Journal>(path::Join(workDir, L"journal.jsonl"));
+        journal->Begin(L"modify", dir, scope, pkg_.appId);
+        const std::wstring backup = path::Join(workDir, L"b-" + RandomToken().substr(0, 10));
+        fs::CreateDirectories(backup);
+
+        rep.Set(State::Registering, -1, {}, false);
+        // Shortcuts as chosen now; the others go.
+        const auto wantShortcut = [&](Offer offer, bool chosen) { return offer == Offer::On || (OfferVisible(offer) && chosen); };
+        const auto plans = PlanShortcuts(dir, scope, wantShortcut(pkg_.startMenuShortcut, options.startMenuShortcut),
+                                         wantShortcut(pkg_.desktopShortcut, options.desktopShortcut), choices, ctx);
+        std::vector<std::wstring> shortcuts;
+        int linkIndex = 0;
+        for (const auto& plan : plans) {
+            std::wstring saved;
+            if (fs::Exists(plan.link)) {
+                saved = path::Join(backup, L"link" + std::to_wstring(linkIndex++) + L".lnk");
+                journal->Shortcut(plan.link, saved);
+                fs::Move(plan.link, saved);
+            } else {
+                journal->Shortcut(plan.link, L"");
+            }
+            if (!fs::IsDirectory(path::Parent(plan.link))) fs::CreateDirectories(path::Parent(plan.link));
+            CreateShortcut(plan.link, plan.spec);
+            shortcuts.push_back(plan.link);
+        }
+        for (const auto& old : record.shortcuts) {
+            const bool kept = std::any_of(shortcuts.begin(), shortcuts.end(), [&](const std::wstring& d) { return EqualsIgnoreCase(d, old); });
+            if (kept || !fs::Exists(old)) continue;
+            const std::wstring saved = path::Join(backup, L"link" + std::to_wstring(linkIndex++) + L".lnk");
+            journal->Backup(old, saved);
+            fs::Move(old, saved);
+        }
+        // Registry and config files as chosen now.
+        RegistryWriter writer(RootFor(scope), journal.get());
+        const RegistrationContext rctx{&pkg_, dir, scope, &choices, ctx};
+        const std::vector<RegistryItem> registry = ApplyRegistration(rctx, writer);
+        std::vector<RegistryItem> obsolete;
+        for (const auto& old : record.registry) {
+            if (!StillWritten(old, registry)) obsolete.push_back(old);
+        }
+        RemoveRegistryItems(obsolete, writer);
+        std::vector<RecordFile> files = record.files;
+        WriteConfigFiles(true, dir, choices, ctx, journal.get(), backup, &files, out);
+        for (const auto& opt : pkg_.ext.options) {
+            if (opt.startupName.empty() || record.mainExecutable.empty()) continue;
+            if (choices[opt.id]) {
+                if (!WriteRunValue(opt.startupName, mainExe, opt.startupArgs)) out.warnings.push_back(L"Could not register " + opt.startupName);
+            } else {
+                DeleteRunValue(opt.startupName);
+            }
+        }
+
+        // The rewritten install record (the old one is journaled) and its checksum in the uninstall key.
+        const std::vector<EnvironmentItem> previousEnvironment = record.environment;
+        const bool previousFirewall = record.firewall;
+        record.files = files;
+        record.choices = choices;
+        record.inputs = Remembered(pkg_, inputs);
+        record.shortcuts = shortcuts;
+        record.registry = registry;
+        record.environment = PlannedEnvironment(pkg_, choices, ctx);
+        const std::vector<FirewallRule> firewall = machineAdmin ? PlannedFirewall(pkg_, dir, choices) : std::vector<FirewallRule>();
+        record.firewall = machineAdmin ? !firewall.empty() : record.firewall;
+        const std::string recordJson = json::Serialize(RecordToJson(record), 2);
+        const std::wstring recordPath = path::Join(dir, kRecordName);
+        const std::wstring savedRecord = path::Join(backup, kRecordName);
+        journal->Backup(recordPath, savedRecord);
+        if (!::CopyFileW(path::Long(recordPath).c_str(), path::Long(savedRecord).c_str(), TRUE)) ThrowWin32(L"Cannot back up the install record");
+        fs::WriteAllAtomic(recordPath, {reinterpret_cast<const uint8_t*>(recordJson.data()), recordJson.size()});
+        journal->Registry(SnapshotArp(pkg_.appId, scope));
+        UpdateArpRecordHash(pkg_.appId, scope, Utf8ToWide(ToHex(Sha256::Of({reinterpret_cast<const uint8_t*>(recordJson.data()), recordJson.size()}))));
+        // Steps of options that were just turned on (e.g. a driver component added later).
+        RunActions(Action::When::AfterInstall, dir, choices, out, &turnedOn, &ctx);
+
+        rep.Set(State::Finalizing, 0.99, {}, false);
+        journal->Commit();
+        ApplyEnvironment(rctx, previousEnvironment, out.warnings);
+        if (machineAdmin && (!firewall.empty() || previousFirewall)) {
+            std::wstring error;
+            if (!ReplaceFirewallRules(L"FluentSetup:" + pkg_.appId, firewall, error)) out.warnings.push_back(error);
+        }
+        WriteConfigFiles(false, dir, choices, ctx, nullptr, {}, nullptr, out);
+        NotifyAssociationsChanged();
+        journal.reset();
+        if (!fs::DeleteTree(workDir)) log::Warn(L"Could not fully remove %s", workDir.c_str());
+        ClearPending(pkg_.appId, scope);
+        rep.Set(State::Completed, 1.0, {}, false);
+        log::Info(L"Modify completed");
+        return out;
+    } catch (const Failure& f) {
+        out.code = f.code();
+        out.detail = Describe(f);
+    } catch (const std::exception&) {
+        out.code = ErrorCode::Internal;
+        out.detail = L"Unexpected exception";
+    }
+    log::Error(L"Modify failed: %s [%s]", out.detail.c_str(), ErrorCodeName(out.code));
+    if (journal) {
+        rep.Set(State::RollingBack, -1, {}, false);
+        const auto entries = journal->Entries();
+        journal.reset();
+        if (!JournalCommitted(entries)) {
+            const auto stats = Rollback(entries, dir, scope, pkg_.appId);
+            log::Info(L"Rollback: %u undone, %u failed", stats.undone, stats.failed);
+            out.rolledBack = stats.failed == 0;
+            if (stats.failed == 0) fs::DeleteTree(workDir);
+            else RewriteJournal(path::Join(workDir, L"journal.jsonl"), stats.remaining);
+        }
+    } else {
+        out.rolledBack = true;
+    }
+    if (pendingSet && out.rolledBack) ClearPending(pkg_.appId, scope);
     rep.Set(State::Failed, -1, {}, false);
     return out;
 }

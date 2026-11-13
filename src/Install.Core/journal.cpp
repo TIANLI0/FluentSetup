@@ -6,6 +6,10 @@
 #include "Common/path.h"
 #include "Common/text.h"
 #include "Install.Core/installed.h"
+#include "Install.Core/integration.h"
+
+#include <algorithm>
+#include <functional>
 
 namespace fsetup::install {
 
@@ -81,6 +85,30 @@ void Journal::Registry(const json::Value& snapshot) {
     Append(e, true);
 }
 
+void Journal::RegistryKey(const std::wstring& key, const json::Value& snapshot) {
+    json::Value e;
+    e.set("op", "regkey");
+    e.set("key", key);
+    e.set("snapshot", snapshot);
+    Append(e, true);
+}
+
+void Journal::RegistryValue(const std::wstring& key, const std::wstring& name, const json::Value& snapshot) {
+    json::Value e;
+    e.set("op", "regvalue");
+    e.set("key", key);
+    e.set("name", name);
+    e.set("snapshot", snapshot);
+    Append(e, true);
+}
+
+void Journal::ServiceStopped(const std::wstring& name) {
+    json::Value e;
+    e.set("op", "svcstop");
+    e.set("name", name);
+    Append(e, true);
+}
+
 void Journal::Commit() {
     json::Value e;
     e.set("op", "commit");
@@ -122,28 +150,42 @@ RollbackStats Rollback(const std::vector<json::Value>& entries, const std::wstri
         std::wstring n;
         return path::ValidateAbsoluteSyntax(p, n) == path::Problem::None && path::IsSameOrUnder(n, installDir);
     };
+    const json::Value* current = nullptr;
     const auto note = [&](bool ok, const wchar_t* what, const std::wstring& p) {
         if (ok) {
             ++stats.undone;
         } else {
             ++stats.failed;
+            stats.remaining.push_back(*current);  // retried by the next run; nothing else is repeated
             log::Warn(L"Rollback: could not undo %s %s (error %lu)", what, p.c_str(), ::GetLastError());
         }
+    };
+    // Files the shell or a virus scanner has just opened (a new shortcut, a placed file) are released within moments.
+    const auto retry = [](const std::function<DWORD()>& step) {
+        DWORD e = step();
+        for (int i = 0; i < 30 && (e == ERROR_ACCESS_DENIED || e == ERROR_SHARING_VIOLATION || e == ERROR_LOCK_VIOLATION); ++i) {
+            ::Sleep(100);
+            e = step();
+        }
+        if (e == ERROR_FILE_NOT_FOUND || e == ERROR_PATH_NOT_FOUND) e = 0;  // nothing left to undo
+        ::SetLastError(e);
+        return e;
     };
 
     for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
         const json::Value& e = *it;
+        current = &e;
         const std::string& op = e["op"].asString();
         if (op == "place") {
             const std::wstring p = e["path"].asWide();
             if (!insideDir(p)) continue;
-            note(fs::DeleteFileForce(p) == 0, L"place", p);
+            note(retry([&] { return fs::DeleteFileForce(p); }) == 0, L"place", p);
         } else if (op == "backup") {
             const std::wstring from = e["from"].asWide(), to = e["to"].asWide();
             const bool shortcutOrigin = IsAllowedShortcutPath(from, scope);
             if ((!insideDir(from) && !shortcutOrigin) || !path::IsSameOrUnder(to, workDir)) continue;
             if (!fs::Exists(to)) continue;  // the move never happened
-            note(fs::Move(to, from, true) == 0, L"backup", from);
+            note(retry([&] { return fs::Move(to, from, true); }) == 0, L"backup", from);
         } else if (op == "mkdir") {
             const std::wstring p = e["path"].asWide();
             if (!insideDir(p)) continue;
@@ -151,20 +193,47 @@ RollbackStats Rollback(const std::vector<json::Value>& entries, const std::wstri
         } else if (op == "shortcut") {
             const std::wstring p = e["path"].asWide();
             if (!IsAllowedShortcutPath(p, scope)) continue;
-            fs::DeleteFileForce(p);
             const std::wstring backup = e["backup"].asWide();
             if (!backup.empty() && path::IsSameOrUnder(backup, workDir) && fs::Exists(backup)) {
-                note(fs::Move(backup, p, true) == 0, L"shortcut", p);
+                note(retry([&] { return fs::Move(backup, p, true); }) == 0, L"shortcut", p);
             } else {
-                RemoveEmptyShortcutFolder(p, scope);  // a Start menu folder created for it
-                ++stats.undone;
+                const bool ok = retry([&] { return fs::DeleteFileForce(p); }) == 0;
+                if (ok) RemoveEmptyShortcutFolder(p, scope);  // a Start menu folder created for it
+                note(ok, L"shortcut", p);
             }
         } else if (op == "reg") {
             RestoreArp(appId, scope, e["snapshot"]);
             ++stats.undone;
+        } else if (op == "regkey") {
+            const std::wstring key = e["key"].asWide();
+            // Owned trees are restored; an extension key may only be deleted again (it did not exist before).
+            if (!IsOwnedRegistryKey(key, true) && !(e["snapshot"].isNull() && IsCreatableRegistryKey(key))) continue;
+            RestoreRegistryKey(RootFor(scope), key, e["snapshot"]);
+            ++stats.undone;
+        } else if (op == "regvalue") {
+            const std::wstring key = e["key"].asWide();
+            if (!IsOwnedRegistryKey(key)) continue;
+            RestoreRegistryValue(RootFor(scope), key, e["name"].asWide().substr(0, 256), e["snapshot"]);
+            ++stats.undone;
+        } else if (op == "svcstop") {
+            const std::wstring name = e["name"].asWide();
+            if (scope != Scope::Machine || !IsServiceName(name)) continue;
+            note(StartServiceByName(name), L"service stop", name);
         }
     }
+    std::reverse(stats.remaining.begin(), stats.remaining.end());
+    if (!stats.remaining.empty() && !entries.empty()) stats.remaining.insert(stats.remaining.begin(), entries.front());  // "begin"
     return stats;
+}
+
+void RewriteJournal(const std::wstring& file, const std::vector<json::Value>& entries) {
+    std::string text;
+    for (const auto& e : entries) text += json::Serialize(e) + "\n";
+    try {
+        fs::WriteAllAtomic(file, {reinterpret_cast<const uint8_t*>(text.data()), text.size()});
+    } catch (const Failure& f) {
+        log::Warn(L"Could not rewrite the journal: %s", f.detail().c_str());
+    }
 }
 
 }  // namespace fsetup::install

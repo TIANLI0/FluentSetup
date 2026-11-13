@@ -5,7 +5,8 @@
 //  * an entry is appended *before* the action it describes;
 //  * rollback walks the entries newest-first and tolerates actions that never happened;
 //  * paths in the journal are only acted on if they are inside the install directory or a shortcut folder of the
-//    scope, and registry entries only for the product's own ARP key.
+//    scope, registry entries only for the product's own ARP key and the keys IsOwnedRegistryKey allows (in the
+//    scope's hive), and services only for per-machine operations.
 #pragma once
 
 #include "Common/json.h"
@@ -29,6 +30,12 @@ public:
     void Place(const std::wstring& file);
     void Shortcut(const std::wstring& link, const std::wstring& backup);
     void Registry(const json::Value& snapshot);
+    // Registry key tree of the scope's hive before setup changed it (null snapshot = the key did not exist).
+    void RegistryKey(const std::wstring& key, const json::Value& snapshot);
+    // One registry value before setup changed it (null snapshot = the value did not exist).
+    void RegistryValue(const std::wstring& key, const std::wstring& name, const json::Value& snapshot);
+    // A service setup stopped (rollback starts it again).
+    void ServiceStopped(const std::wstring& name);
     void Commit();
     void Flush();
     [[nodiscard]] const std::wstring& FilePath() const noexcept { return file_; }
@@ -50,9 +57,13 @@ bool JournalCommitted(const std::vector<json::Value>& entries);
 struct RollbackStats {
     unsigned undone = 0;
     unsigned failed = 0;
+    std::vector<json::Value> remaining;  // "begin" + the entries that could not be undone (empty when all were)
 };
 // Undoes the recorded operations newest-first (best effort, never throws).
 RollbackStats Rollback(const std::vector<json::Value>& entries, const std::wstring& installDir, Scope scope,
                        const std::wstring& appId);
+// After a partial rollback the journal keeps only what is left, so the next run never repeats a step that was undone
+// already (undoing a "place" twice would delete the restored original).
+void RewriteJournal(const std::wstring& file, const std::vector<json::Value>& entries);
 
 }  // namespace fsetup::install
