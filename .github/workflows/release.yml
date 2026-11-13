@@ -54,7 +54,7 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: ./scripts/build.ps1 -Configuration Release
+        run: ./scripts/build.ps1 -Configuration Release -Platforms x64,ARM64
 
       - name: Tests (native, managed, end-to-end)
         shell: pwsh

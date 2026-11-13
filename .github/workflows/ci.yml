@@ -35,7 +35,7 @@ jobs:
 
       - name: Build (native runtime, WinUI front end, Builder.Core, CLI, Builder GUI, tests)
         shell: pwsh
-        run: ./scripts/build.ps1 -Configuration Release
+        run: ./scripts/build.ps1 -Configuration Release -Platforms x64,ARM64
 
       - name: Native unit tests
         shell: pwsh
@@ -59,7 +59,6 @@ jobs:
       # there because the Windows App Runtime is not installed (Setup.exe would fall back to Win32 anyway).
       - name: UI tests (UI Automation)
         shell: pwsh
-        continue-on-error: true
         run: ./tests/UI/ui-tests.ps1
 
       - name: Release assets (dry run)
@@ -83,6 +82,40 @@ jobs:
             out/test-results/
             out/e2e/logs/
             out/ui-tests/logs/
+
+  arm64:
+    # The ARM64 installer runtime, built and tested natively: native unit tests and the end-to-end installs with ARM64
+    # packages (the x64 job above cross-compiles ARM64 too, so the release assets carry both runtimes).
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Build (ARM64 runtime, CLI, tests)
+        shell: pwsh
+        run: ./scripts/build.ps1 -Configuration Release -Platforms ARM64 -Skip Builder
+
+      - name: Native unit tests (ARM64)
+        shell: pwsh
+        run: |
+          ./out/bin/ARM64/Release/FluentSetup.Tests.Native.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: End-to-end with ARM64 packages
+        shell: pwsh
+        run: ./tests/Integration/e2e.ps1 -Arch arm64
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fluentsetup-arm64-logs
+          if-no-files-found: ignore
+          path: out/e2e/logs/
 
   action:
     # The GitHub Action (action.yml) the way apps use it: download the latest release, verify it, put it on PATH.

@@ -8,10 +8,12 @@
   -> delete Setup.exe -> uninstall through the registered QuietUninstallString -> environment restored.
 
 .PARAMETER Large   Also test a 600 MB payload file (slower).
+.PARAMETER Arch    Architecture of the test packages and the DemoApp build: x64 (default) or arm64 (on an ARM64 PC).
 .PARAMETER KeepArtifacts  Do not delete the generated packages and logs.
 #>
-param([switch] $Large, [switch] $KeepArtifacts)
+param([switch] $Large, [switch] $KeepArtifacts, [ValidateSet('x64', 'arm64')] [string] $Arch = 'x64')
 $ErrorActionPreference = 'Stop'
+$platform = if ($Arch -eq 'arm64') { 'ARM64' } else { 'x64' }
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $root
 $msbuild = & (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe') -latest -prerelease -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
@@ -58,7 +60,7 @@ function New-Package([string] $version, [scriptblock] $populate, [hashtable] $ov
     $stage = Join-Path $work "stage-$version"
     $bin = Join-Path $work "bin-$version"
     Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-    & $msbuild samples\DemoApp\DemoApp.vcxproj /p:Configuration=Release /p:Platform=x64 "/p:DemoVersion=$version" "/p:DemoOut=$bin" /nologo /v:q | Out-Null
+    & $msbuild samples\DemoApp\DemoApp.vcxproj /p:Configuration=Release /p:Platform=$platform "/p:DemoVersion=$version" "/p:DemoOut=$bin" /nologo /v:q | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "DemoApp $version build failed" }
     New-Item -ItemType Directory -Force $stage | Out-Null
     Copy-Item (Join-Path $bin 'DemoApp.exe') $stage
@@ -75,7 +77,7 @@ function New-Package([string] $version, [scriptblock] $populate, [hashtable] $ov
     $projectPath = Join-Path $work "project-$version.json"
     [IO.File]::WriteAllText($projectPath, ($project | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
     # --test-hooks: the packages honour FLUENTSETUP_TEST_FAULT_AFTER (used below to inject a failure).
-    & $cli build $projectPath --test-hooks --report (Join-Path $work "report-$version.json") | Out-Null
+    & $cli build $projectPath --arch $Arch --test-hooks --report (Join-Path $work "report-$version.json") | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Packaging $version failed" }
     return (Join-Path $work "dist\$appName-$version-Setup.exe")
 }
@@ -328,7 +330,7 @@ Remove-Item -Recurse -Force $legacyDir, $legacyKey, $oldLink -ErrorAction Silent
 Write-Host '==> Variants (shared vs. self-contained builds), option startup entry, close command' -ForegroundColor Cyan
 Remove-Existing
 $vbin = Join-Path $work 'bin-variants'
-& $msbuild samples\DemoApp\DemoApp.vcxproj /p:Configuration=Release /p:Platform=x64 "/p:DemoVersion=8.0.0" "/p:DemoOut=$vbin\" /nologo /v:q | Out-Null
+& $msbuild samples\DemoApp\DemoApp.vcxproj /p:Configuration=Release /p:Platform=$platform "/p:DemoVersion=8.0.0" "/p:DemoOut=$vbin\" /nologo /v:q | Out-Null
 $va = Join-Path $work 'variant-a'; $vb = Join-Path $work 'variant-b'
 New-Item -ItemType Directory -Force $va, $vb | Out-Null
 foreach ($v in $va, $vb) { Copy-Item (Join-Path $vbin 'DemoApp.exe') $v; 'same in both' | Set-Content (Join-Path $v 'common.txt') }
@@ -348,7 +350,7 @@ $vproject | Add-Member -Force -NotePropertyName requirements -NotePropertyValue 
 $vproject | Add-Member -Force -NotePropertyName options -NotePropertyValue @(@{ id = 'startup'; label = @{ 'en-US' = 'Start with Windows' }; default = $true; startup = @{ name = 'FluentSetupE2E-Startup'; arguments = @('--background') } })
 $vpath = Join-Path $work 'project-variants.json'
 [IO.File]::WriteAllText($vpath, ($vproject | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
-& $cli build $vpath | Out-Null
+& $cli build $vpath --arch $Arch | Out-Null
 $vsetup = Join-Path $work "dist\$appName-8.0.0-Setup.exe"
 $header = & $cli inspect $vsetup --json | ConvertFrom-Json
 Check 'variants: package built' { Test-Path $vsetup }
@@ -363,7 +365,7 @@ $running = Start-Process (Join-Path $installDir 'DemoApp.exe') -PassThru  # runn
 for ($i = 0; $i -lt 50 -and -not $running.HasExited -and $running.MainWindowHandle -eq 0; $i++) { Start-Sleep -Milliseconds 200; $running.Refresh() }
 $vproject.requirements.dotNet[0].variants = @('a')    # now b has no missing prerequisite
 [IO.File]::WriteAllText($vpath, ($vproject | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
-& $cli build $vpath | Out-Null
+& $cli build $vpath --arch $Arch | Out-Null
 $code = Run-Setup $vsetup @('/quiet', '/variant', 'b') 'variant-switch'
 $switchLog = Get-Content (Join-Path $logs 'variant-switch.log') -Raw
 Check 'switch to variant b: a-only files removed, b files installed, shared kept' {
