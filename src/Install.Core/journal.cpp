@@ -209,11 +209,14 @@ RollbackStats Rollback(const std::vector<json::Value>& entries, const std::wstri
             // Owned trees are restored; an extension key may only be deleted again (it did not exist before).
             if (!IsOwnedRegistryKey(key, true) && !(e["snapshot"].isNull() && IsCreatableRegistryKey(key))) continue;
             RestoreRegistryKey(RootFor(scope), key, e["snapshot"]);
+            log::Info(L"Rollback: registry key %s %s", key.c_str(), e["snapshot"].isNull() ? L"removed" : L"restored");
             ++stats.undone;
         } else if (op == "regvalue") {
             const std::wstring key = e["key"].asWide();
             if (!IsOwnedRegistryKey(key)) continue;
-            RestoreRegistryValue(RootFor(scope), key, e["name"].asWide().substr(0, 256), e["snapshot"]);
+            const std::wstring name = e["name"].asWide().substr(0, 256);
+            RestoreRegistryValue(RootFor(scope), key, name, e["snapshot"]);
+            log::Info(L"Rollback: registry value %s [%s] %s", key.c_str(), name.c_str(), e["snapshot"].isNull() ? L"removed" : L"restored");
             ++stats.undone;
         } else if (op == "svcstop") {
             const std::wstring name = e["name"].asWide();

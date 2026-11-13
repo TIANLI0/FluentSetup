@@ -41,6 +41,28 @@ public static class InstallerCache
         if (cached is not null && !refresh && DateTimeOffset.UtcNow - cached.Downloaded < Fresh) return cached;
 
         Directory.CreateDirectory(dir);
+        // Short network failures (a dropped TLS handshake, a CDN hiccup) are retried before the cached copy is used.
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return Download(installer, dir, file, metaFile, log, ct);
+            }
+            catch (InvalidDataException ex) when (attempt < 3 && ex.InnerException is HttpRequestException or IOException && !ct.IsCancellationRequested)
+            {
+                log($"Download attempt {attempt} failed ({ex.InnerException?.Message}); retrying");
+                Thread.Sleep(TimeSpan.FromSeconds(2 * attempt));
+            }
+            catch (InvalidDataException) when (cached is not null && !ct.IsCancellationRequested)
+            {
+                log($"Could not download {installer.FileName}; using the copy from {cached.Downloaded.LocalDateTime:g}.");
+                return cached;
+            }
+        }
+    }
+
+    private static CachedInstaller Download(OfficialInstaller installer, string dir, string file, string metaFile, Action<string> log, CancellationToken ct)
+    {
         var temp = Path.Combine(dir, $".{Guid.NewGuid():N}.download");
         try
         {
@@ -92,12 +114,8 @@ public static class InstallerCache
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException && !ct.IsCancellationRequested)
         {
-            if (cached is not null)
-            {
-                log($"Could not download {installer.FileName} ({ex.Message}); using the copy from {cached.Downloaded.LocalDateTime:g}.");
-                return cached;
-            }
-            throw new InvalidDataException($"Could not download {installer.FileName} from {installer.Url}: {ex.Message}", ex);
+            var detail = ex.Message + (ex.InnerException is { } inner ? $" ({inner.Message})" : "");
+            throw new InvalidDataException($"Could not download {installer.FileName} from {installer.Url}: {detail}", ex as HttpRequestException ?? (Exception)new IOException(ex.Message, ex));
         }
         finally
         {

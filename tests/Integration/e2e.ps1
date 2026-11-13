@@ -681,6 +681,68 @@ Check '1.2: uninstall removed shortcuts, scheme, capabilities and registry value
     -not (Test-Path "HKCU:\Software\FluentSetup\Capabilities\$appId") }
 Remove-Item -Recurse -Force $installDir -ErrorAction SilentlyContinue
 
+Write-Host '==> 1.2: signed uninstaller (temporary self-signed certificate in the current user''s store)' -ForegroundColor Cyan
+Remove-Existing
+$cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=FluentSetup E2E Signing' -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddDays(1)
+try {
+    $signedPkg = New-Package '14.0.0' { param($s) } @{} @{ signing = @{ enabled = $true; certificateThumbprint = $cert.Thumbprint; timestampUrl = ''; signUninstaller = $true } }
+    $code = Run-Setup $signedPkg @('/quiet') 'signed-install'
+    $sig = Get-AuthenticodeSignature (Join-Path $installDir 'uninstall.exe')
+    Check 'signed: install exit 0' { $code -eq 0 }
+    Check 'signed: uninstall.exe carries the package signature' {
+        $sig.SignerCertificate.Thumbprint -eq $cert.Thumbprint -and $sig.Status -notin 'HashMismatch', 'NotSigned', 'NotSupportedFileFormat' -and
+        (Get-Content (Join-Path $logs 'signed-install.log') -Raw) -match 'Wrote the signed uninstaller' }
+    $p = Start-Process (Join-Path $installDir 'uninstall.exe') -ArgumentList '/uninstall', '/quiet' -Wait -PassThru
+    Check 'signed: the signed uninstaller works' { $p.ExitCode -eq 0 -and -not (Test-Path $arpKey) }
+} finally {
+    Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -ErrorAction SilentlyContinue
+}
+Remove-Existing
+
+if ($env:CI) {
+    # These run Microsoft's VC++ installer, so only on CI runners. minVersion 99 keeps the prerequisite "missing", so the
+    # installer runs every time; onFailure warn installs the app anyway.
+    Write-Host '==> 1.2: official installers: bundled at build time, downloaded by setup (CI only)' -ForegroundColor Cyan
+    $bundlePkg = New-Package '15.0.0' { param($s) } @{} @{ requirements = @{ vcRedist = @{ required = $true; minVersion = '99.0'; auto = 'bundle'; onFailure = 'warn' } } }
+    $code = Run-Setup $bundlePkg @('/quiet') 'bundle-install'
+    $log = Get-Content (Join-Path $logs 'bundle-install.log') -Raw
+    Check 'official: bundled VC++ installer extracted from Setup.exe and run' { $code -eq 0 -and $log -match 'Extracting the bundled installer' -and $log -match 'Installing prerequisite' }
+    Remove-Existing
+    $dlPkg = New-Package '15.1.0' { param($s) } @{} @{ requirements = @{ vcRedist = @{ required = $true; minVersion = '99.0'; auto = 'download'; onFailure = 'warn' } } }
+    $code = Run-Setup $dlPkg @('/quiet') 'download-install'
+    $log = Get-Content (Join-Path $logs 'download-install.log') -Raw
+    Check 'official: VC++ installer downloaded by setup, accepted by its Microsoft signature and run' {
+        $code -eq 0 -and $log -match 'Downloading' -and $log -notmatch 'not signed by' -and $log -match 'Installing prerequisite' }
+    Remove-Existing
+
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($isAdmin) {
+        Write-Host '==> 1.2: per-machine services, firewall rules, machine-wide file types and environment (CI, elevated)' -ForegroundColor Cyan
+        $machineDir = Join-Path $env:ProgramFiles $appName
+        $machineArp = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$appId"
+        $svc = 'FluentSetupE2ESvc'
+        $machinePkg = New-Package '16.0.0' { param($s) } @{ scope = 'machine' } @{
+            services = @(@{ name = $svc; displayName = 'FluentSetup E2E service'; run = 'DemoApp.exe'; arguments = @('--service'); startType = 'manual'; start = $false })
+            firewall = @(@{ name = 'FluentSetup E2E'; protocol = 'tcp'; localPorts = '45678' })
+            associations = @(@{ extensions = @('.fse2em'); progId = 'FluentSetup.E2E.Machine'; description = 'machine' })
+            environment = @(@{ name = 'FLUENTSETUP_E2E_MACHINE'; value = '{InstallDir}' })
+        }
+        $code = Run-Setup $machinePkg @('/quiet') 'machine-install'
+        Check 'machine: install exit 0' { $code -eq 0 }
+        Check 'machine: service created with its command line' {
+            (Get-Service $svc -ErrorAction SilentlyContinue) -and (Get-CimInstance Win32_Service -Filter "Name='$svc'").PathName -eq "`"$machineDir\DemoApp.exe`" --service" }
+        Check 'machine: firewall rule added to the app''s group' { @(Get-NetFirewallRule -DisplayName 'FluentSetup E2E' -ErrorAction SilentlyContinue | Where-Object Group -eq "FluentSetup:$appId").Count -eq 1 }
+        Check 'machine: file type registered for all users' { (Get-ItemProperty 'HKLM:\Software\Classes\.fse2em').'(default)' -eq 'FluentSetup.E2E.Machine' }
+        Check 'machine: machine environment variable' { [Environment]::GetEnvironmentVariable('FLUENTSETUP_E2E_MACHINE', 'Machine') -eq $machineDir }
+        $p = Start-Process (Join-Path $machineDir 'uninstall.exe') -ArgumentList '/uninstall', '/quiet' -Wait -PassThru
+        Check 'machine: uninstall removed the service, the firewall rule, the file type and the variable' {
+            $p.ExitCode -eq 0 -and -not (Get-Service $svc -ErrorAction SilentlyContinue) -and -not (Get-NetFirewallRule -DisplayName 'FluentSetup E2E' -ErrorAction SilentlyContinue) -and
+            -not (Test-Path 'HKLM:\Software\Classes\FluentSetup.E2E.Machine') -and $null -eq [Environment]::GetEnvironmentVariable('FLUENTSETUP_E2E_MACHINE', 'Machine') -and
+            -not (Test-Path $machineArp) }
+        Remove-Item -Recurse -Force $machineDir -ErrorAction SilentlyContinue
+    }
+}
+
 Remove-Existing
 Check 'environment restored (no ARP entry)' { -not (Test-Path $arpKey) }
 

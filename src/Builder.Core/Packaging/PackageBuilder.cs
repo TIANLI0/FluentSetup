@@ -337,7 +337,12 @@ public sealed class PackageBuilder
                 // The uninstaller is derived from this header, signed, and described in the final header.
                 output.Flush();
                 progress?.Report(new(BuildStage.Signing, 0, "Signing the uninstaller"));
-                var image = UninstallerImage.Create(project, projectDir, partial, overlayStart, headerJson, ui is null ? [] : [ui.TempFile], tempDir, log);
+                var stubBytes = new byte[overlayStart];
+                var end = output.Position;
+                output.Position = 0;
+                output.ReadExactly(stubBytes);
+                output.Position = end;
+                var image = UninstallerImage.Create(project, projectDir, stubBytes, overlayStart, headerJson, ui is null ? [] : [ui.TempFile], tempDir, log);
                 headerJson = HeaderWriter.Write(project, texts, variants, arch, license, licenses, payloadRecords, results, collected.Directories, uiRecord, ui,
                                                 includeUi, bannerName, bundled, redistRecords, redist, options.TestHooks, image);
                 report.UninstallerSigned = true;

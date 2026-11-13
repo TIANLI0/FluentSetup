@@ -18,10 +18,10 @@ internal static class UninstallerImage
 {
     internal sealed record Image(byte[] Header, byte[] Certificates, uint Checksum, byte[] Sha256);
 
-    /// <param name="setup">Setup.exe as written so far (stub + streams); only the stub part [0, overlayStart) is read.</param>
+    /// <param name="stubBytes">The first overlayStart bytes of Setup.exe (the stub with its padding).</param>
     /// <param name="setupHeader">The setup header JSON (without uninstallerImage).</param>
     /// <param name="frontendStreams">The front-end stream files in header order.</param>
-    public static Image Create(SetupProject project, string projectDir, string setup, long overlayStart, byte[] setupHeader,
+    public static Image Create(SetupProject project, string projectDir, byte[] stubBytes, long overlayStart, byte[] setupHeader,
                                IReadOnlyList<string> frontendStreams, string tempDir, Action<string> log)
     {
         var unsigned = Path.Combine(tempDir, "uninstall.exe");
@@ -29,8 +29,8 @@ internal static class UninstallerImage
         using (var output = new FileStream(unsigned, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
         {
             // Stub (with padding) as Container::CopyStubTo copies it: Authenticode directory and checksum cleared.
-            var stub = new byte[overlayStart];
-            using (var input = File.OpenRead(setup)) input.ReadExactly(stub);
+            if (stubBytes.Length != overlayStart) throw new InvalidDataException("Unexpected stub size.");
+            var stub = (byte[])stubBytes.Clone();
             var (checksumOffset, securityOffset) = PeHeaderOffsets(stub);
             stub.AsSpan(checksumOffset, 4).Clear();
             stub.AsSpan(securityOffset, 8).Clear();
