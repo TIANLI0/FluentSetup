@@ -49,7 +49,8 @@ public static class Program
                                         what was mapped and what needs manual work
           fluentsetup locale add <language> <project.json> [--force]
                                         Create <ui.localization>/<language>.json with every text to translate
-                                        (installer strings, option/action/variant ids); any BCP-47 tag, e.g. fr-FR
+                                        (option/action/variant ids, and the installer strings for a language it
+                                        does not ship); any BCP-47 tag, e.g. nl-NL or pt-PT
           fluentsetup update [--check] [--prerelease] [--json]
                                         Update FluentSetup (Builder and CLI) to the latest release on GitHub:
                                         downloads Setup.exe, verifies its SHA-256 and installs it (Windows only).
@@ -331,7 +332,8 @@ public static class Program
 
     /// <summary>
     /// locale add &lt;lang&gt; &lt;project.json&gt;: writes a localization file listing every text of the package and, for a
-    /// language the installer does not ship, every installer string (English as the starting point).
+    /// language the installer does not ship, every installer string. The starting point is the installer's table of the
+    /// same language (pt-PT starts from pt-BR, fr-CA from fr-FR, zh-HK from zh-TW), else English.
     /// </summary>
     private static int Locale(ParsedArgs a)
     {
@@ -360,14 +362,16 @@ public static class Program
             ["license"] = "",
         };
         var builtIn = Localization.SupportedLanguages.Contains(lang);
+        var basis = Localization.BuiltInLanguage(lang) ?? "en-US";
         var strings = new System.Text.Json.Nodes.JsonObject();
         if (!builtIn)
         {
-            // The installer's own texts, in English, to be translated. Placeholders {0}, {1} and "&" mnemonics stay.
-            var english = new RuntimeAssets().LocalizationFile("en-US");
-            if (!File.Exists(english)) throw new InvalidDataException($"Installer strings not found: {english}");
-            foreach (var p in System.Text.Json.JsonDocument.Parse(File.ReadAllText(english)).RootElement.EnumerateObject())
-                strings[p.Name] = p.Value.GetString();
+            // The installer's own texts to be translated or adapted: its table of the same language if it has one
+            // (e.g. pt-BR for pt-PT), else English. Placeholders {0}, {1} and "&" mnemonics stay.
+            var source = new RuntimeAssets().LocalizationFile(basis);
+            if (!File.Exists(source)) throw new InvalidDataException($"Installer strings not found: {source}");
+            foreach (var p in System.Text.Json.JsonDocument.Parse(File.ReadAllText(source)).RootElement.EnumerateObject())
+                strings[p.Name] = p.Name == "language" ? lang : p.Value.GetString();
         }
         json["strings"] = strings;
         Directory.CreateDirectory(folder);
@@ -378,7 +382,9 @@ public static class Program
         Console.WriteLine($"Created {file}");
         Console.WriteLine(builtIn
             ? $"The installer already speaks {lang}; translate the package texts (options, actions, variants, license)."
-            : $"The installer has no {lang} strings: translate the {strings.Count} entries under \"strings\" too (keep {{0}} placeholders and & mnemonics). Untranslated entries show in English.");
+            : basis != "en-US"
+                ? $"The installer has no {lang} strings: the {strings.Count} entries under \"strings\" are its {basis} text; adapt them where {lang} differs (keep {{0}} placeholders and & mnemonics)."
+                : $"The installer has no {lang} strings: translate the {strings.Count} entries under \"strings\" too (keep {{0}} placeholders and & mnemonics). Untranslated entries show in English.");
         return 0;
     }
     private static int Validate(ParsedArgs a)

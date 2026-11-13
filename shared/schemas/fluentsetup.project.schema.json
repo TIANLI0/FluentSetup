@@ -1414,32 +1414,60 @@
             "type": "string"
           },
           "default": {},
-          "description": "Per-language license files, e.g. { \"zh-CN\": \"license_zh.txt\" }. Only en-US and zh-CN are used; falls back to license.",
+          "description": "Per-language license files, e.g. { \"zh-CN\": \"license_zh.txt\" }, for a built-in language or one the package brings strings for; the one of the installer's UI language is shown, else license.",
           "propertyNames": {
-            "enum": [
-              "en-US",
-              "zh-CN",
-              "ja-JP",
-              "ko-KR"
+            "anyOf": [
+              {
+                "enum": [
+                  "en-US",
+                  "zh-CN",
+                  "zh-TW",
+                  "ja-JP",
+                  "ko-KR",
+                  "de-DE",
+                  "fr-FR",
+                  "es-ES",
+                  "pt-BR",
+                  "ru-RU",
+                  "it-IT"
+                ]
+              },
+              {
+                "pattern": "^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8}){0,3}$"
+              }
             ]
           }
         },
         "defaultLanguage": {
           "type": "string",
-          "enum": [
-            "auto",
-            "en-US",
-            "zh-CN",
-            "ja-JP",
-            "ko-KR"
+          "anyOf": [
+            {
+              "enum": [
+                "auto",
+                "en-US",
+                "zh-CN",
+                "zh-TW",
+                "ja-JP",
+                "ko-KR",
+                "de-DE",
+                "fr-FR",
+                "es-ES",
+                "pt-BR",
+                "ru-RU",
+                "it-IT"
+              ]
+            },
+            {
+              "pattern": "^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8}){0,3}$"
+            }
           ],
           "default": "auto",
-          "description": "Installer language. auto = the user's Windows display language (zh* -> zh-CN, en* -> en-US, otherwise en-US). Setup.exe /lang overrides it."
+          "description": "Installer language. auto = the user's Windows display languages, the first one the installer has strings for, else en-US. Built in: en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT; a regional tag uses the table of its language (zh-HK, zh-MO, zh-Hant -> zh-TW, other zh -> zh-CN, de-AT -> de-DE, fr-CA -> fr-FR, es-MX -> es-ES, pt-PT -> pt-BR). Any other tag needs strings from the package (ui.strings or ui.localization). Setup.exe /lang overrides it."
         },
         "strings": {
           "type": "object",
           "default": {},
-          "description": "Per-language overrides of built-in installer strings (keys from shared/localization/en-US.json), e.g. { \"zh-CN\": { \"welcome.body\": \"...\" } }. Only en-US and zh-CN are used; values over 4096 bytes are ignored.",
+          "description": "Per-language overrides of built-in installer strings (keys from shared/localization/en-US.json), e.g. { \"zh-CN\": { \"welcome.body\": \"...\" } }. For a language the installer does not ship (e.g. nl-NL) this is the whole table; keys it leaves out show in English. Values over 4096 bytes are ignored.",
           "additionalProperties": {
             "type": "object",
             "additionalProperties": {
@@ -1458,7 +1486,7 @@
         "localization": {
           "type": "string",
           "default": "",
-          "description": "Folder with one <language>.json per language (en-US, zh-CN, ja-JP, ko-KR): {\"options\": {id: text}, \"actions\": {id: text}, \"license\": file, \"strings\": {key: text}}."
+          "description": "Folder with one <language>.json per language, named by any language tag (e.g. ja-JP.json, nl-NL.json): {\"options\": {id: text}, \"actions\": {id: text}, \"variants\": {id: {\"label\", \"description\"}}, \"license\": file, \"strings\": {key: text}}. fluentsetup locale add <tag> creates one."
         },
         "banner": {
           "type": "string",

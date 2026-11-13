@@ -60,6 +60,7 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="stub.rc" />
+    <None Include="localization.rc2" />
     <None Include="stub.manifest" />
   </ItemGroup>
   <ItemGroup>

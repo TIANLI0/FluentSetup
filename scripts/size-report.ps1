@@ -75,7 +75,8 @@ $stubSize = (Get-Item $stubFile).Length
 $mapped = ($groups.Values | Measure-Object -Sum).Sum
 $stubResources = $peImage - $stubSize    # difference = this product's icon/version resources vs. the stub's defaults
 $rcData = 0L
-foreach ($f in 'en-US.json', 'zh-CN.json') { $rcData += (Get-Item (Join-Path $root "shared\localization\$f")).Length }
+$tables = @(Get-ChildItem (Join-Path $root 'shared\localization') -Filter '*.json')
+foreach ($f in $tables) { $rcData += $f.Length }
 
 # --- WinUI front end, raw files ---------------------------------------------------------------------------------------
 $uiDir = Join-Path $bin 'ui'
@@ -87,7 +88,7 @@ $rows = @(
 )
 foreach ($k in $groups.Keys) { $rows += [pscustomobject]@{ Component = "  $k"; Bytes = $groups[$k]; Note = 'code + data, from linker map' } }
 $rows += [pscustomobject]@{ Component = '  PE headers, imports, relocations, alignment'; Bytes = [Math]::Max(0, $stubSize - $mapped - $rcData - 10229); Note = 'remainder' }
-$rows += [pscustomobject]@{ Component = '  Strings (en-US + zh-CN) + default icon'; Bytes = $rcData + 10229; Note = 'RCDATA + ICON resources' }
+$rows += [pscustomobject]@{ Component = "  Strings ($($tables.Count) languages) + default icon"; Bytes = $rcData + 10229; Note = 'RCDATA + ICON resources' }
 $rows += [pscustomobject]@{ Component = '  Product icon/version delta'; Bytes = $stubResources; Note = 'difference to the default stub' }
 $rows += [pscustomobject]@{ Component = 'WinUI 3 front end (compressed)'; Bytes = $frontend; Note = "raw $([Math]::Round($uiRaw / 1KB)) KB: $(($uiFiles | ForEach-Object { '{0} {1} KB' -f $_.Name, [Math]::Round($_.Length / 1KB) }) -join ', ')" }
 $rows += [pscustomobject]@{ Component = 'Package metadata (header, footer, alignment, signature)'; Bytes = $metadata; Note = '' }

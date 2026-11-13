@@ -23,15 +23,14 @@ public static class Loc
 
     public static string Format(string key, params object[] args) => string.Format(System.Globalization.CultureInfo.CurrentCulture, Get(key), args);
 
-    /// <summary>The installer language for this PC (same rule as the installer: first supported Windows display language).</summary>
+    /// <summary>The installer language for this PC (same rule as the installer: the project's language, else the first
+    /// Windows display language it ships, e.g. zh-HK -> zh-TW, de-AT -> de-DE).</summary>
     public static string InstallerLanguage(string projectDefault)
     {
-        var supported = FluentSetup.Builder.Core.Packaging.Localization.SupportedLanguages;
-        if (supported.Contains(projectDefault)) return projectDefault;
+        if (FluentSetup.Builder.Core.Packaging.Localization.BuiltInLanguage(projectDefault) is { } pinned) return pinned;
         foreach (var lang in Windows.System.UserProfile.GlobalizationPreferences.Languages)
         {
-            var match = supported.FirstOrDefault(s => lang.StartsWith(s[..2], StringComparison.OrdinalIgnoreCase));
-            if (match is not null) return match;
+            if (FluentSetup.Builder.Core.Packaging.Localization.BuiltInLanguage(lang) is { } match) return match;
         }
         return "en-US";
     }

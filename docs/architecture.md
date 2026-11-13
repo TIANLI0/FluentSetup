@@ -152,7 +152,7 @@ sequenceDiagram
 
 Public switches: `/quiet|/verysilent|/s`, `/passive|/silent`, `/relaunch|/update`, `/uninstall`, `/modify`, `/repair`, `/log <file>`, `/dir <path>`, `/scope user|machine`,
 `/desktop-shortcut yes|no`, `/start-menu-shortcut yes|no`, `/option <id>=yes|no` (repeatable), `/input <id>=<value>` (repeatable),
-`/lang en-US|zh-CN|ja-JP|ko-KR`, `/ui auto|winui|win32`, `/help`. Internal switches (between FluentSetup processes):
+`/lang <tag>`, `/ui auto|winui|win32`, `/help`. Internal switches (between FluentSetup processes):
 
 | Switch | Used by |
 |---|---|
@@ -374,14 +374,19 @@ found (`MddBootstrapInitialize2` returned `ERROR_NO_MATCH`), `0x23` runtime init
 
 ## 7. Localization
 
-* **Language choice** (`Strings::Load`): `/lang` (any BCP-47 tag), else the package's `ui.defaultLanguage` unless it
-  is `auto`, else the user's Windows display languages in preference order from
-  `GetUserPreferredUILanguages(MUI_LANGUAGE_NAME)` followed by `GetUserDefaultUILanguage()`, else `en-US`. The exact
-  tag wins, then the same primary language; languages the package brings strings for count like built-in ones.
-* **Tables:** every `shared/localization/<tag>.json` is embedded into the stub as an `RCDATA` resource (`stub.rc`,
-  `localization.cpp`). English is the base and the chosen table is merged over it, so a missing translation shows
-  English. Package overrides from `ui.strings.<lang>` (string values up to 4096 bytes)
-  are merged last.
+* **Language choice** (`Strings::Load`): `/lang` (any tag), else the package's `ui.defaultLanguage` unless it is
+  `auto`, else the user's Windows display languages in preference order from
+  `GetUserPreferredUILanguages(MUI_LANGUAGE_NAME)` followed by `GetUserDefaultUILanguage()`, else `en-US`. Each
+  candidate tag is matched as: package strings (`ui.strings.<tag>`) for exactly that tag, else a built-in table
+  (`BuiltInLanguage`: exact tag, then a script or region subtag, e.g. `zh-Hant`/`zh-HK`/`zh-MO` -> `zh-TW`, then the
+  first table of the primary language, e.g. `de-AT` -> `de-DE`, `pt-PT` -> `pt-BR`, `zh-SG` -> `zh-CN`), else package
+  strings for the same primary language; a candidate that matches nothing falls through.
+* **Tables:** `shared/localization/<tag>.json` for en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR,
+  ru-RU and it-IT are embedded into the stub as `RCDATA` resources (`IDR_STRINGS_*` in `resource.h`, listed in
+  `localization.rc2`, which `stub.rc` and the native tests include; `kLanguages` in `localization.cpp`). English is
+  the base and the chosen table is merged over it, so a missing translation shows English. Package overrides from
+  `ui.strings.<lang>` (string values up to 4096 bytes) are merged last. `scripts/check-localization.ps1` checks that
+  every table has the keys, order and placeholders of `en-US.json` and is wired in.
 * **Front ends:** the Win32 UI reads the controller's table; the WinUI front end receives the full table and the chosen
   language in `hello` and has no string tables of its own. User-facing error text comes from `error.<CodeName>` keys;
   path problems from `path.*` keys. The Builder GUI uses its own `.resw` resources (en-US, zh-CN); its preview loads the

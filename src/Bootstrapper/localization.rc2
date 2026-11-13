@@ -1,0 +1,13 @@
+// The installer's built-in string tables, one per language (shared/localization/<tag>.json). Included by stub.rc and
+// by the native tests (tests/Native/strings.rc); ids in resource.h, matching in localization.cpp (kLanguages).
+IDR_STRINGS_EN_US RCDATA "..\\..\\shared\\localization\\en-US.json"
+IDR_STRINGS_ZH_CN RCDATA "..\\..\\shared\\localization\\zh-CN.json"
+IDR_STRINGS_ZH_TW RCDATA "..\\..\\shared\\localization\\zh-TW.json"
+IDR_STRINGS_JA_JP RCDATA "..\\..\\shared\\localization\\ja-JP.json"
+IDR_STRINGS_KO_KR RCDATA "..\\..\\shared\\localization\\ko-KR.json"
+IDR_STRINGS_DE_DE RCDATA "..\\..\\shared\\localization\\de-DE.json"
+IDR_STRINGS_FR_FR RCDATA "..\\..\\shared\\localization\\fr-FR.json"
+IDR_STRINGS_ES_ES RCDATA "..\\..\\shared\\localization\\es-ES.json"
+IDR_STRINGS_PT_BR RCDATA "..\\..\\shared\\localization\\pt-BR.json"
+IDR_STRINGS_RU_RU RCDATA "..\\..\\shared\\localization\\ru-RU.json"
+IDR_STRINGS_IT_IT RCDATA "..\\..\\shared\\localization\\it-IT.json"

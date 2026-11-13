@@ -160,7 +160,8 @@ public class ValidatorTests
         p.Ui.Localization = "locales";
         dir.File("locales/license-ja.txt", "規約");
         dir.File("locales/ja-JP.json", """{ "options": { "auto": "自動起動" }, "actions": { "drv": "ドライバー" }, "license": "license-ja.txt", "strings": { "button.next": "進む" } }""");
-        dir.File("locales/fr-FR.json", """{ "options": { "auto": "Démarrer avec Windows" }, "strings": { "button.install": "Installer" } }""");
+        dir.File("locales/nl-NL.json", """{ "options": { "auto": "Starten met Windows" }, "strings": { "button.install": "Installeren" } }""");
+        dir.File("locales/fr-FR.json", """{ "options": { "auto": "Démarrer avec Windows" }, "strings": { "button.install": "Installer maintenant" } }""");
         dir.File("locales/notes.json", "{}");
         var bag = new DiagnosticBag();
         var t = Localization.Load(p, dir.Path, bag);
@@ -169,9 +170,64 @@ public class ValidatorTests
         Assert.Equal("ドライバー", t.ActionNames[0]["ja-JP"]);
         Assert.EndsWith("license-ja.txt", t.LicenseFiles["ja-JP"]);
         Assert.Equal("進む", t.Strings["ja-JP"]["button.next"]);
-        Assert.Equal("Installer", t.Strings["fr-FR"]["button.install"]);     // a language the installer does not ship
-        Assert.Equal("Démarrer avec Windows", t.OptionLabels["auto"]["fr-FR"]);
+        Assert.Equal("Installeren", t.Strings["nl-NL"]["button.install"]);   // a language the installer does not ship
+        Assert.Equal("Starten met Windows", t.OptionLabels["auto"]["nl-NL"]);
+        Assert.Equal("Installer maintenant", t.Strings["fr-FR"]["button.install"]);  // overrides a built-in string
         Assert.Contains(bag.Items, d => d.Code == "FS1321");  // "notes" is not a language tag: reported, not used
+        // Coverage is reported for nl-NL only: fr-FR and ja-JP fall back to the installer's own tables.
+        if (Localization.InstallerStringKeys().Count > 0)
+            Assert.Equal(["ui.localization/nl-NL.json"], bag.Items.Where(d => d.Code == "FS1327").Select(d => d.Field));
+    }
+
+    [Fact]
+    public void BuiltInLanguageFollowsTheInstallersMatching()
+    {
+        foreach (var tag in Localization.SupportedLanguages) Assert.Equal(tag, Localization.BuiltInLanguage(tag));
+        Assert.Equal("zh-TW", Localization.BuiltInLanguage("ZH-tw"));
+        foreach (var tag in new[] { "zh-HK", "zh-MO", "zh-Hant", "zh-Hant-TW", "zh-Hant-HK" }) Assert.Equal("zh-TW", Localization.BuiltInLanguage(tag));
+        foreach (var tag in new[] { "zh", "zh-SG", "zh-Hans", "zh-Hans-HK" }) Assert.Equal("zh-CN", Localization.BuiltInLanguage(tag));
+        Assert.Equal("de-DE", Localization.BuiltInLanguage("de-AT"));
+        Assert.Equal("de-DE", Localization.BuiltInLanguage("de-CH"));
+        Assert.Equal("fr-FR", Localization.BuiltInLanguage("fr-CA"));
+        Assert.Equal("fr-FR", Localization.BuiltInLanguage("fr-BE"));
+        Assert.Equal("es-ES", Localization.BuiltInLanguage("es-MX"));
+        Assert.Equal("pt-BR", Localization.BuiltInLanguage("pt-PT"));
+        Assert.Equal("ru-RU", Localization.BuiltInLanguage("ru-KZ"));
+        Assert.Equal("it-IT", Localization.BuiltInLanguage("it-CH"));
+        Assert.Equal("en-US", Localization.BuiltInLanguage("en-GB"));
+        foreach (var tag in new[] { "nl-NL", "pl", "sr-Latn-RS", "auto", "", "-" }) Assert.Null(Localization.BuiltInLanguage(tag));
+    }
+
+    /// <summary>The installer's string tables as shipped next to the CLI (runtime/localization): one per supported
+    /// language, each with exactly the keys of en-US.json and the same {n} placeholders per string.</summary>
+    [Fact]
+    public void BuiltInStringTablesAreComplete()
+    {
+        var folder = Path.GetDirectoryName(new RuntimeAssets().LocalizationFile("en-US"))!;
+        Assert.True(Directory.Exists(folder), folder);
+        var files = Directory.GetFiles(folder, "*.json").Select(Path.GetFileNameWithoutExtension).Order(StringComparer.Ordinal);
+        Assert.Equal(Localization.SupportedLanguages.Order(StringComparer.Ordinal), files);
+
+        static Dictionary<string, string> Read(string file)
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file));
+            return doc.RootElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString() ?? "");
+        }
+        static string Placeholders(string text) =>
+            string.Join(' ', System.Text.RegularExpressions.Regex.Matches(text, @"\{\d+\}").Select(m => m.Value).Order(StringComparer.Ordinal));
+
+        var english = Read(new RuntimeAssets().LocalizationFile("en-US"));
+        foreach (var lang in Localization.SupportedLanguages)
+        {
+            var table = Read(new RuntimeAssets().LocalizationFile(lang));
+            Assert.Equal(lang, table["language"]);
+            Assert.Equal(english.Keys.Order(StringComparer.Ordinal), table.Keys.Order(StringComparer.Ordinal));
+            foreach (var (key, text) in english)
+            {
+                Assert.False(string.IsNullOrWhiteSpace(table[key]), $"{lang}: {key} is empty");
+                Assert.True(Placeholders(text) == Placeholders(table[key]), $"{lang}: {key} has placeholders [{Placeholders(table[key])}], en-US [{Placeholders(text)}]");
+            }
+        }
     }
 
     [Fact]

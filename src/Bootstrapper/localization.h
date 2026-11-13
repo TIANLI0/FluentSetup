@@ -10,6 +10,10 @@
 
 namespace fsetup::boot {
 
+// The built-in table for a BCP-47 tag ("zh-Hant-HK" -> "zh-TW", "de-CH" -> "de-DE"), or empty if the installer does
+// not ship that language.
+[[nodiscard]] std::wstring BuiltInLanguage(std::wstring_view tag);
+
 class Strings {
 public:
     // requested: "/lang" value (may be empty). packageDefault: ui.defaultLanguage ("auto" or a tag).

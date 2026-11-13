@@ -482,19 +482,25 @@ Remove-Existing
 Remove-ItemProperty $runKey -Name 'FluentSetupE2E-Managed' -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force $isDir, $group, $isKey, $vendorKey -ErrorAction SilentlyContinue
 
-Write-Host '==> A language the installer does not ship, supplied by the package' -ForegroundColor Cyan
+Write-Host '==> Languages: one the installer does not ship (supplied by the package), regional built-in tables' -ForegroundColor Cyan
 Remove-Existing
 New-Item -ItemType Directory -Force (Join-Path $work 'locales') | Out-Null
-[IO.File]::WriteAllText((Join-Path $work 'locales\de-DE.json'), '{ "strings": { "button.install": "Installieren", "state.Validating": "Wird geprüft" } }', [Text.UTF8Encoding]::new($false))
-$german = New-Package '9.0.0' { param($s) } @{} @{ ui = @{ license = '..\..\samples\DemoApp\LICENSE.txt'; localization = 'locales' } }
-$code = Run-Setup $german @('/quiet', '/lang', 'de-DE') 'lang-de'
-Check 'package-supplied de-DE strings are used (/lang de-DE)' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-de.log') -Raw) -match 'UI language de-DE' }
+[IO.File]::WriteAllText((Join-Path $work 'locales\nl-NL.json'), '{ "strings": { "button.install": "Installeren", "state.Validating": "Bezig met controleren" } }', [Text.UTF8Encoding]::new($false))
+$dutch = New-Package '9.0.0' { param($s) } @{} @{ ui = @{ license = '..\..\samples\DemoApp\LICENSE.txt'; localization = 'locales' } }
+$code = Run-Setup $dutch @('/quiet', '/lang', 'nl-NL') 'lang-nl'
+Check 'package-supplied nl-NL strings are used (/lang nl-NL)' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-nl.log') -Raw) -match 'UI language nl-NL' }
 Remove-Existing
-$code = Run-Setup $german @('/quiet', '/lang', 'de-AT') 'lang-de-at'
-Check 'de-AT falls back to the package''s de-DE' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-de-at.log') -Raw) -match 'UI language de-DE' }
+$code = Run-Setup $dutch @('/quiet', '/lang', 'nl-BE') 'lang-nl-be'
+Check 'nl-BE falls back to the package''s nl-NL' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-nl-be.log') -Raw) -match 'UI language nl-NL' }
 Remove-Existing
-$code = Run-Setup $german @('/quiet', '/lang', 'fr-FR') 'lang-fr'
-Check 'a language nobody supplies falls back to the Windows display language' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-fr.log') -Raw) -match 'UI language (en-US|zh-CN|ja-JP|ko-KR) ' }
+$code = Run-Setup $dutch @('/quiet', '/lang', 'de-AT') 'lang-de-at'
+Check 'de-AT uses the built-in de-DE table' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-de-at.log') -Raw) -match 'UI language de-DE' }
+Remove-Existing
+$code = Run-Setup $dutch @('/quiet', '/lang', 'zh-HK') 'lang-zh-hk'
+Check 'zh-HK uses the built-in Traditional Chinese table (zh-TW)' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-zh-hk.log') -Raw) -match 'UI language zh-TW' }
+Remove-Existing
+$code = Run-Setup $dutch @('/quiet', '/lang', 'sv-SE') 'lang-sv'
+Check 'a language nobody supplies falls back to the Windows display language' { $code -eq 0 -and (Get-Content (Join-Path $logs 'lang-sv.log') -Raw) -match 'UI language (en-US|zh-CN|zh-TW|ja-JP|ko-KR|de-DE|fr-FR|es-ES|pt-BR|ru-RU|it-IT) ' }
 Remove-Existing
 
 Write-Host '==> Prerequisites: .NET version checks, missing runtime, verified download' -ForegroundColor Cyan

@@ -20,9 +20,39 @@ namespace FluentSetup.Builder.Core.Packaging;
 /// </summary>
 public static class Localization
 {
-    /// <summary>Languages the installer user interface ships with (shared/localization/*.json). A package can add any
-    /// other language by giving its localization file a full "strings" table (see <see cref="Coverage"/>).</summary>
-    public static readonly string[] SupportedLanguages = ["en-US", "zh-CN", "ja-JP", "ko-KR"];
+    /// <summary>Languages the installer user interface ships with (shared/localization/*.json, embedded by
+    /// src/Bootstrapper/localization.rc2 and matched in localization.cpp). A package can add any other language by
+    /// giving its localization file a full "strings" table (see <see cref="Coverage"/>). The first table of a language
+    /// is its default (zh-CN before zh-TW); the Builder's language list shows them in this order.</summary>
+    public static readonly string[] SupportedLanguages = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "de-DE", "fr-FR", "es-ES", "pt-BR", "ru-RU", "it-IT"];
+
+    /// <summary>Script and region subtags that pick a table among those of its language (localization.cpp, kLanguages).</summary>
+    private static readonly Dictionary<string, string[]> Markers = new(StringComparer.Ordinal)
+    {
+        ["zh-CN"] = ["Hans"],
+        ["zh-TW"] = ["Hant", "TW", "HK", "MO"],
+    };
+
+    /// <summary>
+    /// The built-in table the installer shows for a language tag, by the installer's own rule: the exact tag, else a
+    /// script or region subtag (zh-Hant, zh-HK, zh-MO -> zh-TW; zh-Hans-HK -> zh-CN), else the first table of the
+    /// language (de-AT -> de-DE, es-MX -> es-ES, pt-PT -> pt-BR, zh-SG -> zh-CN). Null if the installer does not ship
+    /// the language.
+    /// </summary>
+    public static string? BuiltInLanguage(string tag)
+    {
+        var exact = SupportedLanguages.FirstOrDefault(l => string.Equals(l, tag, StringComparison.OrdinalIgnoreCase));
+        if (exact is not null) return exact;
+        var subtags = tag.Split('-');
+        if (subtags[0].Length == 0) return null;
+        var candidates = SupportedLanguages.Where(l => string.Equals(l.Split('-')[0], subtags[0], StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var subtag in subtags.Skip(1))
+        {
+            var match = candidates.FirstOrDefault(l => Markers.TryGetValue(l, out var m) && m.Contains(subtag, StringComparer.OrdinalIgnoreCase));
+            if (match is not null) return match;
+        }
+        return candidates.FirstOrDefault();
+    }
 
     /// <summary>BCP-47 tag such as fr-FR, de, pt-BR or zh-Hant-TW.</summary>
     public static bool IsLanguageTag(string tag) =>
@@ -149,7 +179,7 @@ public static class Localization
         var keys = d is null ? [] : InstallerStringKeys();
         foreach (var (lang, table) in strings)
         {
-            if (SupportedLanguages.Contains(lang) || keys.Count == 0) continue;
+            if (SupportedLanguages.Contains(lang, StringComparer.OrdinalIgnoreCase) || keys.Count == 0) continue;
             var (done, total, missing) = Coverage(table, keys);
             if (missing.Count > 0)
                 d!.Warning("FS1327", $"ui.localization/{lang}.json", $"{done} of {total} installer strings translated; missing ones are shown in English (e.g. {string.Join(", ", missing.Take(5))}). fluentsetup locale add {lang} lists them all.");

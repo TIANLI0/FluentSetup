@@ -58,7 +58,7 @@ paths work but make the project machine-specific.
 | Write settings into a config file | `configFiles[]`: JSON (dotted keys) or INI (section/key), existing files keep their other settings. |
 | Files the app keeps open during updates | `install.restartManager: "auto"` (default) closes and restarts the programs holding them; `install.lockedFiles: "reboot"` (per-machine) replaces what is still locked at the next restart (exit code 3010). |
 | Signed uninstaller | `signing.signUninstaller: true` (default when signing): uninstall.exe shows the publisher in UAC. |
-| Languages | Built in: see §10. Any other language: a localization file with a `strings` table (§10). |
+| Languages | Built in: en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT (regional tags such as zh-HK, de-CH, pt-PT use the table of their language). Any other language: a localization file with a `strings` table (§10). |
 
 ## 4. Project file at a glance
 
@@ -284,13 +284,17 @@ committed. Apps & features "Modify" runs `uninstall.exe /modify` (Change page + 
 ## 10. Languages
 
 - The installer follows the Windows display language; `/lang <tag>` overrides; `ui.defaultLanguage` pins one.
+- Built in: en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT. A regional tag uses the
+  table of its language: zh-HK, zh-MO, zh-Hant -> zh-TW, other zh -> zh-CN, de-AT/de-CH -> de-DE, fr-CA -> fr-FR,
+  es-* -> es-ES, pt-PT -> pt-BR. A package's own `strings` for exactly the user's tag win over a built-in table.
 - Package texts per language live in `ui.localization` (a folder), one `<tag>.json` each:
   `{ "options": { id: text }, "actions": { id: text }, "variants": { id: { "label", "description" } },
   "license": "file relative to the folder", "strings": { key: text } }`. Inline texts in the project are the fallback.
-- **Adding a language the installer does not ship** (e.g. `fr-FR`): `fluentsetup locale add fr-FR project.json`
-  creates `locales/fr-FR.json` with every installer string in English plus the package's ids; translate the values
-  (keep `{0}` placeholders and `&` mnemonics in `fallback.*` keys). The installer then offers French on French
-  Windows. `validate` reports how many strings are still untranslated (FS1327).
+- **Adding a language the installer does not ship** (e.g. `nl-NL`): `fluentsetup locale add nl-NL project.json`
+  creates `locales/nl-NL.json` with every installer string in English plus the package's ids; translate the values
+  (keep `{0}` placeholders and `&` mnemonics in `fallback.*` keys). The installer then offers Dutch on Dutch
+  Windows. `validate` reports how many strings are still untranslated (FS1327). For a regional variant of a built-in
+  language (e.g. `pt-PT`, `fr-CA`) the strings start from the built-in table (pt-BR, fr-FR) instead of English.
 - `strings` in a built-in language overrides single installer texts (keys: `fluentsetup locale add en-US` output or
   `shared/localization/en-US.json`).
 

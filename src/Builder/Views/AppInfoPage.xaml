@@ -103,11 +103,19 @@
                             <TextBlock x:Uid="AppLanguageDescription" Style="{StaticResource RowDescriptionStyle}" />
                         </StackPanel>
                         <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.LanguageIndex, Mode=TwoWay}" x:Uid="AppLanguageCombo">
+                            <!-- same order as Localization.SupportedLanguages (MainViewModel.Languages) -->
                             <ComboBoxItem x:Uid="LanguageAuto" />
                             <ComboBoxItem Content="English (en-US)" />
                             <ComboBoxItem Content="简体中文 (zh-CN)" />
-                    <ComboBoxItem Content="日本語 (ja-JP)" />
-                    <ComboBoxItem Content="한국어 (ko-KR)" />
+                            <ComboBoxItem Content="繁體中文 (zh-TW)" />
+                            <ComboBoxItem Content="日本語 (ja-JP)" />
+                            <ComboBoxItem Content="한국어 (ko-KR)" />
+                            <ComboBoxItem Content="Deutsch (de-DE)" />
+                            <ComboBoxItem Content="Français (fr-FR)" />
+                            <ComboBoxItem Content="Español (es-ES)" />
+                            <ComboBoxItem Content="Português (pt-BR)" />
+                            <ComboBoxItem Content="Русский (ru-RU)" />
+                            <ComboBoxItem Content="Italiano (it-IT)" />
                         </ComboBox>
                     </Grid>
                 </Border>

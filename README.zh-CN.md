@@ -20,7 +20,7 @@
 - **声明式扩展**：关闭正在运行的进程；必需（锁定）组件与可选组件；安装后或卸载前运行安装包内的程序（支持失败后的备用方式）；NGen；PATH；清理旧版本的计划任务、Run 启动项、快捷方式、文件、注册表项和卸载项。
 - **内置更新**：在项目里指定 GitHub Releases 或 JSON 源，已安装的应用即可自行更新：`uninstall.exe /install-update` 负责检查、询问、下载、校验（SHA-256、同一应用、更高版本、可选的签名者）并安装；`/check-update` 只检查。应用里无需编写更新代码。
 - **多变体**：一个安装包可同时带自包含版和依赖共享运行时的版本（相同文件只存一份），安装时由用户选择，或用 `--variant` 只打其中一种。
-- **无障碍与本地化**：内置英文、简体中文、日文、韩文，跟随 Windows 显示语言；其他语言可由安装包自行补齐（`fluentsetup locale add fr-FR`）；UI 自动化名称、键盘导航、浅色/深色/高对比度主题、按显示器 DPI 缩放。
+- **无障碍与本地化**：内置英文、简体中文、繁体中文、日文、韩文、德文、法文、西班牙文、巴西葡萄牙文、俄文、意大利文，跟随 Windows 显示语言；其他语言可由安装包自行补齐（`fluentsetup locale add nl-NL`）；UI 自动化名称、键盘导航、浅色/深色/高对比度主题、按显示器 DPI 缩放。
 - **三种制作方式**：图形化 Builder 应用、`fluentsetup` 命令行（也提供 GitHub Action），或直接调用 `Builder.Core` 库。
 - **便于 AI 编写**：`fluentsetup guide` 输出完整的编写指南，`fluentsetup schema` 输出 JSON Schema，`fluentsetup validate --json` 给出带代码和字段路径的诊断。
 
