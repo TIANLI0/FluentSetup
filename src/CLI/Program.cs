@@ -33,6 +33,13 @@ public static class Program
           fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
           fluentsetup inspect <Setup.exe> [--verify] [--json]
           fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
+          fluentsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [options]
+                                        Write winget manifests (winget-pkgs layout) for a built Setup.exe
+              -o, --output <dir>        Root folder (default: current folder): <dir>/manifests/<x>/<Publisher>/<App>/<version>
+              --identifier <id>         PackageIdentifier (default: app.id if it is Publisher.App)
+              --license <name>          e.g. MIT (default: recognized from the license text, else Proprietary)
+              --license-url, --publisher-url, --release-notes-url <url>
+              --short-description <text>, --tags <a,b,...>, --json
           fluentsetup locale add <language> <project.json> [--force]
                                         Create <ui.localization>/<language>.json with every text to translate
                                         (installer strings, option/action/variant ids); any BCP-47 tag, e.g. fr-FR
@@ -79,6 +86,7 @@ public static class Program
                 "schema" => PrintResource("FluentSetup.Cli.fluentsetup.project.schema.json"),
                 "locale" => Locale(parsed),
                 "update" => await UpdateAsync(parsed, cts.Token),
+                "winget" => WingetCommand.Run(parsed),
                 _ => UsageError($"Unknown command '{args[0]}'."),
             };
         }
