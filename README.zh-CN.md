@@ -127,7 +127,7 @@ cd FluentSetup
 .\scripts\package-release.ps1             # 生成发布文件，输出到 out\release
 ```
 
-源码构建的命令行位于 `src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe`。测试打包使用的示例应用是 [samples/DemoApp](samples/DemoApp)。
+源码构建的命令行位于 `src\CLI\bin\Release\net10.0\fluentsetup.exe`。测试打包使用的示例应用是 [samples/DemoApp](samples/DemoApp)。
 
 ### 测试
 

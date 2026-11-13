@@ -171,7 +171,7 @@ cd FluentSetup
 .\scripts\package-release.ps1             # the release files, in out\release
 ```
 
-The CLI built from source is `src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe`.
+The CLI built from source is `src\CLI\bin\Release\net10.0\fluentsetup.exe`.
 [samples/DemoApp](samples/DemoApp) is the app the tests package.
 
 | Path | What |
