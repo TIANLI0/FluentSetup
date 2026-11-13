@@ -198,6 +198,11 @@ public sealed class OutputSettings
 public sealed class SigningSettings
 {
     public bool Enabled { get; set; }
+    /// <summary>
+    /// signtool (certificate store or .pfx, Windows) | trustedSigning (Azure Artifact Signing through signtool, Windows) |
+    /// command (any signing tool, e.g. osslsigncode or jsign on Linux and macOS). "" = signtool.
+    /// </summary>
+    public string Provider { get; set; } = "signtool";
     public string CertificateThumbprint { get; set; } = "";
     public string CertificateFile { get; set; } = "";
     /// <summary>Name of an environment variable holding the PFX password (never stored in the project).</summary>
@@ -206,7 +211,40 @@ public sealed class SigningSettings
     public string SignToolPath { get; set; } = "";
     /// <summary>Also sign the uninstall.exe that setup writes into the install folder (UAC and SmartScreen then show the publisher when uninstalling).</summary>
     public bool SignUninstaller { get; set; } = true;
+    /// <summary>Settings of the trustedSigning provider.</summary>
+    public TrustedSigningSettings? TrustedSigning { get; set; }
+    /// <summary>Settings of the command provider.</summary>
+    public SigningCommand? Command { get; set; }
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
+}
+
+/// <summary>Azure Artifact Signing (formerly Trusted Signing): signtool with Microsoft's Azure.CodeSigning.Dlib.dll.</summary>
+public sealed class TrustedSigningSettings
+{
+    /// <summary>Regional endpoint of the account, e.g. https://eus.codesigning.azure.net.</summary>
+    public string Endpoint { get; set; } = "";
+    /// <summary>Artifact Signing account name.</summary>
+    public string AccountName { get; set; } = "";
+    /// <summary>Certificate profile name.</summary>
+    public string CertificateProfile { get; set; } = "";
+    /// <summary>Path of Azure.CodeSigning.Dlib.dll (same architecture as signtool.exe).</summary>
+    public string DlibPath { get; set; } = "";
+    /// <summary>Optional opaque value that tags the signing requests (e.g. a build id).</summary>
+    public string CorrelationId { get; set; } = "";
+    /// <summary>DefaultAzureCredential sources to skip, e.g. ["ManagedIdentityCredential"].</summary>
+    public List<string> ExcludeCredentials { get; set; } = [];
+}
+
+/// <summary>A signing tool run without a shell; <c>{file}</c> in <see cref="Arguments"/> is the file to sign.</summary>
+public sealed class SigningCommand
+{
+    /// <summary>Executable: a name found on PATH, or a path (relative to the project file).</summary>
+    public string Run { get; set; } = "";
+    /// <summary>Arguments; placeholders {file}, {output}, {description}, {timestampUrl}.</summary>
+    public List<string> Arguments { get; set; } = [];
+    /// <summary>Extra environment variables for the tool (it also inherits the build's environment).</summary>
+    public Dictionary<string, string> Environment { get; set; } = [];
+    public int TimeoutSeconds { get; set; } = 600;
 }
 
 public sealed class RequirementSettings

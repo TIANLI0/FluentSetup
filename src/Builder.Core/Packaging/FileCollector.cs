@@ -51,7 +51,7 @@ public static class FileCollector
             return result;
         }
 
-        var hashes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        var hashes = new Dictionary<string, byte[]>(StringComparer.FromComparison(PathRules.HostPathComparison));
         byte[] Hash(CollectedFile f)
         {
             if (!hashes.TryGetValue(f.SourcePath, out var h))
@@ -113,7 +113,8 @@ public static class FileCollector
                 return;
             }
             seen[normalized] = source;
-            var attrs = info.Attributes & (FileAttributes.ReadOnly | FileAttributes.Hidden);
+            // On Linux and macOS .NET calls dot files hidden; that is not the Windows attribute, so only read-only is taken.
+            var attrs = info.Attributes & (OperatingSystem.IsWindows() ? FileAttributes.ReadOnly | FileAttributes.Hidden : FileAttributes.ReadOnly);
             result.Files.Add(new CollectedFile(source, normalized, info.Length, Glob.MatchesAny(preserve, normalized), attrs));
         }
 
@@ -149,10 +150,16 @@ public static class FileCollector
                 {
                     var relFromRoot = Path.GetRelativePath(root, entry.FullName);
                     var target = string.IsNullOrEmpty(targetPrefix) ? relFromRoot : Path.Combine(targetPrefix, relFromRoot);
-                    if (entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                    if (PathRules.IsLink(entry))
                     {
                         result.SkippedLinks++;
                         result.Diagnostics.Warning("FS1112", "files.source", $"Skipped link (symbolic link or junction): {entry.FullName}");
+                        continue;
+                    }
+                    if (!OperatingSystem.IsWindows() && entry.Name.Contains('\\'))
+                    {
+                        // A backslash is a folder separator on Windows: "a\b.txt" would land in a folder "a".
+                        result.Diagnostics.Error("FS1107", "files", $"'{relFromRoot}' cannot be installed: the name contains '\\'.");
                         continue;
                     }
                     if (entry is DirectoryInfo)
@@ -162,7 +169,7 @@ public static class FileCollector
                         continue;
                     }
                     if (applyFilters && (!Glob.MatchesAny(include, relFromRoot) || Glob.MatchesAny(exclude, relFromRoot))) continue;
-                    if (outputFile is not null && entry.FullName.Equals(outputFile, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (outputFile is not null && entry.FullName.Equals(outputFile, PathRules.HostPathComparison)) continue;
                     if (result.Files.Count >= MaxFiles)
                     {
                         result.Diagnostics.Error("FS1113", "files", $"More than {MaxFiles:N0} files.");
@@ -220,7 +227,7 @@ public static class FileCollector
     {
         var p = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         var r = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent));
-        return p.Equals(r, StringComparison.OrdinalIgnoreCase) ||
-               p.StartsWith(r + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        return p.Equals(r, PathRules.HostPathComparison) ||
+               p.StartsWith(r + Path.DirectorySeparatorChar, PathRules.HostPathComparison);
     }
 }

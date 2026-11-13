@@ -1,5 +1,5 @@
 name: Setup FluentSetup
-description: Installs the fluentsetup CLI (self-contained, with the installer runtime) and puts it on PATH.
+description: Installs the fluentsetup CLI (self-contained, with the installer runtime) and puts it on PATH. Windows, Linux x64 and macOS arm64 runners.
 author: TIANLI0
 branding:
   icon: package
@@ -15,7 +15,7 @@ inputs:
 
 outputs:
   path:
-    description: Full path of fluentsetup.exe.
+    description: Full path of fluentsetup.exe (fluentsetup on Linux and macOS).
     value: ${{ steps.install.outputs.path }}
   version:
     description: The installed version.
@@ -42,23 +42,39 @@ runs:
           $latest = Invoke-RestMethod -Headers $headers "https://api.github.com/repos/$repo/releases/latest"
           $version = $latest.tag_name.TrimStart('v')
         }
-        $name = "fluentsetup-$version-win-x64.zip"
+        # Windows x64 (also used on Windows Arm64), Linux x64, macOS Apple silicon.
+        $arch = "$env:RUNNER_ARCH".ToUpperInvariant()
+        if ($IsWindows) { $rid = 'win-x64'; $ext = 'zip'; $exeName = 'fluentsetup.exe' }
+        elseif ($IsLinux -and $arch -eq 'X64') { $rid = 'linux-x64'; $ext = 'tar.gz'; $exeName = 'fluentsetup' }
+        elseif ($IsMacOS -and $arch -eq 'ARM64') { $rid = 'osx-arm64'; $ext = 'tar.gz'; $exeName = 'fluentsetup' }
+        else { throw "FluentSetup has no build for this runner ($([Runtime.InteropServices.RuntimeInformation]::OSDescription), $arch). Use a Windows, Linux x64 or macOS arm64 runner." }
+        $name = "fluentsetup-$version-$rid.$ext"
         $base = "https://github.com/$repo/releases/download/v$version"
-        $dir = Join-Path $env:RUNNER_TEMP "fluentsetup\$version"
+        $dir = Join-Path $env:RUNNER_TEMP 'fluentsetup' $version
         New-Item -ItemType Directory -Force $dir | Out-Null
-        $zip = Join-Path $env:RUNNER_TEMP $name
-        Write-Host "FluentSetup $version from $base"
-        Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'fluentsetup-action' } "$base/$name" -OutFile $zip
+        $archive = Join-Path $env:RUNNER_TEMP $name
+        Write-Host "FluentSetup $version ($rid) from $base"
+        try {
+          Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'fluentsetup-action' } "$base/$name" -OutFile $archive
+        } catch {
+          if (-not $IsWindows) { throw "Could not download $name ($($_.Exception.Message)). Linux and macOS builds exist from FluentSetup 1.2.0 on." }
+          throw
+        }
         # Saved to a file and read as text: GitHub serves release files as application/octet-stream, for which
         # Invoke-WebRequest returns .Content as bytes on PowerShell 7.
         $sumsFile = Join-Path $env:RUNNER_TEMP "fluentsetup-$version-SHA256SUMS.txt"
         Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'fluentsetup-action' } "$base/SHA256SUMS.txt" -OutFile $sumsFile
         $expected = (Get-Content $sumsFile | Where-Object { $_ -match "^([0-9a-fA-F]{64})\s+\*?$([regex]::Escape($name))\s*$" } | ForEach-Object { $Matches[1] }) | Select-Object -First 1
         if (-not $expected) { throw "SHA256SUMS.txt has no entry for $name" }
-        $actual = (Get-FileHash $zip -Algorithm SHA256).Hash
+        $actual = (Get-FileHash $archive -Algorithm SHA256).Hash
         if ($actual -ne $expected.ToUpperInvariant()) { throw "SHA-256 mismatch for ${name}: $actual, expected $expected" }
-        Expand-Archive $zip -DestinationPath $dir -Force
-        $exe = Join-Path $dir 'fluentsetup.exe'
+        if ($ext -eq 'zip') {
+          Expand-Archive $archive -DestinationPath $dir -Force
+        } else {
+          tar -xzf $archive -C $dir
+          if ($LASTEXITCODE -ne 0) { throw "Could not extract $name" }
+        }
+        $exe = Join-Path $dir $exeName
         & $exe --version
         if ($LASTEXITCODE -ne 0) { throw 'fluentsetup does not start' }
         Add-Content $env:GITHUB_PATH $dir

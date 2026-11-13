@@ -150,6 +150,7 @@ public sealed class PackageBuilder
         report.AppName = project.App.Name;
         report.Version = project.App.Version;
         var diagnostics = ProjectValidator.Validate(project, projectDir);
+        diagnostics = SigningValidator.ForBuild(diagnostics, project.Signing, projectDir, options.Sign ?? project.Signing.Enabled);
         diagnostics.AddRange(variableDiagnostics.Items);
         report.Diagnostics.AddRange(diagnostics.Items);
         if (!assets.HasStub(arch)) diagnostics.Error("FS2001", "output.architecture", $"The installer runtime for {arch} is missing: {assets.StubPath(arch)}");
@@ -215,7 +216,7 @@ public sealed class PackageBuilder
         // decode another variant's data.
         var ordered = collected.Files
             .OrderBy(f => f.Variant, StringComparer.Ordinal)
-            .ThenBy(f => Path.GetExtension(f.RelativePath), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(f => Path.GetExtension(f.RelativePath.AsSpan(f.RelativePath.LastIndexOf('\\') + 1)).ToString(), StringComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase).ToList();
         var blocks = new List<List<CollectedFile>>();
         var current = new List<CollectedFile>();

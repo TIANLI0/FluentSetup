@@ -26,8 +26,9 @@ Win32 fallback, transactional (any failure rolls back), Apps & features entry, s
    0 = success (§8). Per-user packages need no administrator rights; a per-machine quiet install started without them
    shows the UAC prompt (start it elevated for unattended tests).
 
-Relative paths in the project are relative to the project file. Absolute paths work but make the project
-machine-specific.
+Relative paths in the project are relative to the project file; `\` and `/` both work, so the same project builds on
+Windows, Linux and macOS (`fluentsetup` runs on all three; the result is always a Windows `Setup.exe`). Absolute
+paths work but make the project machine-specific.
 
 ## 3. Decisions to make
 
@@ -273,7 +274,7 @@ committed. Apps & features "Modify" runs `uninstall.exe /modify` (Change page + 
 | FS12xx | `install` (scope, directory templates, offers, Windows build) |
 | FS13xx | `ui` (FS1304 language, FS1306 license size, FS1311 licenseMode, FS1320–FS1328 localization) |
 | FS14xx | `output` |
-| FS15xx | `signing` |
+| FS15xx | `signing` (FS1501 no certificate, FS1504 provider, FS1505–FS1509 `trustedSigning`, FS1510–FS1516 `command`, FS1518 thumbprint, FS1519 provider needs Windows) |
 | FS16xx | requirements, options, actions, cleanup, variants filters (FS1640–FS1642: a referenced file is not in the package; FS1670–FS1683 VC++, custom prerequisites, `auto`, download signer) |
 | FS17xx | `update` (FS1701 both sources, FS1702 repository, FS1703 feed URL, FS1704 asset name, FS1705 literal version in the name, FS1706 checksums, FS1707–FS1710 settings without effect, signer) |
 | FS18xx | `variables` |
@@ -346,5 +347,8 @@ Uninstall entries: `"<dir>\uninstall.exe" /uninstall` (and `/quiet`). Logs defau
 - Fresh install, update from the previous version, uninstall: all with `/quiet /log` and exit code 0.
 - Per-machine: test the UAC path once interactively.
 - `onFailure: "fail"` only for steps without which the app cannot run.
-- Sign the package (`signing`): unsigned downloads trigger SmartScreen. Keep `signUninstaller` on.
+- Sign the package (`signing`): unsigned downloads trigger SmartScreen. `provider`: `signtool` (certificate store or
+  `.pfx`), `trustedSigning` (Azure Artifact Signing), or `command` (any tool, e.g. osslsigncode or jsign; the only
+  one that works when building on Linux or macOS).
+  Keep `signUninstaller` on.
 - File types, schemes, services: install, check the registry/Services, uninstall, check they are gone.

@@ -1544,78 +1544,255 @@
     },
     "signing": {
       "type": "object",
-      "description": "Authenticode signing of Setup.exe with signtool.exe.",
+      "description": "Authenticode signing of Setup.exe (and of the uninstall.exe it writes): signtool with a certificate from the store or a .pfx, Azure Artifact Signing, or any signing tool (also on Linux and macOS).",
       "properties": {
         "enabled": {
           "type": "boolean",
           "default": false,
           "description": "Sign the output. Overridden by fluentsetup build --sign / --no-sign."
         },
+        "provider": {
+          "enum": [
+            "signtool",
+            "trustedSigning",
+            "command",
+            ""
+          ],
+          "default": "signtool",
+          "description": "signtool: certificateThumbprint or certificateFile (Windows). trustedSigning: Azure Artifact Signing (formerly Trusted Signing) through signtool and Microsoft's dlib (Windows). command: run any signing tool (osslsigncode, jsign, AzureSignTool, ...; works on Linux and macOS). Empty = signtool."
+        },
         "certificateThumbprint": {
           "type": "string",
           "default": "",
-          "description": "SHA-1 thumbprint of a certificate in the Windows certificate store (spaces are removed). Takes precedence over certificateFile."
+          "description": "signtool: SHA-1 thumbprint (40 hex digits) of a certificate in the current user's certificate store (spaces are removed). Takes precedence over certificateFile."
         },
         "certificateFile": {
           "type": "string",
           "default": "",
-          "description": "Path of a .pfx file (relative to the project file or absolute)."
+          "description": "signtool: path of a .pfx file (relative to the project file or absolute)."
         },
         "passwordEnvironmentVariable": {
           "type": "string",
           "default": "",
-          "description": "Name of an environment variable holding the PFX password (the password itself is never stored in the project)."
+          "description": "signtool: name of an environment variable holding the PFX password. The password is never stored in the project, never logged and never put on signtool's command line (the .pfx is imported into a temporary certificate store of the current user and removed after signing)."
         },
         "timestampUrl": {
           "type": "string",
           "default": "http://timestamp.digicert.com",
-          "description": "RFC 3161 timestamp server (SHA-256). Empty = no timestamp."
+          "description": "RFC 3161 timestamp server (SHA-256). Empty = no timestamp. For Artifact Signing use http://timestamp.acs.microsoft.com. With the command provider it is the {timestampUrl} placeholder."
         },
         "signToolPath": {
           "type": "string",
           "default": "",
-          "description": "Path of signtool.exe; empty = search the Windows 10/11 SDK and PATH."
+          "description": "signtool and trustedSigning: path of signtool.exe; empty = search the Windows 10/11 SDK and PATH."
         },
         "signUninstaller": {
           "type": "boolean",
           "default": true,
           "description": "Also sign the uninstall.exe that setup writes into the install folder (UAC and SmartScreen show the publisher when uninstalling)."
+        },
+        "trustedSigning": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "default": null,
+          "description": "Settings of the trustedSigning provider. Authentication uses DefaultAzureCredential (e.g. AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET in the environment, or az login).",
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "pattern": "^https://",
+              "description": "Regional endpoint of the account, e.g. https://eus.codesigning.azure.net."
+            },
+            "accountName": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Artifact Signing account name."
+            },
+            "certificateProfile": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Certificate profile name."
+            },
+            "dlibPath": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Path of Azure.CodeSigning.Dlib.dll (NuGet package Microsoft.ArtifactSigning.Client, bin/x64; same architecture as signtool.exe)."
+            },
+            "correlationId": {
+              "type": "string",
+              "default": "",
+              "description": "Optional value attached to the signing requests (e.g. a build id)."
+            },
+            "excludeCredentials": {
+              "type": "array",
+              "default": [],
+              "items": {
+                "enum": [
+                  "EnvironmentCredential",
+                  "WorkloadIdentityCredential",
+                  "ManagedIdentityCredential",
+                  "SharedTokenCacheCredential",
+                  "VisualStudioCredential",
+                  "VisualStudioCodeCredential",
+                  "AzureCliCredential",
+                  "AzurePowerShellCredential",
+                  "AzureDeveloperCliCredential",
+                  "InteractiveBrowserCredential"
+                ]
+              },
+              "description": "DefaultAzureCredential sources to skip."
+            }
+          },
+          "required": [
+            "endpoint",
+            "accountName",
+            "certificateProfile",
+            "dlibPath"
+          ]
+        },
+        "command": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "default": null,
+          "description": "Settings of the command provider: a signing tool run without a shell, in the project folder, with the build's environment. It signs the file in place, or writes the signed copy to {output}.",
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The program: a name found on PATH (e.g. osslsigncode) or a path (relative to the project file)."
+            },
+            "arguments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "contains": {
+                "type": "string",
+                "pattern": "\\{file\\}"
+              },
+              "description": "Arguments, one per item (no quoting needed). Placeholders: {file} (required: the file to sign), {output} (the tool writes the signed file here; it then replaces {file}), {description}, {timestampUrl}."
+            },
+            "environment": {
+              "type": "object",
+              "default": {},
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Extra environment variables for the tool. Do not put secrets here: the tool inherits the build's environment, so pass them from CI secrets."
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 3600,
+              "default": 600,
+              "description": "The tool is stopped (and the build fails) after this time."
+            }
+          },
+          "required": [
+            "run",
+            "arguments"
+          ]
         }
       },
-      "if": {
-        "required": [
-          "enabled"
-        ],
-        "properties": {
-          "enabled": {
-            "const": true
-          }
-        }
-      },
-      "then": {
-        "anyOf": [
-          {
+      "allOf": [
+        {
+          "if": {
             "required": [
-              "certificateThumbprint"
+              "enabled"
             ],
             "properties": {
-              "certificateThumbprint": {
-                "minLength": 1
+              "enabled": {
+                "const": true
+              },
+              "provider": {
+                "enum": [
+                  "signtool",
+                  ""
+                ]
               }
             }
           },
-          {
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "certificateThumbprint"
+                ],
+                "properties": {
+                  "certificateThumbprint": {
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "required": [
+                  "certificateFile"
+                ],
+                "properties": {
+                  "certificateFile": {
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
             "required": [
-              "certificateFile"
+              "enabled",
+              "provider"
             ],
             "properties": {
-              "certificateFile": {
-                "minLength": 1
+              "enabled": {
+                "const": true
+              },
+              "provider": {
+                "const": "trustedSigning"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "trustedSigning"
+            ],
+            "properties": {
+              "trustedSigning": {
+                "type": "object"
               }
             }
           }
-        ]
-      }
+        },
+        {
+          "if": {
+            "required": [
+              "enabled",
+              "provider"
+            ],
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "provider": {
+                "const": "command"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
     },
     "download": {
       "type": "object",

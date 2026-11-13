@@ -322,13 +322,16 @@ package explicitly adopts it (`engine.cpp:598-600`).
 
 ## 4. Recommendations
 
-1. **Sign every package.** Enable the `signing` section of the project (`src/Builder.Core/Model/ProjectModel.cs:125-135`):
-   `enabled`, either `certificateThumbprint` (certificate store; preferred, works with hardware tokens) or
-   `certificateFile` (.pfx) with `passwordEnvironmentVariable` (the password is never stored in the project),
-   `timestampUrl` (default `http://timestamp.digicert.com`; always timestamp so signatures outlive the certificate), and
-   optionally `signToolPath`. The builder signs with SHA-256 file and timestamp digests
-   (`src/Builder.Core/Packaging/Signer.cs:38-65`) and, with output verification on, re-inspects the written package
-   (`PackageBuilder.cs:273-279`). Check the result with `fluentsetup inspect --verify` and `signtool verify /pa`.
+1. **Sign every package.** Enable the `signing` section of the project (`SigningSettings` in
+   `src/Builder.Core/Model/ProjectModel.cs`): `enabled`, a `provider` and its settings: `signtool` with
+   `certificateThumbprint` (certificate store; preferred, works with hardware tokens) or `certificateFile` (.pfx) with
+   `passwordEnvironmentVariable` (the password is never stored in the project and never put on a command line),
+   `trustedSigning` (Azure Artifact Signing, keys never leave Azure), or `command` (any signing tool, e.g. against a
+   cloud HSM; also on Linux and macOS). Set `timestampUrl` (default `http://timestamp.digicert.com`; always timestamp so
+   signatures outlive the certificate). The builder signs with a SHA-256 file digest
+   (`src/Builder.Core/Packaging/Signer.cs`), fails if the file has no signature afterwards and, with output
+   verification on, re-inspects the written package. Check the result with `fluentsetup inspect --verify` and
+   `signtool verify /pa`.
 2. Prefer per-user packages unless the app really needs machine-wide installation; per-machine packages run their
    actions as administrator.
 3. For per-machine packages keep the default `{ProgramFiles}\{AppName}` location and consider `allowCustomDir: false`
@@ -364,7 +367,7 @@ Found while reading the code for this document. G1, G5, G6, G7, G8, G10, G11 and
 | G6 | Fixed | `src/Install.Worker/worker.cpp`; `Engine::SanitizeOptions` | *Was:* the worker did not re-apply the package's option policy. *Now:* the worker rejects options that `Engine::SanitizeOptions` refuses (scope, custom folder when `allowCustomDir` is false, undeclared option ids) and forces hidden shortcut offers to their defaults. |
 | G7 | Fixed | `src/Bootstrapper/main.cpp` (`InstanceLock`) | *Was:* the `Global\FluentSetup-<appId>` mutex was created with default security, and if an existing object denied access, `CreateMutexW` failed and the single-instance check was silently skipped. *Now:* it is created with an explicit security descriptor (`D:P(A;;0x001F0001;;;SY)(A;;0x001F0001;;;BA)(A;;0x00100001;;;AU)(A;;0x00100001;;;IU)(A;;0x00100001;;;OW)`: every authenticated or interactive user may wait on it and release it, so setups of different users and sessions see each other; the owner-rights ACE keeps its creator from rewriting that security) and opened with `SYNCHRONIZE \| MUTEX_MODIFY_STATE`. Any failure to create or open it, including access denied or a same-named object of another type, is treated as "another setup is running" (exit code 16, fail closed). A user who creates the mutex first can still make other users' setups of that app wait while their own runs; that is the purpose of the lock. |
 | G8 | Fixed | `src/Install.Core/extensions.cpp` (`RunProgram`); `engine.cpp` | *Was:* bundled prerequisite installers skipped the location checks of actions, and processes an action started outlived it. *Now:* an installer among the installed files must be strictly inside the install folder and not reached through a link, and the job object of an action ends every process the action left running when it exits (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Vendor prerequisite installers are exempt: their updaters keep running on purpose. |
-| G9 | Low | `src/Builder.Core/Packaging/Signer.cs:51-56` | The PFX password is passed to `signtool.exe` on its command line (`/p`), visible to other processes on the build machine; it is only masked in the log. |
+| G9 | Fixed | `src/Builder.Core/Packaging/Signer.cs` (`TemporaryCertificateStore`) | *Was:* the PFX password was passed to `signtool.exe` on its command line (`/p`), visible to other processes on the build machine and to process-creation auditing; it was only masked in the log. *Now:* a password-protected .pfx is imported (password from the environment variable) into a certificate store of its own under the current user (`FluentSetup-Signing-<pid>-<random>`), signtool signs with `/s <store> /sha1 <thumbprint>`, and the store and the persisted private key are deleted afterwards, also when signing fails. A store left by a build that was killed while signing (its process is gone) is removed with its key by the next signing run. The command provider never receives secrets from FluentSetup; tools read them from the environment. |
 | G10 | Fixed | `src/Bootstrapper/main.cpp` (`RunUninstallPhase1`) | A running copy cannot delete itself, so each uninstall removes the `%TEMP%\FluentSetup-u-<random>` copies earlier uninstalls left behind (skipping links and copies still in use). The copy of the most recent uninstall remains until the next one. |
 | G11 | Fixed | `src/Bootstrapper/controller.cpp` (`Run`); `src/Bootstrapper/main.cpp` | *Was:* test hooks were active in every release package: the `FLUENTSETUP_TEST_FAULT_AFTER` environment variable (forces a failure and rollback after N files, in-process installs only) and `--ui-simulate`. *Now:* both are honoured only by packages built with `fluentsetup build --test-hooks` (header `testHooks: true`, used by the e2e and UI tests); other packages ignore them and log a warning. The parser still accepts `--ui-simulate`, so such a command line is not an error. |
 | G12 | Informational | `src/Bootstrapper/winui_host.cpp:177`; `src/Setup.WinUI/app.manifest` | The UI manifest comment says the UI "never runs elevated", but if `Setup.exe` itself is started elevated the WinUI child inherits the elevated token. |

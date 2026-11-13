@@ -70,6 +70,27 @@ jobs:
         shell: pwsh
         run: ./tests/MSBuild/msbuild-e2e.ps1 -Feed out/release
 
+      - name: DemoApp for the Linux and macOS jobs
+        shell: pwsh
+        run: |
+          $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -prerelease -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+          & $msbuild samples\DemoApp\DemoApp.vcxproj /p:Configuration=Release /p:Platform=x64 /p:DemoVersion=1.0.0 "/p:DemoOut=$PWD\samples\DemoApp\out\staging" /nologo /v:m
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # The Windows-built installer runtime and the sample app, for building packages on Linux and macOS.
+      - name: Upload the installer runtime
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-runtime-x64
+          if-no-files-found: error
+          path: |
+            out/bin/x64/Release/FluentSetup.Stub.exe
+            out/bin/x64/Release/ui/*.exe
+            out/bin/x64/Release/ui/*.dll
+            out/bin/x64/Release/ui/*.pri
+            out/bin/x64/Release/ui/*.xbf
+            samples/DemoApp/out/staging/DemoApp.exe
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v7
@@ -131,3 +152,160 @@ jobs:
           fluentsetup --version
           if ($LASTEXITCODE -ne 0) { throw 'fluentsetup is not on PATH' }
           Write-Host "FluentSetup ${{ steps.fluentsetup.outputs.version }} at ${{ steps.fluentsetup.outputs.path }}"
+
+  cross-platform:
+    # The CLI on Linux and macOS with the installer runtime from the Windows job: managed tests, the DemoApp package
+    # built with the CLI from source and with the self-contained release archive, and (Linux) signed with osslsigncode
+    # through the command provider. install-from-linux installs the Linux packages on Windows.
+    needs: build-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-latest
+            rid: osx-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Download the installer runtime and DemoApp
+        uses: actions/download-artifact@v8
+        with:
+          name: installer-runtime-x64
+
+      - name: Download the release archives (dry run)
+        uses: actions/download-artifact@v8
+        with:
+          name: fluentsetup-x64
+          path: out/windows
+
+      - name: Managed unit tests
+        shell: pwsh
+        run: dotnet test tests/Builder.Core.Tests -c Release --logger "trx;LogFileName=managed-${{ matrix.rid }}.trx" --results-directory out/test-results
+
+      - name: Build and inspect DemoApp with the CLI from source
+        shell: pwsh
+        run: |
+          $cli = 'src/CLI/bin/Release/net10.0/fluentsetup.dll'
+          dotnet $cli build samples/DemoApp/fluentsetup.json -o out/xplat
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet $cli inspect 'out/xplat/FluentSetup Demo-1.0.0-Setup.exe' --verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Sign with osslsigncode (command provider, throw-away certificate)
+        if: runner.os == 'Linux'
+        shell: pwsh
+        run: |
+          sudo apt-get install -y --no-install-recommends osslsigncode
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $certs = Join-Path $env:RUNNER_TEMP 'codesign'
+          New-Item -ItemType Directory -Force $certs | Out-Null
+          # Like New-SelfSignedCertificate -Type CodeSigningCert: Windows sees an intact signature from an untrusted root.
+          @(
+            '[req]', 'distinguished_name = dn', 'x509_extensions = ext', 'prompt = no',
+            '[dn]', 'CN = FluentSetup CI Test Signer',
+            '[ext]', 'keyUsage = critical, digitalSignature', 'extendedKeyUsage = codeSigning', 'subjectKeyIdentifier = hash'
+          ) | Set-Content "$certs/openssl.cnf"
+          openssl req -x509 -config "$certs/openssl.cnf" -newkey rsa:3072 -sha256 -days 3 -nodes -keyout "$certs/key.pem" -out "$certs/cert.pem"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $project = Get-Content samples/DemoApp/fluentsetup.json -Raw | ConvertFrom-Json
+          $project.output.fileName = '{AppName}-{Version}-Signed-Setup.exe'
+          $project.signing = [ordered]@{
+            enabled = $true; provider = 'command'; timestampUrl = ''
+            command = [ordered]@{
+              run = 'osslsigncode'
+              arguments = @('sign', '-certs', "$certs/cert.pem", '-key', "$certs/key.pem", '-h', 'sha256', '-n', '{description}', '-in', '{file}', '-out', '{output}')
+            }
+          }
+          $project | ConvertTo-Json -Depth 10 | Set-Content samples/DemoApp/fluentsetup.signed.json
+          $cli = 'src/CLI/bin/Release/net10.0/fluentsetup.dll'
+          dotnet $cli build samples/DemoApp/fluentsetup.signed.json -o out/xplat --verbose
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $info = dotnet $cli inspect 'out/xplat/FluentSetup Demo-1.0.0-Signed-Setup.exe' --verify --json | ConvertFrom-Json
+          if (-not $info.signed -or $info.problems.Count -gt 0) { throw "Signed package: signed=$($info.signed), problems: $($info.problems -join '; ')" }
+
+      - name: The self-contained release archive runs and builds
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem out/windows/release -Filter 'fluentsetup-*-${{ matrix.rid }}.tar.gz' | Select-Object -First 1
+          if (-not $archive) { throw 'No ${{ matrix.rid }} archive in the release dry run' }
+          $dir = Join-Path $env:RUNNER_TEMP 'fluentsetup-release'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          tar -xzf $archive.FullName -C $dir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$dir/fluentsetup" --version
+          if ($LASTEXITCODE -ne 0) { throw "$($archive.Name): fluentsetup does not start" }
+          & "$dir/fluentsetup" build samples/DemoApp/fluentsetup.json -o out/xplat-release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$dir/fluentsetup" inspect 'out/xplat-release/FluentSetup Demo-1.0.0-Setup.exe' --verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload the packages
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages
+          if-no-files-found: error
+          path: out/xplat/*.exe
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.rid }}
+          if-no-files-found: ignore
+          path: out/test-results/
+
+  install-from-linux:
+    # Packages built (and signed) on Linux install and uninstall on Windows: quiet, per-user.
+    needs: cross-platform
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - name: Download the Linux packages
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-packages
+          path: packages
+
+      - name: Install, run and uninstall
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\FluentSetup Demo'
+          $arp = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FluentSetup.DemoApp'
+          $setups = @(Get-ChildItem packages -Filter '*.exe')
+          if ($setups.Count -ne 2) { throw "Expected an unsigned and a signed package, got $($setups.Count)" }
+          foreach ($setup in $setups) {
+            Write-Host "==> $($setup.Name)"
+            $signature = Get-AuthenticodeSignature $setup.FullName
+            Write-Host "    signature: $($signature.Status) $($signature.SignerCertificate.Subject)"
+            if ($setup.Name -like '*-Signed-*') {
+              # Untrusted root (throw-away certificate), but the hash must match: the installer refuses tampered packages.
+              if ($signature.Status -eq 'HashMismatch' -or $signature.SignerCertificate.Subject -ne 'CN=FluentSetup CI Test Signer') { throw 'The osslsigncode signature is not valid on Windows' }
+            } elseif ($signature.Status -ne 'NotSigned') {
+              throw "Unexpected signature state $($signature.Status)"
+            }
+            $log = Join-Path $env:RUNNER_TEMP "$($setup.BaseName)-install.log"
+            $p = Start-Process $setup.FullName -ArgumentList '/quiet', '/log', "`"$log`"" -Wait -PassThru
+            if ($p.ExitCode -ne 0) { Get-Content $log -Tail 50; throw "Install exit code $($p.ExitCode)" }
+            Start-Process "$dir\DemoApp.exe" -ArgumentList '--version' -Wait
+            if ((Get-Content "$dir\version-check.txt" -Raw).Trim() -ne '1.0.0') { throw 'The installed DemoApp.exe does not run' }
+            Remove-Item "$dir\version-check.txt"
+            if ((Get-ItemProperty $arp).DisplayVersion -ne '1.0.0') { throw 'No Apps & features entry' }
+            $quiet = (Get-ItemProperty $arp).QuietUninstallString
+            if ($quiet -notmatch '^"([^"]+)"\s*(.*)$') { throw "Unexpected QuietUninstallString: $quiet" }
+            $log = Join-Path $env:RUNNER_TEMP "$($setup.BaseName)-uninstall.log"
+            $u = Start-Process $Matches[1] -ArgumentList ($Matches[2] + " /log `"$log`"") -Wait -PassThru
+            if ($u.ExitCode -ne 0) { Get-Content $log -Tail 50 -ErrorAction SilentlyContinue; throw "Uninstall exit code $($u.ExitCode)" }
+            Start-Sleep -Seconds 2
+            if (Test-Path $arp) { throw 'Apps & features entry left behind' }
+            if ((Test-Path "$dir\DemoApp.exe") -or (Test-Path "$dir\uninstall.exe")) { throw 'Installed files left behind' }
+            Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+          }

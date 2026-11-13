@@ -2,10 +2,12 @@ name: Release
 
 # Push a tag vX.Y.Z (matching Directory.Build.props, src/Bootstrapper/main.cpp and packaging/fluentsetup.json, with a
 # "## [X.Y.Z]" section in CHANGELOG.md) to build, test and publish:
-#   fluentsetup-X.Y.Z-win-x64.zip   CLI + installer runtime (used by the GitHub Action in action.yml)
-#   FluentSetup-X.Y.Z-Setup.exe     Builder app + CLI
-#   FluentSetup.*.X.Y.Z.nupkg       NuGet packages (Builder.Core, Cli, MSBuild), also pushed to nuget.org when the
-#                                   NUGET_API_KEY secret is set
+#   fluentsetup-X.Y.Z-win-x64.zip       CLI + installer runtimes x64 and arm64 (used by the GitHub Action in action.yml)
+#   fluentsetup-X.Y.Z-linux-x64.tar.gz  the same for Linux (Action on ubuntu runners)
+#   fluentsetup-X.Y.Z-osx-arm64.tar.gz  the same for macOS on Apple silicon (Action on macos runners)
+#   FluentSetup-X.Y.Z-Setup.exe         Builder app + CLI
+#   FluentSetup.*.X.Y.Z.nupkg           NuGet packages (Builder.Core, Cli, MSBuild), also pushed to nuget.org when the
+#                                       NUGET_API_KEY secret is set
 #   SHA256SUMS.txt
 on:
   push:

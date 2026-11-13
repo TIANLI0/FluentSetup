@@ -30,7 +30,9 @@ public sealed class RuntimeAssets
     {
         var dir = UiDirectory(arch);
         if (!Directory.Exists(dir)) return [];
-        return UiFilePatterns.SelectMany(p => Directory.EnumerateFiles(dir, p, SearchOption.TopDirectoryOnly))
+        // Case-insensitive also on Linux, where the runtime folder may come from a Windows build.
+        var options = new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, AttributesToSkip = 0, RecurseSubdirectories = false };
+        return UiFilePatterns.SelectMany(p => Directory.EnumerateFiles(dir, p, options))
                              .Where(f => !f.EndsWith(".winmd", StringComparison.OrdinalIgnoreCase))
                              .Distinct(StringComparer.OrdinalIgnoreCase)
                              .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)

@@ -1,94 +1,54 @@
 using System.Buffers.Binary;
-using System.ComponentModel;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace FluentSetup.Builder.Core.Packaging;
 
-/// <summary>Replaces the icon group and version resource of the (unsigned) stub before the package is appended.</summary>
-public static partial class PeResources
+/// <summary>
+/// Replaces the icon group and version resource of the (unsigned) stub before the package is appended. Managed, so it
+/// works the same on Windows, Linux and macOS (see <see cref="PeImage"/>).
+/// </summary>
+public static class PeResources
 {
     private const ushort LangNeutral = 0;
-    private static readonly IntPtr RtIcon = 3, RtGroupIcon = 14, RtVersion = 16;
-
-    [LibraryImport("kernel32.dll", EntryPoint = "BeginUpdateResourceW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    private static partial IntPtr BeginUpdateResource(string fileName, [MarshalAs(UnmanagedType.Bool)] bool deleteExisting);
-
-    [LibraryImport("kernel32.dll", EntryPoint = "UpdateResourceW", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool UpdateResource(IntPtr update, IntPtr type, IntPtr name, ushort language, byte[]? data, uint size);
-
-    [LibraryImport("kernel32.dll", EntryPoint = "EndUpdateResourceW", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool EndUpdateResource(IntPtr update, [MarshalAs(UnmanagedType.Bool)] bool discard);
-
-    [LibraryImport("kernel32.dll", EntryPoint = "LoadLibraryExW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    private static partial IntPtr LoadLibraryEx(string path, IntPtr reserved, uint flags);
-
-    [LibraryImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool FreeLibrary(IntPtr module);
-
-    private delegate bool EnumResNameProc(IntPtr module, IntPtr type, IntPtr name, IntPtr param);
-
-    [DllImport("kernel32.dll", EntryPoint = "EnumResourceNamesW", SetLastError = true)]
-    private static extern bool EnumResourceNames(IntPtr module, IntPtr type, EnumResNameProc callback, IntPtr param);
+    private const ushort IconGroupId = 1;   // IDI_APP in src/Bootstrapper/resource.h
+    private const ushort VersionId = 1;     // VS_VERSION_INFO
 
     public sealed record VersionInfo(string ProductName, string CompanyName, string FileDescription, string ProductVersion,
                                      string OriginalFilename, string Copyright);
 
-    public static void Apply(string exePath, byte[]? icoFile, VersionInfo version)
+    public static void Apply(string exePath, byte[]? icoFile, VersionInfo version) =>
+        File.WriteAllBytes(exePath, Apply(File.ReadAllBytes(exePath), icoFile, version));
+
+    /// <summary>Returns the executable with icon group 1 (and its images) and version resource 1 replaced.</summary>
+    public static byte[] Apply(byte[] exe, byte[]? icoFile, VersionInfo version)
     {
-        var existingIcons = ListIntegerNames(exePath, RtIcon);
-        var handle = BeginUpdateResource(exePath, false);
-        if (handle == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "BeginUpdateResource failed");
-        try
+        var pe = PeImage.Parse(exe);
+        var tree = Win32ResourceTree.Read(pe);
+        if (icoFile is not null)
         {
-            if (icoFile is not null)
-            {
-                // Drop the stub's default icon images, then add the new ones under fresh ids and point group 1 at them.
-                foreach (var id in existingIcons) Check(UpdateResource(handle, RtIcon, id, LangNeutral, null, 0), "remove icon");
-                var (images, group) = IconConverter.ToResources(icoFile, firstId: 1);
-                for (var i = 0; i < images.Count; i++)
-                {
-                    Check(UpdateResource(handle, RtIcon, (IntPtr)(i + 1), LangNeutral, images[i], (uint)images[i].Length), "add icon image");
-                }
-                Check(UpdateResource(handle, RtGroupIcon, (IntPtr)1, LangNeutral, group, (uint)group.Length), "replace icon group");
-            }
-            var ver = BuildVersionResource(version);
-            Check(UpdateResource(handle, RtVersion, (IntPtr)1, LangNeutral, ver, (uint)ver.Length), "replace version resource");
+            // Drop the images of the old icon group, then add the new ones under ids no other group uses.
+            var oldImages = tree.OfType(Win32ResourceTree.RtGroupIcon).Where(e => e.Name == (ResourceId)IconGroupId)
+                                .SelectMany(e => IconGroupImageIds(e.Data)).ToHashSet();
+            tree.Entries.RemoveAll(e => e.Type == (ResourceId)Win32ResourceTree.RtIcon && e.Name.Name is null && oldImages.Contains(e.Name.Id));
+            tree.Remove(Win32ResourceTree.RtGroupIcon, IconGroupId);
+            var firstId = tree.OfType(Win32ResourceTree.RtIcon).Where(e => e.Name.Name is null).Select(e => e.Name.Id + 1).DefaultIfEmpty(1).Max();
+            var (images, group) = IconConverter.ToResources(icoFile, firstId);
+            if (firstId + images.Count > ushort.MaxValue) throw new InvalidDataException("The executable has too many icons.");
+            for (var i = 0; i < images.Count; i++) tree.Set(Win32ResourceTree.RtIcon, (ushort)(firstId + i), LangNeutral, images[i]);
+            tree.Set(Win32ResourceTree.RtGroupIcon, IconGroupId, LangNeutral, group);
         }
-        catch
-        {
-            EndUpdateResource(handle, true);  // discard
-            throw;
-        }
-        if (!EndUpdateResource(handle, false)) throw new Win32Exception(Marshal.GetLastWin32Error(), "EndUpdateResource failed");
+        tree.Remove(Win32ResourceTree.RtVersion, VersionId);
+        tree.Set(Win32ResourceTree.RtVersion, VersionId, LangNeutral, BuildVersionResource(version));
+        return pe.WithResources(tree);
     }
 
-    private static void Check(bool ok, string what)
+    /// <summary>The RT_ICON ids an RT_GROUP_ICON directory refers to.</summary>
+    internal static IEnumerable<ushort> IconGroupImageIds(byte[] group)
     {
-        if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error(), $"UpdateResource failed ({what})");
-    }
-
-    private static List<IntPtr> ListIntegerNames(string exePath, IntPtr type)
-    {
-        var names = new List<IntPtr>();
-        var module = LoadLibraryEx(exePath, IntPtr.Zero, 0x00000002 /*LOAD_LIBRARY_AS_DATAFILE*/ | 0x00000020 /*AS_IMAGE_RESOURCE*/);
-        if (module == IntPtr.Zero) return names;
-        try
-        {
-            EnumResourceNames(module, type, (_, _, name, _) =>
-            {
-                if ((ulong)name <= 0xFFFF) names.Add(name);
-                return true;
-            }, IntPtr.Zero);
-        }
-        finally
-        {
-            FreeLibrary(module);
-        }
-        return names;
+        if (group.Length < 6) yield break;
+        int count = BinaryPrimitives.ReadUInt16LittleEndian(group.AsSpan(4));
+        for (var i = 0; i < count && 6 + 14 * (i + 1) <= group.Length; i++)
+            yield return BinaryPrimitives.ReadUInt16LittleEndian(group.AsSpan(6 + 14 * i + 12));
     }
 
     // ---- VS_VERSIONINFO ----------------------------------------------------------------------------------------
