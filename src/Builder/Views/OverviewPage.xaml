@@ -17,6 +17,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
                     <Button x:Uid="EmptyNewButton" Style="{StaticResource AccentButtonStyle}" Command="{x:Bind VM.NewProjectCommand}" />
                     <Button x:Uid="EmptyOpenButton" Command="{x:Bind VM.OpenProjectCommand}" />
+                    <Button x:Uid="EmptyImportButton" Command="{x:Bind VM.ImportProjectCommand}" />
                 </StackPanel>
                 <TextBlock x:Uid="EmptyRecent" Style="{StaticResource SectionHeaderStyle}" />
                 <ListView ItemsSource="{x:Bind VM.RecentProjects}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnRecentClick"

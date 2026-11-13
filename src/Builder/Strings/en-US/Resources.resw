@@ -58,6 +58,16 @@
   <data name="EmptyBody.Text" xml:space="preserve"><value>Pick the folder with your app&apos;s files. FluentSetup reads the name, publisher and version from your program and suggests everything else — most apps are ready to build in a few minutes.</value></data>
   <data name="EmptyNewButton.Content" xml:space="preserve"><value>New project</value></data>
   <data name="EmptyOpenButton.Content" xml:space="preserve"><value>Open project</value></data>
+  <data name="TitleImportButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Import from Inno Setup or NSIS</value></data>
+  <data name="TitleImportButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Import from Inno Setup or NSIS</value></data>
+  <data name="EmptyImportButton.Content" xml:space="preserve"><value>Import Inno Setup / NSIS script</value></data>
+  <data name="Import_ReplaceTitle" xml:space="preserve"><value>Replace the existing project?</value></data>
+  <data name="Import_ReplaceBody" xml:space="preserve"><value>{0} already exists. Importing replaces it and import-report.md next to it.</value></data>
+  <data name="Import_Replace" xml:space="preserve"><value>Replace</value></data>
+  <data name="Import_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Import_FailedTitle" xml:space="preserve"><value>The script could not be imported</value></data>
+  <data name="Import_DoneTitle" xml:space="preserve"><value>Script imported</value></data>
+  <data name="Import_DoneBody" xml:space="preserve"><value>{0} things need to be done by hand and {1} should be checked. The checklist is in {2}.</value></data>
   <data name="EmptyRecent.Text" xml:space="preserve"><value>Recent projects</value></data>
   <data name="EmptyNoRecent.Text" xml:space="preserve"><value>Projects you open will appear here.</value></data>
   <data name="NewProject_Title" xml:space="preserve"><value>New project</value></data>

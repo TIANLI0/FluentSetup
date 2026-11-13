@@ -58,6 +58,16 @@
   <data name="EmptyBody.Text" xml:space="preserve"><value>选择包含应用文件的文件夹。FluentSetup 会从程序中读取名称、发布者和版本，并为其余设置提供建议——大多数应用几分钟内即可完成构建。</value></data>
   <data name="EmptyNewButton.Content" xml:space="preserve"><value>新建项目</value></data>
   <data name="EmptyOpenButton.Content" xml:space="preserve"><value>打开项目</value></data>
+  <data name="TitleImportButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>从 Inno Setup 或 NSIS 导入</value></data>
+  <data name="TitleImportButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>从 Inno Setup 或 NSIS 导入</value></data>
+  <data name="EmptyImportButton.Content" xml:space="preserve"><value>导入 Inno Setup / NSIS 脚本</value></data>
+  <data name="Import_ReplaceTitle" xml:space="preserve"><value>替换现有项目？</value></data>
+  <data name="Import_ReplaceBody" xml:space="preserve"><value>{0} 已存在。导入会替换它以及同一文件夹中的 import-report.md。</value></data>
+  <data name="Import_Replace" xml:space="preserve"><value>替换</value></data>
+  <data name="Import_Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="Import_FailedTitle" xml:space="preserve"><value>无法导入该脚本</value></data>
+  <data name="Import_DoneTitle" xml:space="preserve"><value>脚本已导入</value></data>
+  <data name="Import_DoneBody" xml:space="preserve"><value>有 {0} 项需要手动处理，{1} 项需要检查。检查清单在 {2}。</value></data>
   <data name="EmptyRecent.Text" xml:space="preserve"><value>最近的项目</value></data>
   <data name="EmptyNoRecent.Text" xml:space="preserve"><value>你打开的项目会显示在这里。</value></data>
   <data name="NewProject_Title" xml:space="preserve"><value>新建项目</value></data>

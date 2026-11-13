@@ -48,6 +48,9 @@
                             <KeyboardAccelerator Modifiers="Control" Key="O" />
                         </Button.KeyboardAccelerators>
                     </Button>
+                    <Button x:Uid="TitleImportButton" Command="{x:Bind VM.ImportProjectCommand}" Style="{StaticResource TitleBarButtonStyle}">
+                        <FontIcon Glyph="&#xE8B5;" FontSize="16" />
+                    </Button>
                     <Button x:Uid="TitleSaveButton" Command="{x:Bind VM.SaveCommand}" Visibility="{x:Bind VM.HasProject, Mode=OneWay}"
                             Style="{StaticResource TitleBarButtonStyle}">
                         <FontIcon Glyph="&#xE74E;" FontSize="16" />

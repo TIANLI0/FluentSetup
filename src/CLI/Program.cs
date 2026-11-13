@@ -471,7 +471,9 @@ public static class Program
     /// </summary>
     private static int Import(ParsedArgs a)
     {
-        var script = Path.GetFullPath(a.Positional(0, "script (.iss or .nsi)"));
+        var scriptArg = a.Positional(0, "script (.iss or .nsi)");
+        if (string.IsNullOrWhiteSpace(scriptArg)) throw new UsageException("Give the script to import (.iss or .nsi).");
+        var script = Path.GetFullPath(scriptArg);
         var output = a.Value("output", "o") is { } o ? Path.GetFullPath(o) : Path.GetDirectoryName(script)!;
         var force = a.Flag("force");
         var json = a.Flag("json");
