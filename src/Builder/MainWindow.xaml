@@ -82,11 +82,20 @@
                 <NavigationViewItem x:Uid="NavInstall" Tag="install" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE896;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <NavigationViewItem x:Uid="NavShortcuts" Tag="shortcuts" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE71B;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Uid="NavSystem" Tag="system" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE770;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
                 <NavigationViewItem x:Uid="NavPrerequisites" Tag="prerequisites" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xEA86;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem x:Uid="NavOptions" Tag="options" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE762;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Uid="NavInputs" Tag="inputs" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE70F;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem x:Uid="NavAppearance" Tag="appearance" IsEnabled="{x:Bind VM.HasProject, Mode=OneWay}">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE790;" /></NavigationViewItem.Icon>

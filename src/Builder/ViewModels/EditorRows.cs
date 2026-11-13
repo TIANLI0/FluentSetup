@@ -132,8 +132,29 @@ public static class TextForms
 /// <summary>An item of an editable list (option, action, runtime, …). Edits mark the project dirty and revalidate.</summary>
 public abstract partial class EditorRow : ObservableObject
 {
+    private MainViewModel? _owner;
+
     /// <summary>Set once the row is filled; from then on edits are reported to the view model.</summary>
-    public MainViewModel? Owner { get; set; }
+    public MainViewModel? Owner
+    {
+        get => _owner;
+        set
+        {
+            _owner = value;
+            OnOwnerChanged();
+        }
+    }
+
+    /// <summary>Rows with nested rows (registry values, choices, …) pass the owner on.</summary>
+    protected virtual void OnOwnerChanged()
+    {
+    }
+
+    /// <summary>The .exe files among the collected files (suggestions for program fields).</summary>
+    public ObservableCollection<string>? ExecutableChoices => Owner?.ExecutableChoices;
+
+    /// <summary>The .ico, .exe and .dll files among the collected files (suggestions for icon fields).</summary>
+    public ObservableCollection<string>? IconChoices => Owner?.IconChoices;
 
     /// <summary>Validation errors of this item (set by the view model).</summary>
     [ObservableProperty] public partial string Error { get; set; } = "";
@@ -157,57 +178,153 @@ public abstract partial class EditorRow : ObservableObject
     [RelayCommand] private void MoveDown() => Owner?.MoveRow(this, 1);
 }
 
-/// <summary>Where setup gets a missing prerequisite: a bundled installer or a verified download (requirements.*).</summary>
+/// <summary>How setup gets a missing prerequisite.</summary>
+public enum SourceMode
+{
+    /// <summary>Microsoft's official installer, downloaded when the package is built and stored in Setup.exe (auto: bundle).</summary>
+    OfficialBundle,
+    /// <summary>Microsoft's official installer, downloaded by setup when needed (auto: download).</summary>
+    OfficialDownload,
+    /// <summary>An installer among the app's files (installer).</summary>
+    Installer,
+    /// <summary>A download URL verified by SHA-256 or signer (download).</summary>
+    Download,
+    /// <summary>Not installed by setup: it stops and shows the help link.</summary>
+    None,
+}
+
+/// <summary>Where setup gets a missing prerequisite: Microsoft's installer, a bundled installer or a verified download (requirements.*).</summary>
 public partial class PrerequisiteSourceEditor : EditorRow
 {
     internal static readonly string[] Failures = ["warn", "fail"];
+    private static readonly SourceMode[] AllModes = [SourceMode.OfficialBundle, SourceMode.OfficialDownload, SourceMode.Installer, SourceMode.Download, SourceMode.None];
+    private readonly SourceMode[] _modes;
+    private SourceMode _loadedMode = SourceMode.None;
+    private bool _loadedDownload;
 
+    public PrerequisiteSourceEditor() : this(supportsOfficial: true)
+    {
+    }
+
+    protected PrerequisiteSourceEditor(bool supportsOfficial)
+    {
+        SupportsOfficial = supportsOfficial;
+        _modes = supportsOfficial ? AllModes : AllModes[2..];
+        ModeChoices = _modes.Select(m => Loc.Get("SourceMode_" + m)).ToList();
+        ModeIndex = Array.IndexOf(_modes, SourceMode.None);
+    }
+
+    /// <summary>Microsoft's official installer can be used (built-in prerequisites; not custom ones).</summary>
+    public bool SupportsOfficial { get; }
+
+    /// <summary>The labels of the ways offered, in the order of <see cref="ModeIndex"/>.</summary>
+    public IReadOnlyList<string> ModeChoices { get; }
+
+    [ObservableProperty] public partial int ModeIndex { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(SourceSummary))] public partial string Installer { get; set; } = "";
     [ObservableProperty] public partial string ArgumentsText { get; set; } = "";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(SourceSummary))] public partial bool HasDownload { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(SourceSummary))] public partial string DownloadUrl { get; set; } = "";
     [ObservableProperty] public partial string DownloadSha256 { get; set; } = "";
     [ObservableProperty] public partial double DownloadSize { get; set; }
+    [ObservableProperty] public partial string DownloadSigner { get; set; } = "";
     [ObservableProperty] public partial string HelpUrl { get; set; } = "";
     [ObservableProperty] public partial int OnFailureIndex { get; set; }
     [ObservableProperty] public partial string VariantsText { get; set; } = "";
     [ObservableProperty] public partial string ComputeStatus { get; set; } = "";
     [ObservableProperty] public partial bool IsComputing { get; set; }
 
-    protected override bool IsViewState(string name) => base.IsViewState(name) || name is nameof(ComputeStatus) or nameof(IsComputing);
+    protected override bool IsViewState(string name) => base.IsViewState(name) || name is nameof(ComputeStatus) or nameof(IsComputing) or nameof(ModeSelection);
 
-    public ObservableCollection<string>? ExecutableChoices => Owner?.ExecutableChoices;
+    /// <summary>For the choice control: ignores "nothing selected" (pushed while its items are replaced).</summary>
+    public int ModeSelection
+    {
+        get => ModeIndex;
+        set
+        {
+            if (value >= 0 && value < _modes.Length && value != ModeIndex) ModeIndex = value;
+        }
+    }
 
-    /// <summary>"Bundled: redist\x.exe", "Download: host" or "Not installed by setup".</summary>
-    public string SourceSummary =>
-        Installer.Trim().Length > 0 ? Loc.Format("Source_SummaryBundled", Installer.Trim())
-        : HasDownload && Uri.TryCreate(DownloadUrl.Trim(), UriKind.Absolute, out var u) ? Loc.Format("Source_SummaryDownload", u.Host)
-        : Loc.Get("Source_SummaryNone");
+    public SourceMode Mode => ModeIndex >= 0 && ModeIndex < _modes.Length ? _modes[ModeIndex] : SourceMode.None;
+    public bool IsOfficialBundle => Mode == SourceMode.OfficialBundle;
+    public bool IsOfficialDownload => Mode == SourceMode.OfficialDownload;
+    public bool IsInstaller => Mode == SourceMode.Installer;
+    public bool IsDownload => Mode == SourceMode.Download;
+    public bool IsNone => Mode == SourceMode.None;
+    /// <summary>Installer arguments matter for an own installer or download (Microsoft's installers get theirs).</summary>
+    public bool ShowArguments => Mode is SourceMode.Installer or SourceMode.Download;
+    /// <summary>Without an installer setup stops anyway: "if it is still missing" does not apply.</summary>
+    public bool ShowOnFailure => Mode != SourceMode.None;
+
+    partial void OnModeIndexChanged(int value)
+    {
+        foreach (var name in new[] { nameof(ModeSelection), nameof(Mode), nameof(IsOfficialBundle), nameof(IsOfficialDownload), nameof(IsInstaller), nameof(IsDownload),
+                                     nameof(IsNone), nameof(ShowArguments), nameof(ShowOnFailure), nameof(SourceSummary) })
+        {
+            OnPropertyChanged(name);
+        }
+    }
+
+    /// <summary>"Microsoft's installer, bundled", "Bundled installer: redist\x.exe", "Downloaded from host", …</summary>
+    public string SourceSummary => Mode switch
+    {
+        SourceMode.OfficialBundle => Loc.Get("Source_SummaryOfficialBundle"),
+        SourceMode.OfficialDownload => Loc.Get("Source_SummaryOfficialDownload"),
+        SourceMode.Installer when Installer.Trim().Length > 0 => Loc.Format("Source_SummaryBundled", Installer.Trim()),
+        SourceMode.Download when Uri.TryCreate(DownloadUrl.Trim(), UriKind.Absolute, out var u) => Loc.Format("Source_SummaryDownload", u.Host),
+        _ => Loc.Get("Source_SummaryNone"),
+    };
+
+    /// <summary>The way a stored source loads as: auto first, then a bundled installer, then a download.</summary>
+    private SourceMode ModeOf(PrerequisiteSource s) => (s.Auto ?? "") switch
+    {
+        "bundle" when SupportsOfficial => SourceMode.OfficialBundle,
+        "download" when SupportsOfficial => SourceMode.OfficialDownload,
+        _ when !string.IsNullOrWhiteSpace(s.Installer) => SourceMode.Installer,
+        _ when s.Download is not null => SourceMode.Download,
+        _ => SourceMode.None,
+    };
 
     public void LoadSource(PrerequisiteSource s)
     {
         Installer = s.Installer ?? "";
         ArgumentsText = TextForms.Lines(s.Arguments);
-        HasDownload = s.Download is not null;
         DownloadUrl = s.Download?.Url ?? "";
         DownloadSha256 = s.Download?.Sha256 ?? "";
         DownloadSize = s.Download?.Size ?? 0;
+        DownloadSigner = s.Download?.Signer ?? "";
         HelpUrl = s.HelpUrl ?? "";
         OnFailureIndex = TextForms.Find(Failures, s.OnFailure);
         VariantsText = TextForms.Csv(s.Variants);
+        _loadedDownload = s.Download is not null;
+        _loadedMode = ModeOf(s);
+        ModeIndex = Array.IndexOf(_modes, _loadedMode);
     }
 
-    /// <summary>Writes the editor into <paramref name="target"/>, which holds the values it was loaded from.</summary>
+    /// <summary>
+    /// Writes the editor into <paramref name="target"/>, which holds the values it was loaded from. Only the chosen way
+    /// is written; while the choice is still the loaded one the source is kept as it was (e.g. an installer together
+    /// with a download, which setup uses as installer first, download second).
+    /// </summary>
     public void ApplySource(PrerequisiteSource target)
     {
-        target.Installer = TextForms.Keep(Installer, target.Installer);
+        var mode = Mode;
+        var unchanged = mode == _loadedMode;
+        target.Auto = mode switch
+        {
+            SourceMode.OfficialBundle => "bundle",
+            SourceMode.OfficialDownload => "download",
+            _ => unchanged ? target.Auto ?? "" : "",
+        };
+        target.Installer = mode == SourceMode.Installer || unchanged ? TextForms.Keep(Installer, target.Installer) : "";
         target.Arguments = TextForms.FromLines(ArgumentsText, target.Arguments);
-        target.Download = HasDownload
+        target.Download = mode == SourceMode.Download || (unchanged && _loadedDownload)
             ? new DownloadSettings
             {
                 Url = TextForms.Keep(DownloadUrl, target.Download?.Url),
                 Sha256 = TextForms.Keep(DownloadSha256, target.Download?.Sha256),
                 Size = double.IsNaN(DownloadSize) ? 0 : (long)Math.Round(DownloadSize),
+                Signer = TextForms.Keep(DownloadSigner, target.Download?.Signer),
             }
             : null;
         target.HelpUrl = TextForms.Keep(HelpUrl, target.HelpUrl);
@@ -267,6 +384,9 @@ public sealed partial class DotNetRow : PrerequisiteSourceEditor
     [ObservableProperty] public partial int RollForwardIndex { get; set; } = 1;
 
     public string Title => $"{(RuntimeIndex is >= 0 and < 3 ? ExtensionValidator.DotNetRuntime(Runtimes[RuntimeIndex]).Label : _original.Runtime)} {Version.Trim()}".Trim();
+
+    /// <summary>.NET versions from Microsoft for the version box.</summary>
+    public VersionCatalogViewModel? Versions => Owner?.DotNetVersions;
 
     /// <summary>"desktop" and "Microsoft.WindowsDesktop.App" both select the Desktop Runtime.</summary>
     private static int RuntimeIndexOf(string? value)
@@ -366,37 +486,13 @@ public sealed partial class OptionRow : EditorRow
     }
 }
 
-/// <summary>actions[]: a program from the app's files run after install or before uninstall.</summary>
-public sealed partial class ActionRow : EditorRow
+/// <summary>A list item that can depend on an option (ifOption): actions, shortcuts, file types, registry keys, …</summary>
+public abstract partial class GatedRow : EditorRow
 {
-    internal static readonly string[] Whens = ["afterInstall", "beforeUninstall"];
-    internal static readonly string[] Failures = ["fail", "warn", "ignore"];
-    internal static readonly string[] Hives = ["HKLM", "HKCU"];
-    private ActionSettings _original = new();
-
-    [ObservableProperty] public partial string Id { get; set; } = "";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Subtitle))] public partial int WhenIndex { get; set; }
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Title)), NotifyPropertyChangedFor(nameof(Subtitle))] public partial string Run { get; set; } = "";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Subtitle))] public partial string ArgumentsText { get; set; } = "";
-    [ObservableProperty] public partial double TimeoutSeconds { get; set; } = 300;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(ExitCodesError))] public partial string ExitCodesText { get; set; } = "0";
-    [ObservableProperty] public partial int OnFailureIndex { get; set; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IfOptionItem))] public partial string IfOption { get; set; } = "";
-    [ObservableProperty] public partial bool HasSkipIfInstalled { get; set; }
-    [ObservableProperty] public partial int SkipHiveIndex { get; set; }
-    [ObservableProperty] public partial string SkipKey { get; set; } = "";
-    [ObservableProperty] public partial string SkipValue { get; set; } = "";
-    [ObservableProperty] public partial string SkipVersion { get; set; } = "";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Title))] public partial string NameText { get; set; } = "";
-    [ObservableProperty] public partial bool HasFallbackArguments { get; set; }
-    [ObservableProperty] public partial string FallbackArgumentsText { get; set; } = "";
-    [ObservableProperty] public partial bool HasFallbackRunValue { get; set; }
-    [ObservableProperty] public partial string FallbackRunValueName { get; set; } = "";
-    [ObservableProperty] public partial string FallbackRunValueArgumentsText { get; set; } = "";
 
     protected override bool IsViewState(string name) => base.IsViewState(name) || name == nameof(IfOptionItem);
 
-    public ObservableCollection<string>? ExecutableChoices => Owner?.ExecutableChoices;
     public ObservableCollection<string>? IfOptionChoices => Owner?.IfOptionChoices;
 
     /// <summary>ComboBox selection for ifOption; null pushes (while the choices are rebuilt) are ignored.</summary>
@@ -410,6 +506,34 @@ public sealed partial class ActionRow : EditorRow
     }
 
     internal void RefreshIfOptionItem() => OnPropertyChanged(nameof(IfOptionItem));
+}
+
+/// <summary>actions[]: a program from the app's files run after install or before uninstall.</summary>
+public sealed partial class ActionRow : GatedRow
+{
+    internal static readonly string[] Whens = ["afterInstall", "beforeUninstall"];
+    internal static readonly string[] Failures = ["fail", "warn", "ignore"];
+    internal static readonly string[] Hives = ["HKLM", "HKCU"];
+    private ActionSettings _original = new();
+
+    [ObservableProperty] public partial string Id { get; set; } = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Subtitle))] public partial int WhenIndex { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Title)), NotifyPropertyChangedFor(nameof(Subtitle))] public partial string Run { get; set; } = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Subtitle))] public partial string ArgumentsText { get; set; } = "";
+    [ObservableProperty] public partial double TimeoutSeconds { get; set; } = 300;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ExitCodesError))] public partial string ExitCodesText { get; set; } = "0";
+    [ObservableProperty] public partial int OnFailureIndex { get; set; }
+    [ObservableProperty] public partial bool HasSkipIfInstalled { get; set; }
+    [ObservableProperty] public partial int SkipHiveIndex { get; set; }
+    [ObservableProperty] public partial string SkipKey { get; set; } = "";
+    [ObservableProperty] public partial string SkipValue { get; set; } = "";
+    [ObservableProperty] public partial string SkipVersion { get; set; } = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Title))] public partial string NameText { get; set; } = "";
+    [ObservableProperty] public partial bool HasFallbackArguments { get; set; }
+    [ObservableProperty] public partial string FallbackArgumentsText { get; set; } = "";
+    [ObservableProperty] public partial bool HasFallbackRunValue { get; set; }
+    [ObservableProperty] public partial string FallbackRunValueName { get; set; } = "";
+    [ObservableProperty] public partial string FallbackRunValueArgumentsText { get; set; } = "";
 
     public string Title
     {

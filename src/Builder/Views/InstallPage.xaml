@@ -123,6 +123,52 @@
                     <TextBlock Text="{x:Bind VM.Errors.InstallIntegration, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallIntegration), Mode=OneWay}" />
                 </StackPanel>
             </Border>
+            <Border Style="{StaticResource RowCardStyle}" Margin="0,4,0,0">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE721;" Style="{StaticResource RowIconStyle}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Uid="InstallAppPathsTitle" Style="{StaticResource RowTitleStyle}" />
+                        <TextBlock x:Uid="InstallAppPathsDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        <TextBlock Text="{x:Bind VM.Errors.InstallAppPaths, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallAppPaths), Mode=OneWay}" />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.InstallAppPaths, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="InstallAppPathsToggle" />
+                </Grid>
+            </Border>
+
+            <!-- Files of the app that are in use while they are replaced or removed -->
+            <TextBlock x:Uid="InstallInUseSection" Style="{StaticResource SectionHeaderStyle}" />
+            <StackPanel Spacing="4">
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE777;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="InstallRestartManagerTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="InstallRestartManagerDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.RestartManagerIndex, Mode=TwoWay}" x:Uid="InstallRestartManagerCombo">
+                            <ComboBoxItem x:Uid="RestartManagerAuto" /><ComboBoxItem x:Uid="RestartManagerOff" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE72E;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="InstallLockedFilesTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="InstallLockedFilesDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            <TextBlock x:Uid="InstallLockedFilesMachineOnly" Style="{StaticResource RowDescriptionStyle}" Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                       Visibility="{x:Bind VM.LockedFilesNeedMachine, Mode=OneWay}" Margin="0,4,0,0" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.LockedFilesIndex, Mode=TwoWay}" x:Uid="InstallLockedFilesCombo">
+                            <ComboBoxItem x:Uid="LockedFilesFail" /><ComboBoxItem x:Uid="LockedFilesReboot" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <TextBlock Text="{x:Bind VM.Errors.InstallFilesInUse, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallFilesInUse), Mode=OneWay}" />
+            </StackPanel>
 
             <TextBlock x:Uid="InstallRequirementsSection" Style="{StaticResource SectionHeaderStyle}" />
             <Border Style="{StaticResource RowCardStyle}">

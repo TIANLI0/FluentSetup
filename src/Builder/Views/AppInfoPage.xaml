@@ -113,6 +113,29 @@
                 </Border>
             </StackPanel>
 
+            <!-- AppUserModelID and toast activator set on the app's own shortcuts (notifications of unpackaged apps) -->
+            <TextBlock x:Uid="AppNotificationsSection" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                <StackPanel Spacing="16">
+                    <TextBlock x:Uid="AppNotificationsDescription" Style="{StaticResource RowDescriptionStyle}" />
+                    <Grid ColumnSpacing="24">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBox x:Uid="AppAumidBox" Text="{x:Bind VM.AppUserModelId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                            <TextBlock Text="{x:Bind VM.Errors.AppUserModelId, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppUserModelId), Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBox x:Uid="AppToastClsidBox" Text="{x:Bind VM.ToastActivatorClsid, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" IsSpellCheckEnabled="False" />
+                                <Button x:Uid="AppToastClsidGenerate" Grid.Column="1" VerticalAlignment="Bottom" Command="{x:Bind VM.GenerateToastActivatorClsidCommand}" />
+                            </Grid>
+                            <TextBlock Text="{x:Bind VM.Errors.AppToastActivatorClsid, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppToastActivatorClsid), Mode=OneWay}" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <TextBlock x:Uid="AppOutputSection" Style="{StaticResource SectionHeaderStyle}" />
             <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
                 <StackPanel>

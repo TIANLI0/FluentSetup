@@ -357,7 +357,6 @@
   <data name="RollForwardPatch.Content" xml:space="preserve"><value>相同的主版本和次版本（patch）</value></data>
   <data name="RollForwardMinor.Content" xml:space="preserve"><value>相同的主版本（minor）</value></data>
   <data name="RollForwardMajor.Content" xml:space="preserve"><value>任何更高版本（major）</value></data>
-  <data name="SourceHelp.Text" xml:space="preserve"><value>安装程序会运行随附的安装程序（在“安装文件”页的“附加文件夹”中添加），否则下载该文件并校验其 SHA-256。两者都未设置时，安装程序会在做出任何更改之前停止，并显示帮助链接。</value></data>
   <data name="SourceInstallerCombo.Header" xml:space="preserve"><value>随附的安装程序（位于安装的文件中）</value></data>
   <data name="SourceInstallerCombo.PlaceholderText" xml:space="preserve"><value>redist\installer.exe</value></data>
   <data name="SourceOnFailureCombo.Header" xml:space="preserve"><value>安装后仍然缺少时</value></data>
@@ -367,7 +366,6 @@
   <data name="SourceHelpUrlBox.Header" xml:space="preserve"><value>帮助链接（https）</value></data>
   <data name="SourceHelpUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
   <data name="SourceVariantsBox.Header" xml:space="preserve"><value>仅用于这些变体（逗号分隔；留空 = 始终）</value></data>
-  <data name="SourceDownloadToggle.Header" xml:space="preserve"><value>未随附安装程序时从网络下载</value></data>
   <data name="SourceUrlBox.Header" xml:space="preserve"><value>下载地址（https）</value></data>
   <data name="SourceUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
   <data name="SourceComputeButton.Content" xml:space="preserve"><value>计算哈希和大小</value></data>
@@ -603,4 +601,308 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="UpdateSignerBox.Header" xml:space="preserve"><value>要求的签名者（可选）</value></data>
   <data name="UpdateSignerBox.PlaceholderText" xml:space="preserve"><value>证书使用者名称，例如 Contoso Ltd</value></data>
   <data name="UpdateHowToUse.Text" xml:space="preserve"><value>在应用里，“检查更新”可运行安装目录下的“uninstall.exe /install-update /relaunch”（先弹出小窗口询问），后台检查用“uninstall.exe /check-update”（退出代码 18 = 有更新）。下载的文件必须与发布的 SHA-256 一致，且是本应用的更新版本；文件名中的 {Version} 代表发布的版本号。</value></data>
+  <data name="NavShortcuts.Content" xml:space="preserve"><value>快捷方式与文件类型</value></data>
+  <data name="NavSystem.Content" xml:space="preserve"><value>系统</value></data>
+  <data name="NavInputs.Content" xml:space="preserve"><value>输入与配置文件</value></data>
+  <data name="AppNotificationsSection.Text" xml:space="preserve"><value>任务栏与通知</value></data>
+  <data name="AppNotificationsDescription.Text" xml:space="preserve"><value>设置在应用的“开始”菜单和桌面快捷方式上。未打包的应用需要 AppUserModelID 才能显示 Toast 通知，需要 Toast 激活器才能从通知启动。</value></data>
+  <data name="AppAumidBox.Header" xml:space="preserve"><value>AppUserModelID（可选）</value></data>
+  <data name="AppAumidBox.PlaceholderText" xml:space="preserve"><value>Contoso.Notes</value></data>
+  <data name="AppToastClsidBox.Header" xml:space="preserve"><value>Toast 激活器 CLSID（可选）</value></data>
+  <data name="AppToastClsidBox.PlaceholderText" xml:space="preserve"><value>{00000000-0000-0000-0000-000000000000}</value></data>
+  <data name="AppToastClsidGenerate.Content" xml:space="preserve"><value>生成</value></data>
+  <data name="AppToastClsidGenerate.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>生成新的 CLSID</value></data>
+  <data name="InstallAppPathsTitle.Text" xml:space="preserve"><value>注册到 App Paths</value></data>
+  <data name="InstallAppPathsDescription.Text" xml:space="preserve"><value>“运行”对话框（Win+R）和其他程序可以按文件名找到主程序。</value></data>
+  <data name="InstallAppPathsToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>注册到 App Paths</value></data>
+  <data name="InstallInUseSection.Text" xml:space="preserve"><value>正在使用的文件</value></data>
+  <data name="InstallRestartManagerTitle.Text" xml:space="preserve"><value>正在使用应用文件的程序</value></data>
+  <data name="InstallRestartManagerDescription.Text" xml:space="preserve"><value>在替换或删除文件之前。Windows 重启管理器会先正常关闭这些程序，必要时强制关闭，完成后重新启动支持重启的程序。</value></data>
+  <data name="InstallRestartManagerCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>正在使用应用文件的程序</value></data>
+  <data name="RestartManagerAuto.Content" xml:space="preserve"><value>关闭并在之后重新启动</value></data>
+  <data name="RestartManagerOff.Content" xml:space="preserve"><value>仅关闭列出的进程</value></data>
+  <data name="InstallLockedFilesTitle.Text" xml:space="preserve"><value>仍被占用的文件</value></data>
+  <data name="InstallLockedFilesDescription.Text" xml:space="preserve"><value>关闭程序后仍无法替换文件时。</value></data>
+  <data name="InstallLockedFilesMachineOnly.Text" xml:space="preserve"><value>在下次重启时替换文件需要管理员权限，仅适用于为所有用户的安装。</value></data>
+  <data name="InstallLockedFilesCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>仍被占用的文件</value></data>
+  <data name="LockedFilesFail.Content" xml:space="preserve"><value>停止并回滚</value></data>
+  <data name="LockedFilesReboot.Content" xml:space="preserve"><value>在下次重启时替换</value></data>
+  <data name="AppearanceBannerSection.Text" xml:space="preserve"><value>横幅</value></data>
+  <data name="AppearanceBannerTitle.Text" xml:space="preserve"><value>横幅图片</value></data>
+  <data name="AppearanceBannerDescription.Text" xml:space="preserve"><value>显示在安装程序第一页的顶部。PNG、JPG 或 BMP，不超过 1 MB，宽高比约 4:1（例如 960 × 240 像素）。</value></data>
+  <data name="AppearanceBannerBox.PlaceholderText" xml:space="preserve"><value>banner.png</value></data>
+  <data name="AppearanceBannerBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>横幅图片文件</value></data>
+  <data name="AppearanceBannerClear.Content" xml:space="preserve"><value>移除</value></data>
+  <data name="AppearanceBannerBrowse.Content" xml:space="preserve"><value>浏览…</value></data>
+  <data name="AppearanceBannerPreview.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>横幅预览</value></data>
+  <data name="Banner_None" xml:space="preserve"><value>无横幅</value></data>
+  <data name="Banner_Missing" xml:space="preserve"><value>找不到文件：{0}</value></data>
+  <data name="Banner_Info" xml:space="preserve"><value>{0} × {1} 像素 · {2}</value></data>
+  <data name="Banner_Unreadable" xml:space="preserve"><value>无法读取该图片。</value></data>
+  <data name="SignUninstallerToggle.Header" xml:space="preserve"><value>同时为卸载程序（uninstall.exe）签名</value></data>
+  <data name="PrereqVcTitle.Text" xml:space="preserve"><value>Microsoft Visual C++ 可再发行组件</value></data>
+  <data name="PrereqVcDescription.Text" xml:space="preserve"><value>适用于使用 Visual C++ 2015–2022（v14）共享运行时 DLL 的应用。</value></data>
+  <data name="PrereqVcToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>需要 Visual C++ 可再发行组件</value></data>
+  <data name="PrereqVcMinVersionBox.Header" xml:space="preserve"><value>最低版本（可选）</value></data>
+  <data name="PrereqVcMinVersionBox.PlaceholderText" xml:space="preserve"><value>14.40</value></data>
+  <data name="PrereqVcArchCombo.Header" xml:space="preserve"><value>体系结构</value></data>
+  <data name="PrereqVcArchPackage.Content" xml:space="preserve"><value>与安装包相同</value></data>
+  <data name="PrereqCustomSection.Text" xml:space="preserve"><value>其他必备组件</value></data>
+  <data name="PrereqCustomDescription.Text" xml:space="preserve"><value>应用需要的其他组件，通过注册表值或文件来检测，例如驱动程序或数据库引擎。</value></data>
+  <data name="PrereqAddCustom.Text" xml:space="preserve"><value>添加必备组件</value></data>
+  <data name="PrereqCustomEmpty.Text" xml:space="preserve"><value>没有其他必备组件。</value></data>
+  <data name="Custom_Untitled" xml:space="preserve"><value>新必备组件</value></data>
+  <data name="CustomNameBox.Header" xml:space="preserve"><value>名称（向用户显示）</value></data>
+  <data name="CustomNameBox.PlaceholderText" xml:space="preserve"><value>Contoso Driver 2</value></data>
+  <data name="CustomIdBox.Header" xml:space="preserve"><value>ID</value></data>
+  <data name="CustomDetectCombo.Header" xml:space="preserve"><value>检测方式</value></data>
+  <data name="CustomDetectRegistry.Content" xml:space="preserve"><value>注册表值</value></data>
+  <data name="CustomDetectFile.Content" xml:space="preserve"><value>文件</value></data>
+  <data name="CustomHiveCombo.Header" xml:space="preserve"><value>根键</value></data>
+  <data name="CustomKeyBox.Header" xml:space="preserve"><value>项</value></data>
+  <data name="CustomKeyBox.PlaceholderText" xml:space="preserve"><value>SOFTWARE\Contoso\Driver</value></data>
+  <data name="CustomValueBox.Header" xml:space="preserve"><value>值名称（留空 = 默认值）</value></data>
+  <data name="CustomVersionBox.Header" xml:space="preserve"><value>最低版本（留空 = 只需存在该值）</value></data>
+  <data name="CustomFileBox.Header" xml:space="preserve"><value>文件</value></data>
+  <data name="CustomFileBox.PlaceholderText" xml:space="preserve"><value>{ProgramFiles}\Contoso\driver.dll</value></data>
+  <data name="CustomFileVersionBox.Header" xml:space="preserve"><value>最低文件版本（可选）</value></data>
+  <data name="SourceModeChoice.Header" xml:space="preserve"><value>缺少时，安装程序使用</value></data>
+  <data name="SourceMode_OfficialBundle" xml:space="preserve"><value>Microsoft 官方安装程序，生成时打包</value></data>
+  <data name="SourceMode_OfficialDownload" xml:space="preserve"><value>Microsoft 官方安装程序，安装时下载</value></data>
+  <data name="SourceMode_Installer" xml:space="preserve"><value>应用文件中的安装程序</value></data>
+  <data name="SourceMode_Download" xml:space="preserve"><value>下载地址，通过 SHA-256 或签名者校验</value></data>
+  <data name="SourceMode_None" xml:space="preserve"><value>无 — 显示帮助链接</value></data>
+  <data name="SourceOfficialBundleHelp.Text" xml:space="preserve"><value>生成时会从 Microsoft 下载官方安装程序（带缓存并校验签名），并存入 Setup.exe。仅在缺少该组件时，安装程序才会解压并运行它；它不会被安装到应用目录中。</value></data>
+  <data name="SourceOfficialDownloadHelp.Text" xml:space="preserve"><value>仅在缺少该组件时，安装程序才会从 Microsoft 下载官方安装程序，并且只有在其带有 Microsoft Corporation 的有效签名时才会运行。安装时需要联网。</value></data>
+  <data name="SourceInstallerHelp.Text" xml:space="preserve"><value>在“安装文件”页的“附加文件夹”中将安装程序加入应用文件；它会随应用一起安装。</value></data>
+  <data name="SourceDownloadHelp.Text" xml:space="preserve"><value>在做出任何更改之前下载（仅限 https），只有在与 SHA-256 一致，或（对于会随时间变化的安装程序）带有颁发给指定签名者的有效签名时才会运行。</value></data>
+  <data name="SourceSignerBox.Header" xml:space="preserve"><value>要求的签名者（代替或配合 SHA-256）</value></data>
+  <data name="SourceSignerBox.PlaceholderText" xml:space="preserve"><value>Microsoft Corporation</value></data>
+  <data name="SourceNoneHelp.Text" xml:space="preserve"><value>安装程序不会安装它：缺少时，安装程序会在做出任何更改之前停止，并显示帮助链接。</value></data>
+  <data name="Source_SummaryOfficialBundle" xml:space="preserve"><value>Microsoft 安装程序（已打包）</value></data>
+  <data name="Source_SummaryOfficialDownload" xml:space="preserve"><value>Microsoft 安装程序（需要时下载）</value></data>
+  <data name="VersionRefreshButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>从 Microsoft 刷新版本列表</value></data>
+  <data name="VersionRefreshButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>从 Microsoft 刷新版本列表</value></data>
+  <data name="Versions_Loading" xml:space="preserve"><value>正在从 Microsoft 获取版本…</value></data>
+  <data name="Versions_FromMicrosoft" xml:space="preserve"><value>来自 Microsoft，{0}</value></data>
+  <data name="Versions_OfflineSaved" xml:space="preserve"><value>离线 · {0} 的列表</value></data>
+  <data name="Versions_OfflineBuiltIn" xml:space="preserve"><value>离线 · 内置列表</value></data>
+  <data name="Versions_VcNote" xml:space="preserve"><value>常用最低版本 · Microsoft 官方安装程序始终为最新版</value></data>
+  <data name="Versions_Failed" xml:space="preserve"><value>无法获取版本：{0}</value></data>
+  <data name="Versions_EdgeStable" xml:space="preserve"><value>Microsoft Edge 稳定版</value></data>
+  <data name="Versions_EdgeBeta" xml:space="preserve"><value>Microsoft Edge Beta 版</value></data>
+  <data name="Versions_Released" xml:space="preserve"><value>发布于 {0}</value></data>
+  <data name="Versions_WasChannel" xml:space="preserve"><value>任意 {0} 运行时</value></data>
+  <data name="Versions_Latest" xml:space="preserve"><value>最新 {0}</value></data>
+  <data name="Versions_Lts" xml:space="preserve"><value>LTS（长期支持）</value></data>
+  <data name="Versions_Sts" xml:space="preserve"><value>STS（标准期限支持）</value></data>
+  <data name="Versions_Eol" xml:space="preserve"><value>已停止支持</value></data>
+  <data name="Versions_EolSince" xml:space="preserve"><value>已于 {0} 停止支持</value></data>
+  <data name="Versions_SupportedUntil" xml:space="preserve"><value>支持至 {0}</value></data>
+  <data name="Versions_Newest" xml:space="preserve"><value>最新</value></data>
+  <data name="Versions_VcAny" xml:space="preserve"><value>任意 Visual C++ 2015–2022 运行时</value></data>
+  <data name="IfOptionCombo.Header" xml:space="preserve"><value>仅在选中此选项时</value></data>
+  <data name="IconIndexBox.Header" xml:space="preserve"><value>图标索引</value></data>
+  <data name="PlaceholdersHelp.Text" xml:space="preserve"><value>值中可以使用 {InstallDir}、{MainExecutable}、{AppVersion}、{AppId} 和 {Input:id}（在安装程序“设置”页输入的值）。</value></data>
+  <data name="ShortcutsPageTitle.Text" xml:space="preserve"><value>快捷方式与文件类型</value></data>
+  <data name="ShortcutsPageDescription.Text" xml:space="preserve"><value>除应用自身快捷方式外的更多快捷方式，以及应用打开的文件类型和处理的链接（URL 协议）。卸载时会全部移除。</value></data>
+  <data name="ShortcutsSection.Text" xml:space="preserve"><value>更多快捷方式</value></data>
+  <data name="ShortcutsSectionDescription.Text" xml:space="preserve"><value>应用的其他程序、带参数的快捷方式、桌面或“启动”文件夹。应用的主快捷方式在“安装选项”中设置。</value></data>
+  <data name="ShortcutsAdd.Text" xml:space="preserve"><value>添加快捷方式</value></data>
+  <data name="ShortcutsEmpty.Text" xml:space="preserve"><value>没有其他快捷方式。</value></data>
+  <data name="Shortcuts_Untitled" xml:space="preserve"><value>新快捷方式</value></data>
+  <data name="Shortcuts_MainProgram" xml:space="preserve"><value>主程序</value></data>
+  <data name="ShortcutLocation_0" xml:space="preserve"><value>“开始”菜单</value></data>
+  <data name="ShortcutLocation_1" xml:space="preserve"><value>桌面</value></data>
+  <data name="ShortcutLocation_2" xml:space="preserve"><value>“启动”文件夹</value></data>
+  <data name="ShortcutNameBox.Header" xml:space="preserve"><value>名称</value></data>
+  <data name="ShortcutNameBox.PlaceholderText" xml:space="preserve"><value>Contoso Notes（安全模式）</value></data>
+  <data name="ShortcutLocationCombo.Header" xml:space="preserve"><value>位置</value></data>
+  <data name="ShortcutLocationStartMenu.Content" xml:space="preserve"><value>“开始”菜单</value></data>
+  <data name="ShortcutLocationDesktop.Content" xml:space="preserve"><value>桌面</value></data>
+  <data name="ShortcutLocationStartup.Content" xml:space="preserve"><value>“启动”文件夹（登录时启动）</value></data>
+  <data name="ShortcutTargetCombo.Header" xml:space="preserve"><value>目标（留空 = 主程序）</value></data>
+  <data name="ShortcutTargetCombo.PlaceholderText" xml:space="preserve"><value>tools\helper.exe</value></data>
+  <data name="ShortcutFolderBox.Header" xml:space="preserve"><value>“开始”菜单文件夹（留空 = 应用的文件夹）</value></data>
+  <data name="ShortcutArgumentsBox.Header" xml:space="preserve"><value>参数（每行一个）</value></data>
+  <data name="ShortcutDescriptionBox.Header" xml:space="preserve"><value>说明（工具提示）</value></data>
+  <data name="ShortcutIconCombo.Header" xml:space="preserve"><value>图标（留空 = 目标程序）</value></data>
+  <data name="ShortcutWorkingDirBox.Header" xml:space="preserve"><value>工作文件夹（留空 = 目标所在文件夹）</value></data>
+  <data name="ShortcutAumidBox.Header" xml:space="preserve"><value>AppUserModelID（可选）</value></data>
+  <data name="AssociationsSection.Text" xml:space="preserve"><value>文件类型</value></data>
+  <data name="AssociationsSectionDescription.Text" xml:space="preserve"><value>在资源管理器中双击这些文件会打开应用；应用也会出现在“打开方式”和“默认应用”中。</value></data>
+  <data name="AssociationsAdd.Text" xml:space="preserve"><value>添加文件类型</value></data>
+  <data name="AssociationsEmpty.Text" xml:space="preserve"><value>没有文件类型。</value></data>
+  <data name="Associations_Untitled" xml:space="preserve"><value>新文件类型</value></data>
+  <data name="AssociationExtensionsBox.Header" xml:space="preserve"><value>扩展名（逗号分隔）</value></data>
+  <data name="AssociationExtensionsBox.PlaceholderText" xml:space="preserve"><value>.cnote, .cnotes</value></data>
+  <data name="AssociationProgIdBox.Header" xml:space="preserve"><value>ProgID</value></data>
+  <data name="AssociationProgIdBox.PlaceholderText" xml:space="preserve"><value>Contoso.Notes.Document</value></data>
+  <data name="AssociationDescriptionBox.Header" xml:space="preserve"><value>文件类型名称（显示在资源管理器中）</value></data>
+  <data name="AssociationDescriptionBox.PlaceholderText" xml:space="preserve"><value>Contoso Notes 文档</value></data>
+  <data name="AssociationContentTypeBox.Header" xml:space="preserve"><value>MIME 类型（可选）</value></data>
+  <data name="AssociationContentTypeBox.PlaceholderText" xml:space="preserve"><value>application/x-contoso-note</value></data>
+  <data name="AssociationTargetCombo.Header" xml:space="preserve"><value>打开文件的程序（留空 = 主程序）</value></data>
+  <data name="AssociationArgumentsBox.Header" xml:space="preserve"><value>参数（每行一个；%1 表示文件）</value></data>
+  <data name="AssociationIconCombo.Header" xml:space="preserve"><value>图标（留空 = 程序）</value></data>
+  <data name="ProtocolsSection.Text" xml:space="preserve"><value>链接（URL 协议）</value></data>
+  <data name="ProtocolsSectionDescription.Text" xml:space="preserve"><value>浏览器或其他应用中的链接（例如 contoso-notes://open?id=1）会启动本应用。</value></data>
+  <data name="ProtocolsAdd.Text" xml:space="preserve"><value>添加 URL 协议</value></data>
+  <data name="ProtocolsEmpty.Text" xml:space="preserve"><value>没有 URL 协议。</value></data>
+  <data name="Protocols_Untitled" xml:space="preserve"><value>新 URL 协议</value></data>
+  <data name="ProtocolSchemeBox.Header" xml:space="preserve"><value>协议名（小写，不含 ://）</value></data>
+  <data name="ProtocolSchemeBox.PlaceholderText" xml:space="preserve"><value>contoso-notes</value></data>
+  <data name="ProtocolDescriptionBox.Header" xml:space="preserve"><value>说明</value></data>
+  <data name="ProtocolTargetCombo.Header" xml:space="preserve"><value>处理链接的程序（留空 = 主程序）</value></data>
+  <data name="ProtocolArgumentsBox.Header" xml:space="preserve"><value>参数（每行一个；%1 表示链接）</value></data>
+  <data name="ProtocolIconCombo.Header" xml:space="preserve"><value>图标（留空 = 程序）</value></data>
+  <data name="SystemPageTitle.Text" xml:space="preserve"><value>系统</value></data>
+  <data name="SystemPageDescription.Text" xml:space="preserve"><value>应用的注册表值、环境变量、Windows 服务和防火墙规则。安装程序会记录它们，并在卸载时撤销。</value></data>
+  <data name="RegistrySection.Text" xml:space="preserve"><value>注册表</value></data>
+  <data name="RegistrySectionDescription.Text" xml:space="preserve"><value>HKEY_CURRENT_USER（为当前用户安装）或 HKEY_LOCAL_MACHINE（为所有用户安装）中 Software\&lt;厂商&gt; 下的项。</value></data>
+  <data name="RegistryAdd.Text" xml:space="preserve"><value>添加项</value></data>
+  <data name="RegistryEmpty.Text" xml:space="preserve"><value>没有注册表值。</value></data>
+  <data name="Registry_Untitled" xml:space="preserve"><value>新项</value></data>
+  <data name="Registry_ValueCount" xml:space="preserve"><value>{0} 个值</value></data>
+  <data name="RegistryUninstall_0" xml:space="preserve"><value>卸载时删除这些值</value></data>
+  <data name="RegistryUninstall_1" xml:space="preserve"><value>卸载时删除整个项</value></data>
+  <data name="RegistryUninstall_2" xml:space="preserve"><value>卸载时保留</value></data>
+  <data name="RegistryKeyBox.Header" xml:space="preserve"><value>项（位于 HKCU 或 HKLM 下）</value></data>
+  <data name="RegistryKeyBox.PlaceholderText" xml:space="preserve"><value>Software\Contoso\Notes</value></data>
+  <data name="RegistryUninstallCombo.Header" xml:space="preserve"><value>卸载时</value></data>
+  <data name="RegistryUninstallValues.Content" xml:space="preserve"><value>删除写入的值（项变空时一并删除）</value></data>
+  <data name="RegistryUninstallKey.Content" xml:space="preserve"><value>删除整个项</value></data>
+  <data name="RegistryUninstallKeep.Content" xml:space="preserve"><value>全部保留</value></data>
+  <data name="RegistryValuesTitle.Text" xml:space="preserve"><value>值</value></data>
+  <data name="RegistryAddValue.Text" xml:space="preserve"><value>添加值</value></data>
+  <data name="RegistryNoValues.Text" xml:space="preserve"><value>没有值：将创建一个空项。</value></data>
+  <data name="RegistryValueNameBox.PlaceholderText" xml:space="preserve"><value>名称（留空 = 默认值）</value></data>
+  <data name="RegistryValueNameBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>值名称</value></data>
+  <data name="RegistryValueTypeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>值类型</value></data>
+  <data name="RegistryTypeString.Content" xml:space="preserve"><value>字符串（REG_SZ）</value></data>
+  <data name="RegistryTypeExpandString.Content" xml:space="preserve"><value>可扩充字符串（REG_EXPAND_SZ）</value></data>
+  <data name="RegistryTypeDword.Content" xml:space="preserve"><value>DWORD（32 位）</value></data>
+  <data name="RegistryTypeQword.Content" xml:space="preserve"><value>QWORD（64 位）</value></data>
+  <data name="RegistryTypeMultiString.Content" xml:space="preserve"><value>多字符串（每行一个）</value></data>
+  <data name="RegistryValueDataBox.PlaceholderText" xml:space="preserve"><value>数据（数字：十进制或 0x 十六进制）</value></data>
+  <data name="RegistryValueDataBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>值数据</value></data>
+  <data name="EnvironmentSection.Text" xml:space="preserve"><value>环境变量</value></data>
+  <data name="EnvironmentSectionDescription.Text" xml:space="preserve"><value>为当前用户安装时设为用户变量，为所有用户安装时设为系统变量；卸载时若未被修改则删除。要加入 PATH 的文件夹在“安装选项”中设置。</value></data>
+  <data name="EnvironmentAdd.Text" xml:space="preserve"><value>添加变量</value></data>
+  <data name="EnvironmentEmpty.Text" xml:space="preserve"><value>没有环境变量。</value></data>
+  <data name="Environment_Untitled" xml:space="preserve"><value>新变量</value></data>
+  <data name="EnvironmentNameBox.Header" xml:space="preserve"><value>名称</value></data>
+  <data name="EnvironmentNameBox.PlaceholderText" xml:space="preserve"><value>CONTOSO_HOME</value></data>
+  <data name="EnvironmentValueBox.Header" xml:space="preserve"><value>值</value></data>
+  <data name="EnvironmentValueBox.PlaceholderText" xml:space="preserve"><value>{InstallDir}</value></data>
+  <data name="EnvironmentExpandCheck.Content" xml:space="preserve"><value>可扩充（引用其他变量，例如 %USERPROFILE%）</value></data>
+  <data name="SystemMachineSection.Text" xml:space="preserve"><value>仅限为所有用户安装</value></data>
+  <data name="SystemMachineOnlyWarning.Title" xml:space="preserve"><value>需要为所有用户安装</value></data>
+  <data name="SystemMachineOnlyWarning.Message" xml:space="preserve"><value>服务和防火墙规则只在为所有用户安装时设置，但此应用为当前用户安装（见“安装选项”）。</value></data>
+  <data name="SystemMachineOnlyInfo.Title" xml:space="preserve"><value>仅在为所有用户安装时生效</value></data>
+  <data name="SystemMachineOnlyInfo.Message" xml:space="preserve"><value>安装范围由用户选择：只有在为所有用户安装时才会设置服务和防火墙规则。</value></data>
+  <data name="ServicesSection.Text" xml:space="preserve"><value>Windows 服务</value></data>
+  <data name="ServicesSectionDescription.Text" xml:space="preserve"><value>文件安装完成后创建（或更新）并启动，替换文件前停止，卸载时删除。</value></data>
+  <data name="ServicesAdd.Text" xml:space="preserve"><value>添加服务</value></data>
+  <data name="ServicesEmpty.Text" xml:space="preserve"><value>没有服务。</value></data>
+  <data name="Services_Untitled" xml:space="preserve"><value>新服务</value></data>
+  <data name="ServiceStart_0" xml:space="preserve"><value>自动</value></data>
+  <data name="ServiceStart_1" xml:space="preserve"><value>自动（延迟启动）</value></data>
+  <data name="ServiceStart_2" xml:space="preserve"><value>手动</value></data>
+  <data name="ServiceStart_3" xml:space="preserve"><value>禁用</value></data>
+  <data name="ServiceKeyNameBox.Header" xml:space="preserve"><value>服务名称</value></data>
+  <data name="ServiceKeyNameBox.PlaceholderText" xml:space="preserve"><value>ContosoSync</value></data>
+  <data name="ServiceDisplayNameBox.Header" xml:space="preserve"><value>显示名称</value></data>
+  <data name="ServiceDescriptionBox.Header" xml:space="preserve"><value>说明</value></data>
+  <data name="ServiceRunCombo.Header" xml:space="preserve"><value>程序（位于安装的文件中）</value></data>
+  <data name="ServiceRunCombo.PlaceholderText" xml:space="preserve"><value>service\ContosoSync.exe</value></data>
+  <data name="ServiceArgumentsBox.Header" xml:space="preserve"><value>参数（每行一个）</value></data>
+  <data name="ServiceStartTypeCombo.Header" xml:space="preserve"><value>启动类型</value></data>
+  <data name="ServiceStartAuto.Content" xml:space="preserve"><value>自动</value></data>
+  <data name="ServiceStartDelayed.Content" xml:space="preserve"><value>自动（延迟启动）</value></data>
+  <data name="ServiceStartManual.Content" xml:space="preserve"><value>手动</value></data>
+  <data name="ServiceStartDisabled.Content" xml:space="preserve"><value>禁用</value></data>
+  <data name="ServiceAccountCombo.Header" xml:space="preserve"><value>登录身份</value></data>
+  <data name="ServiceAccountLocalSystem.Content" xml:space="preserve"><value>本地系统</value></data>
+  <data name="ServiceAccountLocalService.Content" xml:space="preserve"><value>本地服务</value></data>
+  <data name="ServiceAccountNetworkService.Content" xml:space="preserve"><value>网络服务</value></data>
+  <data name="ServiceDependenciesBox.Header" xml:space="preserve"><value>依存的服务（服务名称，逗号分隔）</value></data>
+  <data name="ServiceStartCheck.Content" xml:space="preserve"><value>安装后启动</value></data>
+  <data name="ServiceRestartCheck.Content" xml:space="preserve"><value>失败时重新启动</value></data>
+  <data name="FirewallSection.Text" xml:space="preserve"><value>防火墙规则</value></data>
+  <data name="FirewallSectionDescription.Text" xml:space="preserve"><value>为应用的程序添加 Windows Defender 防火墙允许规则，更新时替换，卸载时删除。</value></data>
+  <data name="FirewallAdd.Text" xml:space="preserve"><value>添加规则</value></data>
+  <data name="FirewallEmpty.Text" xml:space="preserve"><value>没有防火墙规则。</value></data>
+  <data name="Firewall_Untitled" xml:space="preserve"><value>新规则</value></data>
+  <data name="FirewallDirection_0" xml:space="preserve"><value>入站</value></data>
+  <data name="FirewallDirection_1" xml:space="preserve"><value>出站</value></data>
+  <data name="FirewallProtocol_0" xml:space="preserve"><value>任意协议</value></data>
+  <data name="FirewallProtocol_1" xml:space="preserve"><value>TCP</value></data>
+  <data name="FirewallProtocol_2" xml:space="preserve"><value>UDP</value></data>
+  <data name="FirewallNameBox.Header" xml:space="preserve"><value>规则名称</value></data>
+  <data name="FirewallProgramCombo.Header" xml:space="preserve"><value>程序（留空 = 主程序）</value></data>
+  <data name="FirewallDirectionCombo.Header" xml:space="preserve"><value>方向</value></data>
+  <data name="FirewallDirectionIn.Content" xml:space="preserve"><value>入站</value></data>
+  <data name="FirewallDirectionOut.Content" xml:space="preserve"><value>出站</value></data>
+  <data name="FirewallProtocolCombo.Header" xml:space="preserve"><value>协议</value></data>
+  <data name="FirewallProtocolAny.Content" xml:space="preserve"><value>任意</value></data>
+  <data name="FirewallPortsBox.Header" xml:space="preserve"><value>本地端口（留空 = 任意）</value></data>
+  <data name="FirewallPortsBox.PlaceholderText" xml:space="preserve"><value>8080, 9000-9010</value></data>
+  <data name="FirewallProfilesTitle.Text" xml:space="preserve"><value>网络配置文件</value></data>
+  <data name="FirewallProfileDomain.Content" xml:space="preserve"><value>域</value></data>
+  <data name="FirewallProfilePrivate.Content" xml:space="preserve"><value>专用</value></data>
+  <data name="FirewallProfilePublic.Content" xml:space="preserve"><value>公用</value></data>
+  <data name="FirewallProfilesHelp.Text" xml:space="preserve"><value>都不选 = 所有配置文件。</value></data>
+  <data name="InputsPageTitle.Text" xml:space="preserve"><value>输入与配置文件</value></data>
+  <data name="InputsPageDescription.Text" xml:space="preserve"><value>用户在安装程序“设置”页（或通过 /input id=value）输入的值，以及安装程序写入这些值的 JSON 或 INI 文件。</value></data>
+  <data name="InputsSection.Text" xml:space="preserve"><value>设置页</value></data>
+  <data name="InputsSectionDescription.Text" xml:space="preserve"><value>显示在第一页之后。可在注册表值、环境变量、配置文件和参数中以 {Input:id} 引用这些值；记住的值会在更新时自动填入。</value></data>
+  <data name="InputsAdd.Text" xml:space="preserve"><value>添加字段</value></data>
+  <data name="InputsEmpty.Text" xml:space="preserve"><value>没有字段：安装程序不显示设置页。</value></data>
+  <data name="Inputs_Untitled" xml:space="preserve"><value>新字段</value></data>
+  <data name="Inputs_Required" xml:space="preserve"><value>必填</value></data>
+  <data name="Inputs_PatternInvalid" xml:space="preserve"><value>不是有效的正则表达式：{0}</value></data>
+  <data name="InputType_0" xml:space="preserve"><value>文本</value></data>
+  <data name="InputType_1" xml:space="preserve"><value>密码</value></data>
+  <data name="InputType_2" xml:space="preserve"><value>选项</value></data>
+  <data name="InputIdBox.Header" xml:space="preserve"><value>ID（以 {Input:id} 引用）</value></data>
+  <data name="InputTypeCombo.Header" xml:space="preserve"><value>类型</value></data>
+  <data name="InputTypeText.Content" xml:space="preserve"><value>文本</value></data>
+  <data name="InputTypePassword.Content" xml:space="preserve"><value>密码（从不记住）</value></data>
+  <data name="InputTypeChoice.Content" xml:space="preserve"><value>从列表中选择</value></data>
+  <data name="InputLabelBox.Header" xml:space="preserve"><value>各语言的标签（每行一个：en-US = 文本）</value></data>
+  <data name="InputLabelBox.PlaceholderText" xml:space="preserve"><value>zh-CN = 服务器地址</value></data>
+  <data name="InputDescriptionBox.Header" xml:space="preserve"><value>字段下方的帮助文本（每行一个：en-US = 文本）</value></data>
+  <data name="InputDefaultBox.Header" xml:space="preserve"><value>默认值</value></data>
+  <data name="InputPatternBox.Header" xml:space="preserve"><value>格式（正则表达式，可选）</value></data>
+  <data name="InputPatternBox.PlaceholderText" xml:space="preserve"><value>^https://</value></data>
+  <data name="InputRequiredCheck.Content" xml:space="preserve"><value>必填</value></data>
+  <data name="InputRememberCheck.Content" xml:space="preserve"><value>更新时记住</value></data>
+  <data name="InputChoicesTitle.Text" xml:space="preserve"><value>选项</value></data>
+  <data name="InputAddChoice.Text" xml:space="preserve"><value>添加选项</value></data>
+  <data name="InputChoiceValueBox.PlaceholderText" xml:space="preserve"><value>值</value></data>
+  <data name="InputChoiceValueBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>选项值</value></data>
+  <data name="InputChoiceLabelBox.PlaceholderText" xml:space="preserve"><value>zh-CN = 标签</value></data>
+  <data name="InputChoiceLabelBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>各语言的选项标签</value></data>
+  <data name="ConfigFilesSection.Text" xml:space="preserve"><value>配置文件</value></data>
+  <data name="ConfigFilesSectionDescription.Text" xml:space="preserve"><value>文件安装完成后，安装程序会将这些值写入 JSON 或 INI 文件；现有文件中的其他设置会保留。</value></data>
+  <data name="ConfigFilesAdd.Text" xml:space="preserve"><value>添加文件</value></data>
+  <data name="ConfigFilesEmpty.Text" xml:space="preserve"><value>没有配置文件。</value></data>
+  <data name="ConfigFiles_Untitled" xml:space="preserve"><value>新配置文件</value></data>
+  <data name="ConfigPathBox.Header" xml:space="preserve"><value>文件（相对于安装目录，或 {LocalAppData}\…、{AppData}\…、{CommonAppData}\…）</value></data>
+  <data name="ConfigPathBox.PlaceholderText" xml:space="preserve"><value>config.json</value></data>
+  <data name="ConfigFormatCombo.Header" xml:space="preserve"><value>格式</value></data>
+  <data name="ConfigValuesTitle.Text" xml:space="preserve"><value>值</value></data>
+  <data name="ConfigAddValue.Text" xml:space="preserve"><value>添加值</value></data>
+  <data name="ConfigNoValues.Text" xml:space="preserve"><value>没有值。</value></data>
+  <data name="ConfigSectionBox.PlaceholderText" xml:space="preserve"><value>节</value></data>
+  <data name="ConfigSectionBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>INI 节</value></data>
+  <data name="ConfigKeyBox.PlaceholderText" xml:space="preserve"><value>键（JSON：server.url）</value></data>
+  <data name="ConfigKeyBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>键</value></data>
+  <data name="ConfigValueBox.PlaceholderText" xml:space="preserve"><value>值，例如 {Input:server}</value></data>
+  <data name="ConfigValueBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>值</value></data>
+  <data name="ConfigTypeCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>JSON 类型</value></data>
+  <data name="ConfigTypeString.Content" xml:space="preserve"><value>文本</value></data>
+  <data name="ConfigTypeNumber.Content" xml:space="preserve"><value>数字</value></data>
+  <data name="ConfigTypeBool.Content" xml:space="preserve"><value>true / false</value></data>
 </root>

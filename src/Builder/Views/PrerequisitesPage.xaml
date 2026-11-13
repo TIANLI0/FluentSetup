@@ -27,7 +27,8 @@
                         </Grid>
                     </Expander.Header>
                     <StackPanel Spacing="16" Padding="40,4,0,4">
-                        <TextBox x:Uid="PrereqWebView2MinVersionBox" Text="{x:Bind VM.WebView2MinVersion, Mode=TwoWay}" IsSpellCheckEnabled="False" MaxWidth="360" HorizontalAlignment="Left" MinWidth="240" />
+                        <local:VersionBox x:Uid="PrereqWebView2MinVersionBox" Catalog="{x:Bind VM.WebView2Versions}" Text="{x:Bind VM.WebView2MinVersion, Mode=TwoWay}"
+                                          MaxWidth="420" MinWidth="280" HorizontalAlignment="Left" />
                         <local:PrerequisiteSourceView Source="{x:Bind VM.WebView2Source}" />
                         <TextBlock Text="{x:Bind VM.Errors.WebView2, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.WebView2), Mode=OneWay}" />
                     </StackPanel>
@@ -47,9 +48,39 @@
                         </Grid>
                     </Expander.Header>
                     <StackPanel Spacing="16" Padding="40,4,0,4">
-                        <TextBox x:Uid="PrereqWarVersionBox" Text="{x:Bind VM.WindowsAppRuntimeVersion, Mode=TwoWay}" IsSpellCheckEnabled="False" MaxWidth="360" HorizontalAlignment="Left" MinWidth="240" />
+                        <local:VersionBox x:Uid="PrereqWarVersionBox" Catalog="{x:Bind VM.WindowsAppRuntimeVersions}" Text="{x:Bind VM.WindowsAppRuntimeVersion, Mode=TwoWay}"
+                                          MaxWidth="420" MinWidth="280" HorizontalAlignment="Left" />
                         <local:PrerequisiteSourceView Source="{x:Bind VM.WindowsAppRuntimeSource}" />
                         <TextBlock Text="{x:Bind VM.Errors.WindowsAppRuntime, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.WindowsAppRuntime), Mode=OneWay}" />
+                    </StackPanel>
+                </Expander>
+
+                <!-- Visual C++ Redistributable -->
+                <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <Grid ColumnSpacing="16" Padding="0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE943;" Style="{StaticResource RowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Uid="PrereqVcTitle" Style="{StaticResource RowTitleStyle}" />
+                                <TextBlock x:Uid="PrereqVcDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.VcRedistRequired, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="PrereqVcToggle" />
+                        </Grid>
+                    </Expander.Header>
+                    <StackPanel Spacing="16" Padding="40,4,0,4">
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <local:VersionBox x:Uid="PrereqVcMinVersionBox" Catalog="{x:Bind VM.VcRedistVersions}" Text="{x:Bind VM.VcRedistMinVersion, Mode=TwoWay}" />
+                            <ComboBox x:Uid="PrereqVcArchCombo" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Top" SelectedIndex="{x:Bind VM.VcRedistArchitectureIndex, Mode=TwoWay}">
+                                <ComboBoxItem x:Uid="PrereqVcArchPackage" />
+                                <ComboBoxItem Content="x64" />
+                                <ComboBoxItem Content="x86" />
+                                <ComboBoxItem Content="ARM64" />
+                            </ComboBox>
+                        </Grid>
+                        <local:PrerequisiteSourceView Source="{x:Bind VM.VcRedistSource}" />
+                        <TextBlock Text="{x:Bind VM.Errors.VcRedist, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.VcRedist), Mode=OneWay}" />
                     </StackPanel>
                 </Expander>
 
@@ -117,13 +148,13 @@
                             <StackPanel Spacing="16" Padding="40,4,0,4">
                                 <Grid ColumnSpacing="24">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                    <ComboBox x:Uid="DotNetRuntimeCombo" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind RuntimeIndex, Mode=TwoWay}">
+                                    <ComboBox x:Uid="DotNetRuntimeCombo" HorizontalAlignment="Stretch" VerticalAlignment="Top" SelectedIndex="{x:Bind RuntimeIndex, Mode=TwoWay}">
                                         <ComboBoxItem Content=".NET Desktop Runtime" />
                                         <ComboBoxItem Content=".NET Runtime" />
                                         <ComboBoxItem Content="ASP.NET Core Runtime" />
                                     </ComboBox>
-                                    <TextBox x:Uid="DotNetVersionBox" Grid.Column="1" Text="{x:Bind Version, Mode=TwoWay}" IsSpellCheckEnabled="False" />
-                                    <ComboBox x:Uid="DotNetRollForwardCombo" Grid.Column="2" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind RollForwardIndex, Mode=TwoWay}">
+                                    <local:VersionBox x:Uid="DotNetVersionBox" Grid.Column="1" Catalog="{x:Bind Versions}" Text="{x:Bind Version, Mode=TwoWay}" />
+                                    <ComboBox x:Uid="DotNetRollForwardCombo" Grid.Column="2" HorizontalAlignment="Stretch" VerticalAlignment="Top" SelectedIndex="{x:Bind RollForwardIndex, Mode=TwoWay}">
                                         <ComboBoxItem x:Uid="RollForwardPatch" />
                                         <ComboBoxItem x:Uid="RollForwardMinor" />
                                         <ComboBoxItem x:Uid="RollForwardMajor" />
@@ -136,6 +167,90 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            <!-- Other prerequisites (detected through the registry or a file) -->
+            <Grid Margin="0,28,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="PrereqCustomSection" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock x:Uid="PrereqCustomDescription" Style="{StaticResource RowDescriptionStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddCustomRequirementCommand}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="PrereqAddCustom" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoCustom, Mode=OneWay}">
+                <TextBlock x:Uid="PrereqCustomEmpty" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+            </Border>
+            <ItemsControl ItemsSource="{x:Bind VM.CustomRows}" IsTabStop="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="4" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CustomRequirementRow">
+                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <Expander.Header>
+                                <Grid ColumnSpacing="16" Padding="0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xEA86;" Style="{StaticResource RowIconStyle}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind SourceSummary, Mode=OneWay}" Style="{StaticResource RowDescriptionStyle}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                        <Button x:Uid="RowMoveUp" Command="{x:Bind MoveUpCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Uid="RowMoveDown" Command="{x:Bind MoveDownCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE70D;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Uid="RowRemove" Command="{x:Bind RemoveCommand}" Background="Transparent" BorderThickness="0" Padding="8">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Expander.Header>
+                            <StackPanel Spacing="16" Padding="40,4,0,4">
+                                <Grid ColumnSpacing="24" RowSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <TextBox x:Uid="CustomNameBox" Text="{x:Bind Name, Mode=TwoWay}" />
+                                    <TextBox x:Uid="CustomIdBox" Grid.Column="1" Text="{x:Bind Id, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <ComboBox x:Uid="CustomDetectCombo" Grid.Row="1" HorizontalAlignment="Stretch" SelectedIndex="{x:Bind DetectIndex, Mode=TwoWay}">
+                                        <ComboBoxItem x:Uid="CustomDetectRegistry" />
+                                        <ComboBoxItem x:Uid="CustomDetectFile" />
+                                    </ComboBox>
+                                </Grid>
+                                <Grid ColumnSpacing="24" RowSpacing="16" Visibility="{x:Bind IsRegistry, Mode=OneWay}">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <ComboBox x:Uid="CustomHiveCombo" MinWidth="120" SelectedIndex="{x:Bind RegistryHiveIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="HKLM" />
+                                        <ComboBoxItem Content="HKCU" />
+                                    </ComboBox>
+                                    <TextBox x:Uid="CustomKeyBox" Grid.Column="1" Text="{x:Bind RegistryKey, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnSpacing="24">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <TextBox x:Uid="CustomValueBox" Text="{x:Bind RegistryValue, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                        <TextBox x:Uid="CustomVersionBox" Grid.Column="1" Text="{x:Bind RegistryVersion, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    </Grid>
+                                </Grid>
+                                <Grid ColumnSpacing="24" Visibility="{x:Bind IsFile, Mode=OneWay}">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <TextBox x:Uid="CustomFileBox" Text="{x:Bind FilePath, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                    <TextBox x:Uid="CustomFileVersionBox" Grid.Column="1" Text="{x:Bind FileVersion, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                </Grid>
+                                <local:PrerequisiteSourceView Source="{x:Bind}" />
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{x:Bind VM.Errors.CustomRequirements, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.CustomRequirements), Mode=OneWay}" />
         </StackPanel>
     </ScrollViewer>
 </Page>
