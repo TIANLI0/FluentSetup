@@ -283,6 +283,19 @@
   <data name="BuildSigningToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>代码签名</value></data>
   <data name="SignThumbprintBox.Header" xml:space="preserve"><value>证书指纹（证书存储）</value></data>
   <data name="SignPfxBox.Header" xml:space="preserve"><value>或 .pfx 文件</value></data>
+  <data name="SignProviderCombo.Header" xml:space="preserve"><value>签名方式</value></data>
+  <data name="SignProviderSignTool.Content" xml:space="preserve"><value>signtool：证书存储或 .pfx 文件</value></data>
+  <data name="SignProviderTrusted.Content" xml:space="preserve"><value>Azure 可信签名（Artifact Signing）</value></data>
+  <data name="SignProviderCommand.Content" xml:space="preserve"><value>签名命令（osslsigncode、jsign、AzureSignTool 等）</value></data>
+  <data name="SignTrustedEndpointBox.Header" xml:space="preserve"><value>终结点，例如 https://eus.codesigning.azure.net</value></data>
+  <data name="SignTrustedAccountBox.Header" xml:space="preserve"><value>帐户名</value></data>
+  <data name="SignTrustedProfileBox.Header" xml:space="preserve"><value>证书配置文件</value></data>
+  <data name="SignTrustedDlibBox.Header" xml:space="preserve"><value>Azure.CodeSigning.Dlib.dll 的路径</value></data>
+  <data name="SignTrustedCorrelationBox.Header" xml:space="preserve"><value>关联 ID（可选）</value></data>
+  <data name="SignCommandRunBox.Header" xml:space="preserve"><value>程序（路径，或 PATH 中的名称）</value></data>
+  <data name="SignCommandArgumentsBox.Header" xml:space="preserve"><value>参数，每行一个：{file} 为要签名的文件；另有 {output}、{description}、{timestampUrl}</value></data>
+  <data name="SignCommandEnvironmentBox.Header" xml:space="preserve"><value>环境变量，每行一个 NAME=value（可选；机密信息请放在构建环境中）</value></data>
+  <data name="SignCommandTimeoutBox.Header" xml:space="preserve"><value>超时（秒）</value></data>
   <data name="SignPasswordEnvBox.Header" xml:space="preserve"><value>保存 .pfx 密码的环境变量</value></data>
   <data name="SignTimestampBox.Header" xml:space="preserve"><value>时间戳服务器</value></data>
   <data name="SignToolBox.Header" xml:space="preserve"><value>signtool.exe（可选）</value></data>

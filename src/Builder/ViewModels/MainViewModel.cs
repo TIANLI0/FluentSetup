@@ -67,7 +67,10 @@ public sealed partial class FieldErrors : ObservableObject
     public string UiLicense => Get("ui.license");
     public string OutputFileName => Get("output.fileName");
     public string OutputDirectory => Get("output.directory");
-    public string Signing => string.Join(Environment.NewLine, new[] { Get("signing"), Get("signing.certificateFile"), Get("signing.timestampUrl") }.Where(s => s.Length > 0));
+    public string Signing => string.Join(Environment.NewLine, new[] { "signing", "signing.provider", "signing.certificateThumbprint", "signing.certificateFile",
+        "signing.timestampUrl", "signing.trustedSigning", "signing.trustedSigning.endpoint", "signing.trustedSigning.accountName",
+        "signing.trustedSigning.certificateProfile", "signing.trustedSigning.dlibPath", "signing.trustedSigning.excludeCredentials", "signing.command",
+        "signing.command.run", "signing.command.arguments", "signing.command.environment", "signing.command.timeoutSeconds" }.Select(Get).Where(s => s.Length > 0).Distinct());
 
     // Install, upgrade and uninstall
     public string InstallStartMenuFolder => Get("install.startMenuFolder");
@@ -412,6 +415,7 @@ public sealed partial class MainViewModel : ObservableObject
             CompressionIndex = IndexOf(Compressions, p.Output.Compression, 1); IncludeWinUI = p.Output.IncludeWinUI;
             SigningEnabled = p.Signing.Enabled; CertificateThumbprint = p.Signing.CertificateThumbprint; CertificateFile = p.Signing.CertificateFile;
             PasswordEnvironmentVariable = p.Signing.PasswordEnvironmentVariable; TimestampUrl = p.Signing.TimestampUrl; SignToolPath = p.Signing.SignToolPath;
+            LoadSigning(p);
             LoadAdvanced(p);
         }
         finally
@@ -452,6 +456,7 @@ public sealed partial class MainViewModel : ObservableObject
         p.Output.Compression = PickFrom(Compressions, CompressionIndex, p.Output.Compression, 1); p.Output.IncludeWinUI = IncludeWinUI;
         p.Signing.Enabled = SigningEnabled; p.Signing.CertificateThumbprint = CertificateThumbprint.Trim(); p.Signing.CertificateFile = CertificateFile.Trim();
         p.Signing.PasswordEnvironmentVariable = PasswordEnvironmentVariable.Trim(); p.Signing.TimestampUrl = TimestampUrl.Trim(); p.Signing.SignToolPath = SignToolPath.Trim();
+        ApplySigning(p);
         ApplyAdvanced(p);
         return p;
     }

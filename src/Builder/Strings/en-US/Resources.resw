@@ -283,6 +283,19 @@
   <data name="BuildSigningToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Code signing</value></data>
   <data name="SignThumbprintBox.Header" xml:space="preserve"><value>Certificate thumbprint (certificate store)</value></data>
   <data name="SignPfxBox.Header" xml:space="preserve"><value>Or a .pfx file</value></data>
+  <data name="SignProviderCombo.Header" xml:space="preserve"><value>Signing method</value></data>
+  <data name="SignProviderSignTool.Content" xml:space="preserve"><value>signtool: certificate store or .pfx file</value></data>
+  <data name="SignProviderTrusted.Content" xml:space="preserve"><value>Azure Trusted Signing (Artifact Signing)</value></data>
+  <data name="SignProviderCommand.Content" xml:space="preserve"><value>Signing command (osslsigncode, jsign, AzureSignTool, …)</value></data>
+  <data name="SignTrustedEndpointBox.Header" xml:space="preserve"><value>Endpoint, e.g. https://eus.codesigning.azure.net</value></data>
+  <data name="SignTrustedAccountBox.Header" xml:space="preserve"><value>Account name</value></data>
+  <data name="SignTrustedProfileBox.Header" xml:space="preserve"><value>Certificate profile</value></data>
+  <data name="SignTrustedDlibBox.Header" xml:space="preserve"><value>Path of Azure.CodeSigning.Dlib.dll</value></data>
+  <data name="SignTrustedCorrelationBox.Header" xml:space="preserve"><value>Correlation ID (optional)</value></data>
+  <data name="SignCommandRunBox.Header" xml:space="preserve"><value>Program (a path, or a name on PATH)</value></data>
+  <data name="SignCommandArgumentsBox.Header" xml:space="preserve"><value>Arguments, one per line: {file} is the file to sign; also {output}, {description}, {timestampUrl}</value></data>
+  <data name="SignCommandEnvironmentBox.Header" xml:space="preserve"><value>Environment variables, NAME=value per line (optional; keep secrets in the build environment instead)</value></data>
+  <data name="SignCommandTimeoutBox.Header" xml:space="preserve"><value>Timeout (seconds)</value></data>
   <data name="SignPasswordEnvBox.Header" xml:space="preserve"><value>Environment variable with the .pfx password</value></data>
   <data name="SignTimestampBox.Header" xml:space="preserve"><value>Timestamp server</value></data>
   <data name="SignToolBox.Header" xml:space="preserve"><value>signtool.exe (optional)</value></data>
