@@ -144,7 +144,7 @@ public static partial class ExtensionValidator
                 d.Error("FS1661", field + ".variants", $"No variant '{id}' in files.variants.");
         }
         if (p.Requirements.WindowsAppRuntime is { Required: true } w2 &&
-            !System.Text.RegularExpressions.Regex.IsMatch(w2.Version, @"^(1\.\d+|[2-9]\d*\.\d+(\.\d+){0,2})$"))
+            !System.Text.RegularExpressions.Regex.IsMatch(w2.Version, @"^(1\.\d+|([2-9]|[1-9]\d+)\.\d+(\.\d+){0,2})$"))
         {
             d.Error("FS1663", "requirements.windowsAppRuntime.version", "Use the Windows App SDK version, e.g. 2.5.1 (or 1.6 for a 1.x runtime).");
         }

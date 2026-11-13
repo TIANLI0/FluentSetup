@@ -102,6 +102,29 @@ public static class PreviewLauncher
             ["requiredBytes"] = payloadBytes,
             ["freeBytes"] = 0,
         };
+        // 1.2: publisher line (the build signs when signing is on), banner, Settings page.
+        hello["signature"] = new JsonObject
+        {
+            ["state"] = p.Signing.Enabled ? "valid" : "unsigned",
+            ["publisher"] = p.Signing.Enabled ? p.App.Publisher : "",
+        };
+        var banner = string.IsNullOrEmpty(p.Ui.Banner) ? "" : ProjectValidator.Resolve(projectDir, p.Ui.Banner);
+        ((JsonObject)hello["ui"]!)["bannerPath"] = File.Exists(banner) ? banner : "";
+        string Text(Dictionary<string, string> t, string fallback) =>
+            t.TryGetValue(language, out var v) && v.Length > 0 ? v : t.TryGetValue("en-US", out var en) && en.Length > 0 ? en : t.Values.FirstOrDefault(x => x.Length > 0) ?? fallback;
+        var inputs = new JsonArray();
+        foreach (var i in p.Inputs)
+        {
+            var choices = new JsonArray();
+            foreach (var c in i.Choices) choices.Add(new JsonObject { ["value"] = c.Value, ["label"] = Text(c.Label, c.Value) });
+            inputs.Add(new JsonObject
+            {
+                ["id"] = i.Id, ["label"] = Text(i.Label, i.Id), ["description"] = Text(i.Description, ""), ["type"] = i.Type, ["value"] = i.Default,
+                ["required"] = i.Required, ["pattern"] = i.Pattern, ["choices"] = choices, ["ok"] = !i.Required || i.Default.Length > 0, ["message"] = "",
+            });
+        }
+        hello["inputs"] = inputs;
+        hello["inputsPage"] = inputs.Count > 0 && scenario == "install";
         var helloPath = Path.Combine(temp, "hello.json");
         File.WriteAllText(helloPath, hello.ToJsonString(new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
         Process.Start(new ProcessStartInfo(exe) { ArgumentList = { "--preview", helloPath }, WorkingDirectory = Path.GetDirectoryName(exe)!, UseShellExecute = false })?.Dispose();
