@@ -66,6 +66,11 @@ jobs:
         shell: pwsh
         run: ./scripts/package-release.ps1
 
+      # The .nupkg files packed by the dry run: dotnet publish with FluentSetup.MSBuild, the tool, the library.
+      - name: NuGet packages end-to-end
+        shell: pwsh
+        run: ./tests/MSBuild/msbuild-e2e.ps1 -Feed out/release
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v7

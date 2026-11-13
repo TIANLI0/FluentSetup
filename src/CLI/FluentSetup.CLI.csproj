@@ -25,4 +25,18 @@
     <EmbeddedResource Include="..\..\shared\schemas\fluentsetup.project.schema.json" LogicalName="FluentSetup.Cli.fluentsetup.project.schema.json" />
     <None Include="..\..\assets\default-app.ico" Link="runtime\default-app.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- NuGet package FluentSetup.Cli: a .NET tool ("dotnet tool install -g FluentSetup.Cli" gives the fluentsetup
+       command). The runtime\ folder above is part of the tool's files, so it builds installers on its own.
+       PackAsTool needs a TargetFramework without a platform (net10.0, NETSDK1146); scripts/pack-nuget.ps1 checks that.
+       RollForward lets the tool and the copy in FluentSetup.MSBuild run on a newer .NET when 10 is not installed. -->
+  <PropertyGroup>
+    <PackageId>FluentSetup.Cli</PackageId>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>fluentsetup</ToolCommandName>
+    <RollForward>Major</RollForward>
+    <Description>fluentsetup: the command-line tool of FluentSetup. Builds native Windows 11-style installers (a single Setup.exe) from a fluentsetup.json, validates projects, inspects packages and writes winget manifests. Includes the installer runtime.</Description>
+    <PackageTags>installer;setup;setup.exe;windows;winui;winget;cli;dotnet-tool;fluentsetup</PackageTags>
+  </PropertyGroup>
+  <Import Project="..\..\build\nuget.props" />
 </Project>

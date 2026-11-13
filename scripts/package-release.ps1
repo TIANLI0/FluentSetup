@@ -3,7 +3,8 @@
   Builds the release assets into out\release (run scripts\build.ps1 first):
     fluentsetup-<version>-win-x64.zip   the fluentsetup CLI (self-contained: no .NET needed) with the installer runtime
     FluentSetup-<version>-Setup.exe     Builder app + CLI, packaged with FluentSetup itself
-    SHA256SUMS.txt                      "<sha256>  <file>" for both (sha256sum format)
+    FluentSetup.*.<version>.nupkg       NuGet packages: Builder.Core (+ .snupkg), Cli (.NET tool), MSBuild (scripts\pack-nuget.ps1)
+    SHA256SUMS.txt                      "<sha256>  <file>" for all of them (sha256sum format)
 .PARAMETER Version
   Expected version (e.g. from the release tag, without "v"). Fails if the sources carry another version.
 #>
@@ -44,7 +45,10 @@ Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $relea
 & (Join-Path $PSScriptRoot 'package-fluentsetup.ps1')
 Copy-Item "out\product\dist\FluentSetup-$v-Setup.exe" $release
 
-# 3. Checksums.
+# 3. NuGet packages (the release workflow also pushes them to nuget.org when NUGET_API_KEY is set).
+& (Join-Path $PSScriptRoot 'pack-nuget.ps1') -Output $release
+
+# 4. Checksums.
 Remove-Item -Recurse -Force (Join-Path $release 'stage')
 $sums = Get-ChildItem $release -File | Sort-Object Name | ForEach-Object {
     '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name

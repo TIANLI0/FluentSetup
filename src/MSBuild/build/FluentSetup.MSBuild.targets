@@ -1,0 +1,50 @@
+<Project>
+  <!--
+    FluentSetup.MSBuild: after Publish, runs "fluentsetup build <FluentSetupProject>" with the bundled CLI (settings in
+    FluentSetup.MSBuild.props). Diagnostics come back as MSBuild errors and warnings with their FS codes; any failure
+    fails the publish.
+  -->
+  <Target Name="FluentSetupBuild" AfterTargets="Publish" Condition="'$(FluentSetupProject)' != '' and '$(FluentSetupEnabled)' != 'false'">
+    <PropertyGroup>
+      <_FluentSetupProjectPath>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(FluentSetupProject)'))</_FluentSetupProjectPath>
+      <_FluentSetupCliPath>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(FluentSetupCliPath)'))</_FluentSetupCliPath>
+      <!-- Passed without the trailing separator: a backslash before a closing quote would escape it. -->
+      <_FluentSetupPublishDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(PublishDir)'))</_FluentSetupPublishDir>
+      <_FluentSetupPublishDir>$(_FluentSetupPublishDir.TrimEnd('\').TrimEnd('/'))</_FluentSetupPublishDir>
+
+      <_FluentSetupArch>$(FluentSetupArchitecture)</_FluentSetupArch>
+      <_FluentSetupArch Condition="'$(_FluentSetupArch)' == '' and '$(RuntimeIdentifier.ToLowerInvariant().EndsWith(`-arm64`))' == 'true'">arm64</_FluentSetupArch>
+      <_FluentSetupArch Condition="'$(_FluentSetupArch)' == '' and '$(RuntimeIdentifier.ToLowerInvariant().EndsWith(`-x64`))' == 'true'">x64</_FluentSetupArch>
+      <_FluentSetupArgs>--msbuild -D &quot;Version=$(Version)&quot; -D &quot;PublishDir=$(_FluentSetupPublishDir)&quot;</_FluentSetupArgs>
+      <_FluentSetupArgs Condition="'$(_FluentSetupArch)' != ''">$(_FluentSetupArgs) --arch $(_FluentSetupArch)</_FluentSetupArgs>
+      <!-- NormalizeDirectory ends with "\", so the value ends with "\\" before the quote: one backslash, then the quote. -->
+      <_FluentSetupArgs Condition="'$(FluentSetupOutputDirectory)' != ''">$(_FluentSetupArgs) -o &quot;$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(FluentSetupOutputDirectory)'))\&quot;</_FluentSetupArgs>
+
+      <!-- A fluentsetup.dll runs on the dotnet that runs this build; an .exe runs as it is. -->
+      <_FluentSetupDotnet>$(DOTNET_HOST_PATH)</_FluentSetupDotnet>
+      <_FluentSetupDotnet Condition="'$(_FluentSetupDotnet)' == ''">dotnet</_FluentSetupDotnet>
+      <_FluentSetupCommand>&quot;$(_FluentSetupCliPath)&quot;</_FluentSetupCommand>
+      <_FluentSetupCommand Condition="$(_FluentSetupCliPath.ToLowerInvariant().EndsWith('.dll'))">&quot;$(_FluentSetupDotnet)&quot; &quot;$(_FluentSetupCliPath)&quot;</_FluentSetupCommand>
+    </PropertyGroup>
+    <ItemGroup>
+      <_FluentSetupDefine Include="$(FluentSetupDefines)" />
+    </ItemGroup>
+
+    <Error Condition="!Exists('$(_FluentSetupProjectPath)')" File="$(MSBuildProjectFullPath)"
+           Text="FluentSetupProject: $(_FluentSetupProjectPath) does not exist." />
+    <Error Condition="!Exists('$(_FluentSetupCliPath)')" File="$(MSBuildProjectFullPath)"
+           Text="FluentSetupCliPath: $(_FluentSetupCliPath) does not exist." />
+
+    <Message Importance="high" Text="FluentSetup: building the installer of $(MSBuildProjectName) from $(_FluentSetupProjectPath)" />
+    <Exec Command="$(_FluentSetupCommand) build &quot;$(_FluentSetupProjectPath)&quot; $(_FluentSetupArgs) @(_FluentSetupDefine->'-D &quot;%(Identity)&quot;', ' ') $(FluentSetupArguments)"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          StandardOutputImportance="high"
+          StandardErrorImportance="high"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_FluentSetupExitCode" />
+    </Exec>
+    <!-- The CLI's own errors are MSBuild errors already; this adds the exit code and covers failures without such a line. -->
+    <Error Condition="'$(_FluentSetupExitCode)' != '0'" File="$(_FluentSetupProjectPath)"
+           Text="fluentsetup build failed with exit code $(_FluentSetupExitCode)." />
+  </Target>
+</Project>

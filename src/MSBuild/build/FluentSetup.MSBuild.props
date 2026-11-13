@@ -1,0 +1,21 @@
+<Project>
+  <!--
+    FluentSetup.MSBuild: "dotnet publish" also builds the app's Setup.exe (docs/msbuild.md). Set in the app's project:
+
+      FluentSetupProject           fluentsetup.json of the installer, relative to the project file. Required: without it
+                                   nothing happens.
+      FluentSetupOutputDirectory   Folder for Setup.exe (default: output.directory of fluentsetup.json).
+      FluentSetupArchitecture      x64 | arm64 (default: from RuntimeIdentifier, e.g. win-arm64, else output.architecture).
+      FluentSetupDefines           More $(Name) values for the project: "Channel=stable;Edition=Pro".
+      FluentSetupArguments         More arguments for "fluentsetup build" (the sign and verbose switches, see docs/msbuild.md).
+      FluentSetupEnabled           false skips the installer (e.g. -p:FluentSetupEnabled=false).
+      FluentSetupCliPath           Another fluentsetup.dll or fluentsetup.exe (default: the copy in this package).
+
+    The project gets $(Version) and $(PublishDir) (absolute) as -D values, so fluentsetup.json can say
+    "version": "$(Version)" and "files": { "source": "$(PublishDir)" }.
+  -->
+  <PropertyGroup>
+    <FluentSetupEnabled Condition="'$(FluentSetupEnabled)' == ''">true</FluentSetupEnabled>
+    <FluentSetupCliPath Condition="'$(FluentSetupCliPath)' == ''">$(MSBuildThisFileDirectory)..\tools\cli\fluentsetup.dll</FluentSetupCliPath>
+  </PropertyGroup>
+</Project>

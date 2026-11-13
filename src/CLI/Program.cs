@@ -30,6 +30,7 @@ public static class Program
               -v, --verbose             Detailed log
               --json                    Print the build report as JSON instead of text
               --non-interactive         Never prompt (the default; accepted for CI scripts)
+              --msbuild                 Diagnostics as "<project> : error FS1234: ..." (for the MSBuild targets)
           fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
           fluentsetup inspect <Setup.exe> [--verify] [--json]
           fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
@@ -205,6 +206,7 @@ public static class Program
         var project = LoadProject(projectPath);
         var verbose = a.Flag("verbose", "v");
         var json = a.Flag("json");
+        var msbuild = a.Flag("msbuild");
         var options = new BuildOptions
         {
             OutputDirectory = a.Value("output", "o") is { } o ? Path.GetFullPath(o) : null,
@@ -240,7 +242,7 @@ public static class Program
         }
         else
         {
-            PrintDiagnostics(report.Diagnostics, verbose);
+            PrintDiagnostics(report.Diagnostics, verbose, msbuild ? projectPath : null);
             if (report.Success)
             {
                 var s = report.Sizes;
@@ -252,6 +254,10 @@ public static class Program
                                   (s.Signature > 0 ? $", signature {PackageBuilder.Format(s.Signature)}" : "") + ")");
                 Console.WriteLine($"  SHA-256 {report.Sha256}");
                 Console.WriteLine($"  {report.DurationSeconds:F1} s{(report.Signed ? ", signed" : "")}{(report.IncludesWinUI ? "" : ", Win32 interface only")}");
+            }
+            else if (msbuild && !report.Diagnostics.Any(d => d.Severity == Severity.Error))
+            {
+                Console.Error.WriteLine($"{projectPath} : error : Build failed: {report.Error}");
             }
             else
             {
@@ -406,13 +412,17 @@ public static class Program
         return 0;
     }
 
-    private static void PrintDiagnostics(IEnumerable<Diagnostic> diagnostics, bool verbose)
+    /// <param name="msbuildFile">The project path: errors and warnings in MSBuild's canonical form, which MSBuild's Exec
+    /// task logs as build errors and warnings with their code ("&lt;file&gt; : error FS1101: [app.version] ...").</param>
+    private static void PrintDiagnostics(IEnumerable<Diagnostic> diagnostics, bool verbose, string? msbuildFile = null)
     {
         foreach (var d in diagnostics)
         {
             if (d.Severity == Severity.Info && !verbose) continue;
             var w = d.Severity == Severity.Error ? Console.Error : Console.Out;
-            w.WriteLine(d.ToString());
+            w.WriteLine(msbuildFile is not null && d.Severity != Severity.Info
+                ? $"{msbuildFile} : {d.Severity.ToString().ToLowerInvariant()} {d.Code}: [{d.Field}] {d.Message}"
+                : d.ToString());
         }
     }
 
@@ -443,7 +453,7 @@ internal sealed class ParsedArgs
     private readonly Dictionary<string, string?> _options = new(StringComparer.Ordinal);
     private readonly HashSet<string> _used = [];
     private readonly List<string> _defines = [];
-    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease"];
+    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease", "msbuild"];
 
     public static ParsedArgs Parse(string[] args)
     {

@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- NuGet package FluentSetup.MSBuild (scripts/pack-nuget.ps1, docs/msbuild.md): build\FluentSetup.MSBuild.props and
+       .targets make "dotnet publish" of a .NET app also build its Setup.exe. Nothing is compiled here: the package carries
+       the fluentsetup CLI (framework-dependent, with its installer runtime) in tools\cli, which the targets run, so the
+       app needs no global tool. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <!-- Referencing it never flows to the app's own consumers (PrivateAssets="all"). -->
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <PackageId>FluentSetup.MSBuild</PackageId>
+    <Description>Builds a native Windows 11-style installer (Setup.exe) of your .NET app as part of dotnet publish: set FluentSetupProject to a fluentsetup.json. Brings its own fluentsetup CLI and installer runtime.</Description>
+    <PackageTags>installer;setup;setup.exe;windows;winui;msbuild;publish;fluentsetup</PackageTags>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_FluentSetupPackCli</TargetsForTfmSpecificContentInPackage>
+    <_FluentSetupCliDir>$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)cli\</_FluentSetupCliDir>
+  </PropertyGroup>
+  <Import Project="..\..\build\nuget.props" />
+  <ItemGroup>
+    <None Include="build\FluentSetup.MSBuild.props;build\FluentSetup.MSBuild.targets" Pack="true" PackagePath="build\" />
+  </ItemGroup>
+
+  <!-- Publishes the CLI framework-dependent (as package-fluentsetup.ps1 does for the Builder's cli folder), in a process
+       of its own so none of this pack's global properties reach it, and packs it into tools\cli. -->
+  <Target Name="_FluentSetupPackCli">
+    <PropertyGroup>
+      <_FluentSetupDotnet>$(DOTNET_HOST_PATH)</_FluentSetupDotnet>
+      <_FluentSetupDotnet Condition="'$(_FluentSetupDotnet)' == ''">dotnet</_FluentSetupDotnet>
+      <!-- Ends with "/": a backslash before the closing quote would escape it. -->
+      <_FluentSetupNativeArg Condition="'$(FsNativeOut)' != ''">&quot;-p:FsNativeOut=$(FsNativeOut.TrimEnd('\').TrimEnd('/'))/&quot;</_FluentSetupNativeArg>
+    </PropertyGroup>
+    <RemoveDir Directories="$(_FluentSetupCliDir)" />
+    <Exec Command="&quot;$(_FluentSetupDotnet)&quot; publish &quot;$(MSBuildProjectDirectory)\..\CLI\FluentSetup.CLI.csproj&quot; -c $(Configuration) -o &quot;$(_FluentSetupCliDir)\&quot; -nologo -v q --disable-build-servers $(_FluentSetupNativeArg)" />
+    <Error Condition="!Exists('$(_FluentSetupCliDir)runtime\x64\FluentSetup.Stub.exe')"
+           Text="The published CLI has no installer runtime ($(_FluentSetupCliDir)runtime\x64). Build the native projects first (scripts\build.ps1)." />
+    <ItemGroup>
+      <_FluentSetupCliFile Include="$(_FluentSetupCliDir)**\*" Exclude="$(_FluentSetupCliDir)**\*.pdb" />
+      <!-- NuGet appends each file's %(RecursiveDir) to a PackagePath that ends with a separator. -->
+      <TfmSpecificPackageFile Include="@(_FluentSetupCliFile)" PackagePath="tools\cli\" />
+    </ItemGroup>
+  </Target>
+</Project>
