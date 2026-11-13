@@ -26,8 +26,9 @@ Win32 fallback, transactional (any failure rolls back), Apps & features entry, s
    0 = success (§8). Per-user packages need no administrator rights; a per-machine quiet install started without them
    shows the UAC prompt (start it elevated for unattended tests).
 
-Relative paths in the project are relative to the project file. Absolute paths work but make the project
-machine-specific.
+Relative paths in the project are relative to the project file; `\` and `/` both work, so the same project builds on
+Windows, Linux and macOS (`fluentsetup` runs on all three; the result is always a Windows `Setup.exe`). Absolute
+paths work but make the project machine-specific.
 
 ## 3. Decisions to make
 

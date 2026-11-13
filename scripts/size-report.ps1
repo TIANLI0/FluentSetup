@@ -13,7 +13,7 @@ param([string] $Setup, [string] $Json)
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 $bin = Join-Path $root 'out\bin\x64\Release'
-$cli = Join-Path $root 'src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe'
+$cli = Join-Path $root 'src\CLI\bin\Release\net10.0\fluentsetup.exe'
 $budget = 5MB
 
 if (-not $Setup) {

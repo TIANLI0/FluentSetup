@@ -10,6 +10,27 @@ public static class PathRules
     public const int MaxComponent = 255;
     private static readonly string[] ReservedNames = ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"];
 
+    /// <summary>Characters Windows does not allow in file names (what Path.GetInvalidFileNameChars returns on Windows), on every OS.</summary>
+    public static readonly char[] InvalidFileNameChars =
+        [.. Enumerable.Range(0, 32).Select(i => (char)i), '"', '<', '>', '|', ':', '*', '?', '\\', '/'];
+
+    /// <summary>
+    /// How paths on the build machine compare: case-insensitively on Windows and macOS (their usual file systems),
+    /// exactly on Linux. Install paths (inside the package) always compare case-insensitively, as on Windows.
+    /// </summary>
+    public static StringComparison HostPathComparison { get; } = OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+
+    /// <summary>Rooted in the Windows sense on every OS: "\x", "/x", "C:x", "C:\x", UNC paths.</summary>
+    public static bool IsRooted(string path) => path.StartsWith('\\') || path.StartsWith('/') || (path.Length >= 2 && path[1] == ':');
+
+    /// <summary>
+    /// A symbolic link, junction or other reparse point (never followed when collecting files). .NET reports symbolic
+    /// links on Linux and macOS as reparse points too; <see cref="FileSystemInfo.LinkTarget"/> (a cheap readlink there)
+    /// is asked as well.
+    /// </summary>
+    public static bool IsLink(FileSystemInfo entry) =>
+        entry.Attributes.HasFlag(FileAttributes.ReparsePoint) || (!OperatingSystem.IsWindows() && entry.LinkTarget is not null);
+
     public static bool IsReservedDeviceName(string component)
     {
         var dot = component.IndexOf('.');

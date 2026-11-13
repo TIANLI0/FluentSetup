@@ -341,9 +341,14 @@ public class CollectorTests
         dir.File("outside/secret.txt");
         dir.File("app/dist/old-Setup.exe");
         var junction = Path.Combine(dir.Path, "app", "link");
-        using (var proc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{junction}\" \"{Path.Combine(dir.Path, "outside")}\"") { CreateNoWindow = true, UseShellExecute = false }))
+        if (OperatingSystem.IsWindows())
         {
+            using var proc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{junction}\" \"{Path.Combine(dir.Path, "outside")}\"") { CreateNoWindow = true, UseShellExecute = false });
             proc!.WaitForExit();
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(junction, Path.Combine(dir.Path, "outside"));
         }
         var p = new SetupProject { App = new AppInfo { MainExecutable = "App.exe" }, Files = new FileSettings { Source = "app" }, Output = new OutputSettings { Directory = "app/dist" } };
         var r = FileCollector.Collect(p, dir.Path);
@@ -487,10 +492,16 @@ public class PackagingTests
         Assert.Equal("Test.Pkg", app.GetProperty("id").GetString());
         Assert.Equal("3.1.0", app.GetProperty("version").GetString());
 
-        // The version resource was applied to the stub.
-        var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(report.OutputPath!);
-        Assert.Equal("Pkg Test", fvi.ProductName);
-        Assert.Equal("3.1.0", fvi.ProductVersion);
+        // The version resource was applied to the stub (FileVersionInfo reads native resources on Windows only).
+        var resources = Win32ResourceTree.Read(PeImage.Parse(File.ReadAllBytes(report.OutputPath!)));
+        Assert.Equal(PeResources.BuildVersionResource(new PeResources.VersionInfo("Pkg Test", "P", "Pkg Test Setup", "3.1.0", "Pkg Test-3.1.0-Setup.exe", "© P")),
+                     resources.Find(Win32ResourceTree.RtVersion, 1));
+        if (OperatingSystem.IsWindows())
+        {
+            var fvi = System.Diagnostics.FileVersionInfo.GetVersionInfo(report.OutputPath!);
+            Assert.Equal("Pkg Test", fvi.ProductName);
+            Assert.Equal("3.1.0", fvi.ProductVersion);
+        }
 
         // Tampering is detected by the inspector.
         var bytes = File.ReadAllBytes(report.OutputPath!);

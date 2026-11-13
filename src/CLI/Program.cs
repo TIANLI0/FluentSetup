@@ -38,7 +38,7 @@ public static class Program
                                         (installer strings, option/action/variant ids); any BCP-47 tag, e.g. fr-FR
           fluentsetup update [--check] [--prerelease] [--json]
                                         Update FluentSetup (Builder and CLI) to the latest release on GitHub:
-                                        downloads Setup.exe, verifies its SHA-256 and installs it.
+                                        downloads Setup.exe, verifies its SHA-256 and installs it (Windows only).
                                         --check only reports; --json (with --check) prints the result as JSON
           fluentsetup guide                     Print the complete project-authoring guide (for people and AI tools)
           fluentsetup schema                    Print the JSON Schema of fluentsetup.json
@@ -142,6 +142,12 @@ public static class Program
         }
         Console.WriteLine($"FluentSetup {latest!.Version} is available (this is {current}): {latest.PageUrl}");
         if (checkOnly) return 0;
+        if (!OperatingSystem.IsWindows())
+        {
+            // Updating in place runs FluentSetup's own Setup.exe.
+            Console.Error.WriteLine($"fluentsetup update installs updates on Windows only. Download the new version for this system from {latest.PageUrl}");
+            return 1;
+        }
         if (installed is null)
         {
             // A copy from the zip (or a build): replacing the running files is the user's call.

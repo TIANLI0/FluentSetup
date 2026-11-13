@@ -91,7 +91,7 @@ public static class Localization
             d?.Error("FS1320", "ui.localization", $"Localization folder not found: {folder}");
             return new(options, actions, licenses, strings, variantLabels, variantDescriptions);
         }
-        foreach (var file in Directory.EnumerateFiles(folder, "*.json").Order(StringComparer.OrdinalIgnoreCase))
+        foreach (var file in Directory.EnumerateFiles(folder, "*.json", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, AttributesToSkip = 0 }).Order(StringComparer.OrdinalIgnoreCase))
         {
             var lang = Path.GetFileNameWithoutExtension(file);
             var field = $"ui.localization/{Path.GetFileName(file)}";
@@ -134,7 +134,7 @@ public static class Localization
             }
             if (!string.IsNullOrEmpty(locale.License))
             {
-                var path = Path.GetFullPath(Path.Combine(folder, locale.License));
+                var path = ProjectValidator.Resolve(folder, locale.License);
                 if (!File.Exists(path)) d?.Error("FS1325", field + ".license", $"License file not found: {path}");
                 else if (new FileInfo(path).Length > 1024 * 1024) d?.Error("FS1306", field + ".license", "License file is larger than 1 MB.");
                 else licenses[lang] = path;

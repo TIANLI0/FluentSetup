@@ -93,7 +93,7 @@ public static partial class ProjectValidator
         }
         foreach (var (pattern, i) in p.Files.Include.Concat(p.Files.Exclude).Concat(p.Files.Preserve).Select((e, i) => (e, i)))
         {
-            if (string.IsNullOrWhiteSpace(pattern) || pattern.Contains("..", StringComparison.Ordinal) || Path.IsPathRooted(pattern))
+            if (string.IsNullOrWhiteSpace(pattern) || pattern.Contains("..", StringComparison.Ordinal) || PathRules.IsRooted(pattern))
                 d.Error("FS1106", "files", $"Pattern '{pattern}' is not a relative glob.");
         }
 
@@ -224,12 +224,21 @@ public static partial class ProjectValidator
             d.Error("FS1212", field, "Install folder must start with a known folder placeholder such as {ProgramFiles} or an absolute path.");
     }
 
-    public static string Resolve(string projectDirectory, string path) =>
-        string.IsNullOrEmpty(path) ? path : Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(projectDirectory, path));
+    /// <summary>
+    /// A project path made absolute against the project folder. '\' and '/' both separate folders, so a project written
+    /// on Windows ("bin\Release") also builds on Linux and macOS.
+    /// </summary>
+    public static string Resolve(string projectDirectory, string path)
+    {
+        if (string.IsNullOrEmpty(path)) return path;
+        if (!OperatingSystem.IsWindows()) path = path.Replace('\\', '/');
+        return Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(projectDirectory, path));
+    }
 
     public static string ExpandFileName(string template, SetupProject p)
     {
-        static string Clean(string s) => string.Concat(s.Split(Path.GetInvalidFileNameChars())).Trim();
+        // The Windows set on every OS: the name is used on Windows.
+        static string Clean(string s) => string.Concat(s.Split(PathRules.InvalidFileNameChars)).Trim();
         return template.Replace("{AppName}", Clean(p.App.Name), StringComparison.Ordinal)
                        .Replace("{AppId}", Clean(p.App.Id), StringComparison.Ordinal)
                        .Replace("{Version}", Clean(p.App.Version), StringComparison.Ordinal)

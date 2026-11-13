@@ -152,7 +152,7 @@ inside the header use `\` as separator. `fluentsetup inspect <Setup.exe> --json`
 ### 4.1 Example (trimmed)
 
 Generated from the demo package with
-`src\CLI\bin\Release\net10.0-windows10.0.19041.0\fluentsetup.exe inspect "out\uitest\FluentSetup Demo-1.0.0-Setup.exe" --json`;
+`src\CLI\bin\Release\net10.0\fluentsetup.exe inspect "out\uitest\FluentSetup Demo-1.0.0-Setup.exe" --json`;
 long arrays and the license text are shortened.
 
 ```json

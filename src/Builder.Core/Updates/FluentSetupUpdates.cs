@@ -146,6 +146,7 @@ public static partial class FluentSetupUpdates
     }
 
     /// <summary>Starts the downloaded Setup.exe: progress window only (/passive); /relaunch opens the Builder afterwards.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public static System.Diagnostics.Process StartSetup(string setupPath, bool relaunch) =>
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(setupPath)
         {

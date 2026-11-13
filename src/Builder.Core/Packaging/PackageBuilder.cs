@@ -178,7 +178,7 @@ public sealed class PackageBuilder
         // decode another variant's data.
         var ordered = collected.Files
             .OrderBy(f => f.Variant, StringComparer.Ordinal)
-            .ThenBy(f => Path.GetExtension(f.RelativePath), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(f => Path.GetExtension(f.RelativePath.AsSpan(f.RelativePath.LastIndexOf('\\') + 1)).ToString(), StringComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase).ToList();
         var blocks = new List<List<CollectedFile>>();
         var current = new List<CollectedFile>();
