@@ -427,18 +427,25 @@ requests per hour per address without a token, enough for checks at start-up or 
 | `licenseMode` | `firstInstall` \| `always` | `"firstInstall"` | `always` also shows the license before upgrades and reinstalls (e.g. a user agreement that must be accepted for every version). |
 | `licenses` | object | `{}` | Per-language license files, e.g. `{ "zh-CN": "license_zh.txt" }`. Falls back to `license`. |
 | `localization` | string | `""` | Folder with one `<language>.json` per language; see *Localization*. |
-| `defaultLanguage` | `auto` \| `en-US` \| `zh-CN` \| `ja-JP` \| `ko-KR` | `"auto"` | `auto` follows the user's Windows display languages (first one the installer supports; else en-US). `/lang` overrides this setting. |
+| `defaultLanguage` | `auto` \| language tag | `"auto"` | `auto` follows the user's Windows display languages (first one the installer supports; else en-US). A tag pins the language: a built-in one, a regional tag of one (`de-CH` → `de-DE`) or a language the package brings strings for; see *Localization*. `/lang` overrides this setting. |
 | `strings` | object | `{}` | Per-language overrides of built-in strings, e.g. `{ "zh-CN": { "welcome.body": "…" } }`. Keys are listed in `shared/localization/en-US.json`. Values longer than 4096 bytes are ignored. |
 
 ### Localization
 
-The installer's own text ships in four languages: en-US, zh-CN, ja-JP and ko-KR (one file each in
-`shared/localization`). **Any other language** can be added by a package: give its localization file (named with
-any BCP-47 tag, e.g. `fr-FR.json`, `de.json`, `pt-BR.json`) a `strings` table with the installer's texts.
-`fluentsetup locale add <tag> <project.json>` creates that file with every key (English values to translate) and the
-package's option, action and variant ids. Language choice: `/lang`, else `ui.defaultLanguage`, else the first Windows
-display language the installer has strings for (exact tag first, then the same primary language, e.g. `de-AT` →
-`de-DE`), else English. Untranslated keys show in English; `validate` reports the coverage (FS1327). The package's own text (option labels, action names, license, string overrides) can be kept
+The installer's own text ships in eleven languages: en-US, zh-CN, zh-TW (Traditional Chinese), ja-JP, ko-KR, de-DE,
+fr-FR, es-ES, pt-BR, ru-RU and it-IT (one file each in `shared/localization`; `scripts/check-localization.ps1` checks
+them against `en-US.json`). Regional tags use the table of their language: `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*`
+→ zh-TW, other Chinese (`zh-SG`, `zh-Hans-*`) → zh-CN; `de-AT`, `de-CH` → de-DE; `fr-CA`, `fr-BE` → fr-FR; `es-*` →
+es-ES; `pt-PT` and other Portuguese → pt-BR; `ru-*` → ru-RU; `it-CH` → it-IT; `en-*` → en-US. **Any other language**
+can be added by a package: give its localization file (named with any BCP-47 tag, e.g. `nl-NL.json`, `pl.json`,
+`pt-PT.json`) a `strings` table with the installer's texts. `fluentsetup locale add <tag> <project.json>` creates that
+file with every key (to translate, starting from the installer's table of the same language, e.g. pt-BR for `pt-PT`,
+else English) and the package's option, action and variant ids. Language choice: `/lang`, else `ui.defaultLanguage`,
+else the user's Windows display languages in order; the first tag that matches wins, checked as: the package's
+strings for exactly that tag, else a built-in table (exact tag, then script or region, then the same primary
+language), else the package's strings for the same primary language (`nl-BE` → the package's `nl-NL`). Nothing
+matches: English. Keys missing from a language the installer does not ship show in English; `validate` reports the
+coverage (FS1327). The package's own text (option labels, action names, license, string overrides) can be kept
 out of `fluentsetup.json` in a folder named by `ui.localization`, one file per language:
 
 ```json
@@ -536,7 +543,7 @@ The installed `uninstall.exe` accepts the same switches.
 | Inno / NSIS switches | `/VERYSILENT`, `/SILENT` (passive), `/DIR=`, `/LOG=`, `/LANG=english`, `/TASKS=`, `/MERGETASKS=`, `/NOICONS`, `/CURRENTUSER`, `/ALLUSERS`, `/RELAUNCH=1`, `/S`, `/D=path` (last, may contain spaces) are understood; `/SUPPRESSMSGBOXES`, `/NORESTART`, `/CLOSEAPPLICATIONS`, `/SP-`, `/NCRC`, `_?=` are accepted and have no effect. Upgrades also pre-fill choices from an adopted Inno install's saved tasks. |
 | `/option <id>=yes\|no` | Value of a package option. Can be repeated. Ids the package does not define are ignored. |
 | `/input <id>=<value>` | Value of a package input (`inputs`, the Settings page); everything after the first `=` is the value and may be empty. Can be repeated (at most 8 ids). Install and `/modify` only. An id the package does not define is an error (exit code 3); the value is checked like on the Settings page (required, choices, pattern), and a quiet or passive install with a missing or invalid value fails with exit code 3 and the input named in the log. Without `/input` an update uses the value remembered from the previous install (never for passwords), else the default. Quote values with spaces: `"/input=note=two words"`. |
-| `/lang en-US\|zh-CN\|ja-JP\|ko-KR` | UI language. Overrides `ui.defaultLanguage`. |
+| `/lang <tag>` | UI language: a built-in one (`en-US`, `zh-CN`, `zh-TW`, `ja-JP`, `ko-KR`, `de-DE`, `fr-FR`, `es-ES`, `pt-BR`, `ru-RU`, `it-IT`), a regional tag of one (`zh-HK` → zh-TW, `de-CH` → de-DE) or a language the package brings strings for; see *Localization*. Overrides `ui.defaultLanguage`. |
 | `/log <file>` | Write the log to this absolute file path. Default: `%TEMP%\FluentSetup\<appId>-install-<timestamp>.log` (or `-uninstall-`). |
 | `/ui auto\|winui\|win32` | Front-end selection, for diagnostics. `win32` skips the WinUI front end. |
 | `/help`, `/h`, `/?` | Show usage. |

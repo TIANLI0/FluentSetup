@@ -171,7 +171,8 @@ public sealed class UiSettings
     public string LicenseMode { get; set; } = "firstInstall";
     /// <summary>Folder with one &lt;language&gt;.json per language (option labels, action names, license, strings).</summary>
     public string Localization { get; set; } = "";
-    /// <summary>auto | en-US | zh-CN | ja-JP | ko-KR</summary>
+    /// <summary>auto | a built-in language (en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT) |
+    /// a language the package brings strings for.</summary>
     public string DefaultLanguage { get; set; } = "auto";
     /// <summary>Per-language overrides of installer strings, e.g. { "zh-CN": { "welcome.body": "…" } }.</summary>
     public Dictionary<string, Dictionary<string, string>> Strings { get; set; } = [];

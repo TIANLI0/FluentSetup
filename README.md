@@ -35,9 +35,10 @@ with a Fluent WinUI 3 interface and no .NET, VC++ redistributable, WebView2 or n
   signer) and installs; `/check-update` only reports. No updater code in the app.
 - **Variants.** One package can carry a self-contained and a framework-dependent build of the same app (shared files
   stored once); the user picks at install time, or `--variant` builds a single-variant package.
-- **Accessible and localized.** English, Simplified Chinese, Japanese and Korean built in, following the Windows display
-  language; any other language can be added by a package (`fluentsetup locale add fr-FR`). UI Automation names,
-  keyboard navigation, light/dark/high-contrast themes, and per-monitor DPI.
+- **Accessible and localized.** English, Simplified and Traditional Chinese, Japanese, Korean, German, French, Spanish,
+  Brazilian Portuguese, Russian and Italian built in, following the Windows display language; any other language can be
+  added by a package (`fluentsetup locale add nl-NL`). UI Automation names, keyboard navigation,
+  light/dark/high-contrast themes, and per-monitor DPI.
 - **Three ways to build:** the Builder app, the `fluentsetup` CLI (also as a GitHub Action), or the `Builder.Core`
   library.
 - **Made for AI-assisted authoring.** `fluentsetup guide` prints a complete authoring guide, `fluentsetup schema` the

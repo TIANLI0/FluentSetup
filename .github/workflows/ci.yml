@@ -33,6 +33,10 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'src/Setup.WinUI/packages.config', 'global.json') }}
           restore-keys: nuget-${{ runner.os }}-
 
+      - name: Installer string tables (keys, placeholders, wiring)
+        shell: pwsh
+        run: ./scripts/check-localization.ps1
+
       - name: Build (native runtime, WinUI front end, Builder.Core, CLI, Builder GUI, tests)
         shell: pwsh
         run: ./scripts/build.ps1 -Configuration Release -Platforms x64,ARM64

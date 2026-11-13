@@ -1,0 +1,3 @@
+// The installer's string tables, embedded exactly as in the stub, so Strings::Load can be tested.
+#include "resource.h"
+#include "localization.rc2"
