@@ -594,11 +594,16 @@ More examples (osslsigncode, jsign with Artifact Signing or a cloud key, AzureSi
 
 ## CLI: `fluentsetup`
 
+The CLI runs on Windows, Linux and macOS; the result is the same Windows `Setup.exe` on each. Release downloads:
+`fluentsetup-<version>-win-x64.zip`, `-linux-x64.tar.gz` and `-osx-arm64.tar.gz` (self-contained, with the installer
+runtime in `runtime/`). On Linux and macOS, sign with the `command` provider; `update` (installing a newer FluentSetup)
+works on Windows only. See [Building on Linux and macOS](cross-platform.md).
+
 ```
 fluentsetup build <project.json> [options]
     -o, --output <dir>      Output folder (default: output.directory)
     --arch x64|arm64        Target architecture (default: output.architecture)
-    --sign | --no-sign      Override signing.enabled
+    --sign | --no-sign      Override signing.enabled (--no-sign also skips the signing checks)
     --report <file.json>    Also write a machine-readable build report
     --runtime <dir>         Use another installer runtime folder
     -D, --define <n>=<v>    Value for $(n) in the project (repeatable, overrides "variables")
