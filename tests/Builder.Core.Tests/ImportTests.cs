@@ -267,7 +267,7 @@ public sealed class ImportTests
         Assert.True(Has(r, ImportSeverity.Manual, "Event functions: InitializeSetup"));
         Assert.True(Has(r, ImportSeverity.Manual, "requirements.netFramework"));
         Assert.True(Has(r, ImportSeverity.Manual, "SignTool"));
-        Assert.True(Has(r, ImportSeverity.Manual, "fluentsetup locale add de-DE"));
+        Assert.False(Has(r, ImportSeverity.Manual, "fluentsetup locale add de-DE"));  // German is built into the installer
         Assert.True(Has(r, ImportSeverity.Warning, "Check: NeedsAddPath"));
 
         // Files: the build output is the source; other folders are extra.

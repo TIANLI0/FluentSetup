@@ -95,7 +95,8 @@ GitHub Action 会在 Windows 构建机上安装命令行工具（下载后校验
 ```
 Setup.exe [/quiet | /S | /passive] [/uninstall] [/dir <路径>] [/scope user|machine] [/relaunch]
           [/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no]
-          [/log <文件>] [/lang en-US|zh-CN|ja-JP|ko-KR] [/ui auto|winui|win32]
+          [/input <id>=<值>] [/log <文件>] [/lang <语言>] [/ui auto|winui|win32]
+uninstall.exe /modify | /repair [/quiet]                                        （“应用和功能”中的“修改”）
 uninstall.exe /check-update | /install-update [/passive | /quiet] [/relaunch]   （配置了更新来源时）
 ```
 

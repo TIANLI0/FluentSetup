@@ -139,7 +139,8 @@ What your users and their administrators can run:
 ```
 Setup.exe [/quiet | /S | /passive] [/uninstall] [/dir <path>] [/scope user|machine] [/relaunch]
           [/desktop-shortcut yes|no] [/start-menu-shortcut yes|no] [/option <id>=yes|no]
-          [/log <file>] [/lang en-US|zh-CN|ja-JP|ko-KR] [/ui auto|winui|win32]
+          [/input <id>=<value>] [/log <file>] [/lang <language>] [/ui auto|winui|win32]
+uninstall.exe /modify | /repair [/quiet]                                        (Apps & features "Modify")
 uninstall.exe /check-update | /install-update [/passive | /quiet] [/relaunch]   (with an update source)
 ```
 
