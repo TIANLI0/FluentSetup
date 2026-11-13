@@ -848,6 +848,7 @@ fluentsetup versions <webview2|windowsappruntime|dotnet|vcredist> [--json]
 fluentsetup locale add <language> <project.json> [--force]
 fluentsetup guide | schema
 fluentsetup update [--check] [--prerelease] [--json]
+fluentsetup import <setup.iss|script.nsi> [-o <folder>] [--force] [--json]
 fluentsetup --version | --help
 ```
 
@@ -859,6 +860,7 @@ fluentsetup --version | --help
 - `locale add` creates `<ui.localization>/<language>.json` with every text to translate (installer strings, option, action, variant and input ids), for a language the installer does not ship.
 - `guide` prints the complete authoring guide ([ai-guide.md](ai-guide.md)), `schema` the JSON Schema of the project file.
 - `update` updates FluentSetup itself (Builder and CLI) from its GitHub releases; `--check` only reports.
+- `import` converts an Inno Setup or NSIS script into `<folder>\fluentsetup.json` (default folder: the script's) plus `import-report.md`, a checklist of what was mapped and what needs manual work. It refuses to overwrite either file without `--force`. See [import.md](import.md).
 - Options accept `--name value` or `--name=value`. Unknown or repeated options are usage errors.
 - Exit codes: `0` success, `1` validation or build failure, `2` usage error, `3` unexpected error, `4` cancelled.
 
