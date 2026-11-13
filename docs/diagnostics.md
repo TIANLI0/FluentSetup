@@ -21,7 +21,7 @@ sentence comes from the localization key `error.<Name>` in `shared/localization/
 | 3 | `InvalidArguments` | Bad command line or option value. | Unknown switch, missing/invalid value (the usage text is shown); options sent by a front end that the package does not allow; requested scope not allowed by the package; app already installed in the other scope ("uninstall it first to change the installation scope"); installing with an uninstaller package; malformed options in the elevated worker. | `error.InvalidArguments` |
 | 4 | `PackageCorrupt` | The container, header or payload failed validation. | Missing/invalid footer, header or stream checksum mismatch, header rule violation, file checksum mismatch during installation, zstd frame needing a window > 128 MiB, Authenticode signature does not match the file. Any failure to open or validate the running package at start-up is reported with this code. | `error.PackageCorrupt` |
 | 5 | `UnsupportedSystem` | OS too old. | Windows build lower than the header's `app.minWindowsBuild`. | `error.UnsupportedSystem` |
-| 6 | `ElevationRequired` | Administrator rights needed but not granted. | The UAC prompt was declined or could not be shown; `/quiet` per-machine operation started from a non-elevated process (silent mode never shows UAC); `ERROR_ELEVATION_REQUIRED`. | `error.ElevationRequired` |
+| 6 | `ElevationRequired` | Administrator rights needed but not granted. | The UAC prompt was declined or could not be shown; the UAC prompt of a `/quiet` per-machine operation started from a non-elevated process was declined; `ERROR_ELEVATION_REQUIRED`. | `error.ElevationRequired` |
 | 7 | `DiskFull` | Not enough space. | Path check `path.space` (free space < required size + 4 MiB); `ERROR_DISK_FULL` / `ERROR_HANDLE_DISK_FULL`. | `error.DiskFull` |
 | 8 | `FileInUse` | A file is locked. | `ERROR_SHARING_VIOLATION`, `ERROR_LOCK_VIOLATION`, `ERROR_USER_MAPPED_FILE` while replacing or removing files. | `error.FileInUse` |
 | 9 | `AccessDenied` | No permission. | Per-user target not writable (`path.notWritable`); `ERROR_ACCESS_DENIED`, `ERROR_PRIVILEGE_NOT_HELD`, `ERROR_WRITE_PROTECT`; access denied writing the Apps & features entry. | `error.AccessDenied` |
@@ -269,7 +269,7 @@ detail "Install location rejected (path.<key>): <dir>".
 | Symptom | Explanation |
 |---|---|
 | "Setup for X is already running" (16) | Another Setup.exe or uninstall.exe of the same app id is running, possibly in another user session. |
-| Silent per-machine install exits with 6 | `/quiet` never shows UAC; run it from an elevated process. |
+| Silent per-machine install exits with 6 | `/quiet` from a non-elevated process shows the UAC prompt and it was declined (or could not be shown, e.g. in a service): run it from an elevated process. |
 | Elevation declined → 6 | The user answered "No" to the UAC prompt; nothing was changed. |
 | "The elevated worker stopped unexpectedly …" (14) | The elevated process ended without reporting a result; its journal is rolled back on the next run (section 3). |
 | Update refuses a different scope (3) | The app is installed for the other scope; uninstall it first. |

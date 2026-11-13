@@ -262,8 +262,9 @@ Other fields use their own placeholder sets:
 | `userOrMachine` | The user picks. `defaultScope` is pre-selected, and `/scope` sets it from the command line. |
 
 When the app is already installed, the existing scope and folder are always reused. Installing into the other scope
-fails until the app is uninstalled. A per-machine install in `/quiet` mode must be started from an elevated process,
-because quiet mode never shows the UAC prompt. Otherwise Setup.exe exits with code 6.
+fails until the app is uninstalled. A per-machine install in `/quiet` mode started without administrator rights
+shows the UAC prompt (the only window quiet mode ever shows, as with Inno Setup and NSIS); if it is declined,
+Setup.exe exits with code 6. Deployment tools that run elevated never see it.
 
 ### Upgrades and downgrades
 
