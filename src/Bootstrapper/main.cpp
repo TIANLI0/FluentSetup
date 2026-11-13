@@ -247,8 +247,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
 #endif
               ::GetCommandLineW());
     log::Info(L"UI language %s (user UI language 0x%04X)", strings.Language().c_str(), ::GetUserDefaultUILanguage());
-    log::Info(L"Windows build %lu, elevated=%d, signature=%d (0x%08lX)", OsBuild(), security::IsElevated() ? 1 : 0,
-              static_cast<int>(signature), signatureStatus);
+    log::Info(L"Windows build %lu, elevated=%d%s, signature=%d (0x%08lX)", OsBuild(), security::IsElevated() ? 1 : 0,
+              security::HasLinkedToken() ? L"" : L" (no UAC split token)", static_cast<int>(signature), signatureStatus);
 
     if (!packageError.empty()) {
         log::Error(L"Package validation failed: %s", packageError.c_str());

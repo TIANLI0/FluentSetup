@@ -5,8 +5,10 @@
 #include <aclapi.h>
 #include <memory>
 #include <sddl.h>
+#include <wtsapi32.h>
 
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "wtsapi32.lib")
 
 namespace fsetup::security {
 
@@ -17,6 +19,46 @@ bool IsElevated() {
     TOKEN_ELEVATION elevation{};
     DWORD size = 0;
     return ::GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &size) && elevation.TokenIsElevated;
+}
+
+bool HasLinkedToken() {
+    HANDLE token = nullptr;
+    if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token)) return true;  // unknown: assume split token
+    UniqueHandle t(token);
+    TOKEN_ELEVATION_TYPE type = TokenElevationTypeDefault;
+    DWORD size = 0;
+    if (!::GetTokenInformation(token, TokenElevationType, &type, sizeof(type), &size)) return true;
+    return type != TokenElevationTypeDefault;
+}
+
+bool IsSessionUser() {
+    auto query = [](WTS_INFO_CLASS cls) {
+        LPWSTR buffer = nullptr;
+        DWORD bytes = 0;
+        std::wstring value;
+        if (::WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION, cls, &buffer, &bytes)) {
+            if (buffer) value = buffer;
+            ::WTSFreeMemory(buffer);
+        }
+        return value;
+    };
+    const std::wstring sessionUser = query(WTSUserName), sessionDomain = query(WTSDomainName);
+    if (sessionUser.empty()) return false;
+    wchar_t name[256 + 1]{}, domain[256 + 1]{};
+    DWORD nameLen = ARRAYSIZE(name), domainLen = ARRAYSIZE(domain);
+    SID_NAME_USE use{};
+    HANDLE token = nullptr;
+    if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
+    UniqueHandle t(token);
+    DWORD size = 0;
+    ::GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+    if (size == 0) return false;
+    auto buffer = std::make_unique<uint8_t[]>(size);
+    if (!::GetTokenInformation(token, TokenUser, buffer.get(), size, &size)) return false;
+    if (!::LookupAccountSidW(nullptr, reinterpret_cast<TOKEN_USER*>(buffer.get())->User.Sid, name, &nameLen, domain, &domainLen, &use))
+        return false;
+    return ::CompareStringOrdinal(name, -1, sessionUser.c_str(), -1, TRUE) == CSTR_EQUAL &&
+           ::CompareStringOrdinal(domain, -1, sessionDomain.c_str(), -1, TRUE) == CSTR_EQUAL;
 }
 
 namespace {

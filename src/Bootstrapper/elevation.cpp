@@ -89,11 +89,7 @@ UniqueHandle LaunchElevated(const std::wstring& exe, const std::wstring& paramet
 
 bool ShellOpenAsUser(const std::wstring& file, const std::wstring& workingDir, const std::wstring& parameters) {
     const HRESULT init = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    bool ok = false;
-    if (security::IsElevated()) {
-        ok = ShellExecuteViaExplorer(file, workingDir, parameters);
-        if (!ok) log::Warn(L"Could not start %s as the desktop user; not starting it elevated", file.c_str());
-    } else {
+    auto direct = [&] {
         SHELLEXECUTEINFOW sei{sizeof(sei)};
         sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
         sei.lpVerb = L"open";
@@ -101,7 +97,21 @@ bool ShellOpenAsUser(const std::wstring& file, const std::wstring& workingDir, c
         sei.lpParameters = parameters.empty() ? nullptr : parameters.c_str();
         sei.lpDirectory = workingDir.empty() ? nullptr : workingDir.c_str();
         sei.nShow = SW_SHOWNORMAL;
-        ok = ::ShellExecuteExW(&sei) != FALSE;
+        return ::ShellExecuteExW(&sei) != FALSE;
+    };
+    bool ok = false;
+    if (security::IsElevated()) {
+        ok = ShellExecuteViaExplorer(file, workingDir, parameters);
+        if (!ok && !security::HasLinkedToken() && security::IsSessionUser()) {
+            // UAC is off (or this is the built-in Administrator) and this is the signed-in user: there is no
+            // unelevated token to start the app with, the user's own programs get this same token, so starting it
+            // directly gives it nothing it would not otherwise have. Happens without a desktop shell (Explorer).
+            log::Info(L"No desktop shell; UAC is off for this account, starting %s directly", file.c_str());
+            ok = direct();
+        }
+        if (!ok) log::Warn(L"Could not start %s as the desktop user; not starting it elevated", file.c_str());
+    } else {
+        ok = direct();
     }
     if (SUCCEEDED(init)) ::CoUninitialize();
     return ok;

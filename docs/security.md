@@ -184,8 +184,11 @@ be driven by the process that launched it.
 * **Lifetime:** if the controller goes away, the worker's reader thread sets cancel and the operation rolls back
   (`worker.cpp:77-84`).
 * **Launching the app** after a per-machine install never happens elevated: the main executable must be strictly inside
-  the install directory (`controller.cpp:404-411`) and an elevated process starts it through the desktop shell
-  (Explorer) or not at all (`elevation.cpp:85-101`).
+  the install directory (`controller.cpp:861-870`) and an elevated process starts it through the desktop shell
+  (Explorer) or not at all (`elevation.cpp:90-117`). The one exception is an account without a UAC split token (UAC
+  turned off, or the built-in Administrator) that is also the user signed in to the session: there the user's own
+  programs run with the same token, so when no desktop shell can be reached (a build server, Windows without
+  Explorer) the app is started directly.
 
 The same channel protects the WinUI front end: the UI checks the server PID it was given (`src/Setup.WinUI/UiChannel.cpp:14-23`)
 and the bootstrapper checks the UI's PID (`winui_host.cpp:200`); options coming from the UI are re-validated by
