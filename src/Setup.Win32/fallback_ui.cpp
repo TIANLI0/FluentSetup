@@ -1,6 +1,8 @@
 // Win32 fallback front end, laid out like the WinUI one (Windows App Installer / APK-installer style):
 // a question as the title, publisher/version lines, the app icon large at the top right, "Launch when ready" at the
-// bottom left and progress inline in the bottom bar. System controls only (Common Controls v6, UxTheme, DWM).
+// bottom left and progress inline in the bottom bar. System controls only (Common Controls v6, UxTheme, DWM, WIC for
+// the banner). Pages: first page (install / uninstall / "Change <App>"), Settings (package inputs), license, progress,
+// result.
 #include "Setup.Win32/fallback_ui.h"
 
 #include "Bootstrapper/resource.h"
@@ -14,8 +16,11 @@
 #include <shobjidl.h>
 #include <uxtheme.h>
 #include <vssym32.h>
+#include <wincodec.h>
 #include <windowsx.h>
+#include <wrl/client.h>
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -32,20 +37,29 @@ constexpr int kClientWidth = 720;   // DIP (same window size as the WinUI front 
 constexpr int kClientHeight = 508;  // DIP
 constexpr int kMargin = 32;
 constexpr int kIconSize = 72;
+constexpr int kBannerMaxHeight = 96;  // DIP; the window does not scroll, so a tall banner is shown smaller
+constexpr int kInputWidth = 440;      // DIP, width of an input field
+
+// WIC identifiers, spelled out so that the stub needs no extra import library.
+constexpr CLSID kClsidWicImagingFactory = {0xcacaf262, 0x9370, 0x4615, {0xa1, 0x3b, 0x9f, 0x55, 0x39, 0xda, 0x4c, 0x0a}};
+constexpr GUID kWicPixelFormat32bppPBGRA = {0x6fddc324, 0x4e03, 0x4bfe, {0xb1, 0x85, 0x3d, 0x77, 0x76, 0x8d, 0xc9, 0x10}};
 
 enum Id : int {
-    kStatus = 100, kTitle, kDescription, kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
-    kLblSize, kSize, kInfo, kDirError,
+    kStatus = 100, kTitle, kSignature, kDescription, kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
+    kLblSize, kSize, kInfo, kDirError, kRepairNote,
     kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog,
     kOScopeLabel = 300, kOScopeUser, kOScopeMachine, kODesktop, kOStartMenu, kOVariantLabel, kOVariantDesc, kRemoveData, kUserDataPaths,
     kLHeading = 400, kLSub, kLText, kLAccept,
     kLaunch = 500, kPStage, kPPercent, kPBar, kPDetail,
+    kIHeading = 600, kISub, kIPanel,
     kSecondary = 700,
     kChoiceBase = 900,   // package-defined option checkboxes: kChoiceBase + index
     kVariantBase = 950,  // package variant radio buttons: kVariantBase + index
+    kInputBase = 1000,   // package inputs, children of the Settings panel: kInputBase + 4 * index + InputPart
 };
+enum InputPart : int { kInputLabel, kInputControl, kInputDescription, kInputError };
 
-enum class Page { Welcome, License, Progress, Result };
+enum class Page { Welcome, Inputs, License, Progress, Result };
 enum class ResultKind { None, Success, Failed, Cancelled };
 
 class Window : public boot::IListener {
@@ -62,6 +76,7 @@ public:
 
 private:
     static LRESULT CALLBACK Proc(HWND h, UINT m, WPARAM w, LPARAM l);
+    static LRESULT CALLBACK PanelProc(HWND h, UINT m, WPARAM w, LPARAM l);
     LRESULT Handle(UINT m, WPARAM w, LPARAM l);
 
     std::wstring S(std::string_view key) const { return c_.strings().Get(key); }
@@ -74,8 +89,9 @@ private:
     void Show(int id, bool visible) { ::ShowWindow(Ctl(id), visible ? SW_SHOWNA : SW_HIDE); }
     bool Visible(int id) const { return (::GetWindowLongW(Ctl(id), GWL_STYLE) & WS_VISIBLE) != 0; }
     bool Checked(int id) const { return Button_GetCheck(Ctl(id)) == BST_CHECKED; }
-    int TextHeight(int id, int width) const;
+    int TextHeight(int id, int width) const { return TextHeightOf(Ctl(id), width); }
     int TextWidth(int id) const;
+    static int TextHeightOf(HWND h, int width);
 
     void Create();
     void ApplyFonts();
@@ -83,6 +99,20 @@ private:
     void ApplyHello();
     void UpdateInfoLines();
     void UpdateNotice();
+    void LoadBanner();
+    void RenderBanner();
+    int BannerSpace() const { return banner_ && page_ == Page::Welcome ? bannerH_ + Px(16) : 0; }
+    void CreateInputs();
+    void LayoutPanel();
+    void ScrollPanelTo(int pos);
+    void OnPanelScroll(int code);
+    void EnsureInputVisible(size_t index);
+    void OnInputChanged(size_t index, bool touched);
+    std::wstring InputValue(size_t index) const;
+    HWND InputCtl(size_t index, InputPart part) const { return ::GetDlgItem(panel_, kInputBase + static_cast<int>(index) * 4 + part); }
+    const std::vector<Value>& Inputs() const { return hello_["inputs"].array(); }
+    bool HasInputsPage() const { return hello_["inputsPage"].asBool() && !Inputs().empty(); }
+    bool InputsValid() const { return std::all_of(inputOk_.begin(), inputOk_.end(), [](bool ok) { return ok; }); }
     void OnVariantChanged(size_t index);
     size_t VariantCount() const { return hello_["variants"].array().size(); }
     void ShowPage(Page p);
@@ -93,10 +123,13 @@ private:
     void DrawStatus(const DRAWITEMSTRUCT* di);
 
     bool HasOptions() const;
-    bool ShowsLicense() const { return !IsUninstall() && !hello_["ui"]["licenseText"].asString().empty(); }
-    bool LaunchOffered() const { return !IsUninstall() && hello_["options"]["launchAfter"]["visible"].asBool(); }
+    bool ShowsLicense() const { return IsInstall() && !hello_["ui"]["licenseText"].asString().empty(); }
+    bool LaunchOffered() const { return IsInstall() && hello_["options"]["launchAfter"]["visible"].asBool(); }
     bool NeedsElevation() const { return scope_ == L"machine" && !hello_["elevated"].asBool(); }
     bool IsUninstall() const { return hello_["mode"].asString() == "uninstall"; }
+    bool IsModify() const { return hello_["mode"].asString() == "modify"; }
+    bool IsInstall() const { return !IsUninstall() && !IsModify(); }
+    bool CanRepair() const { return IsModify() && hello_["modify"]["canRepair"].asBool(); }
     std::wstring AppName() const { return hello_["app"]["name"].asWide(); }
     std::wstring PrimaryVerb() const;
 
@@ -105,6 +138,8 @@ private:
     void RequestClose();
     void Finish(bool launch);
     void StartInstall();
+    void StartRepair();
+    void BeginProgress();
     void OnProgressMsg(const install::Progress& p);
     void OnDoneMsg(const Value& m);
     void CheckPath(const std::wstring& path);
@@ -128,6 +163,18 @@ private:
     std::wstring statusGlyph_;
     COLORREF statusColor_ = 0;
     RECT infoRect_{};
+    bool signatureVerified_ = false;
+    bool applyingHello_ = false;  // values set by the program are not the user's edits
+    bool repairing_ = false;  // the progress/result pages are about a repair (modify mode)
+    // Settings page: a scrollable panel holding one label/control/description/error group per input.
+    HWND panel_ = nullptr;
+    int panelScroll_ = 0, panelContent_ = 0;
+    std::vector<bool> inputOk_, inputTouched_;
+    // Banner (ui.banner): decoded once (premultiplied BGRA), scaled and put on the page colour per DPI and theme.
+    std::vector<uint8_t> bannerPixels_;
+    UINT bannerSrcW_ = 0, bannerSrcH_ = 0;
+    HBITMAP banner_ = nullptr;
+    int bannerW_ = 0, bannerH_ = 0;
 };
 
 HWND Window::Make(const wchar_t* cls, int id, DWORD style, DWORD exStyle) {
@@ -142,9 +189,10 @@ std::wstring Window::GetText(int id) const {
     return t;
 }
 
-int Window::TextHeight(int id, int width) const {
-    HWND h = Ctl(id);
-    std::wstring text = GetText(id);
+int Window::TextHeightOf(HWND h, int width) {
+    std::wstring text(static_cast<size_t>(::GetWindowTextLengthW(h)) + 1, L'\0');
+    ::GetWindowTextW(h, text.data(), static_cast<int>(text.size()));
+    text.resize(wcslen(text.c_str()));
     if (text.empty()) text = L" ";
     HDC dc = ::GetDC(h);
     HGDIOBJ old = ::SelectObject(dc, reinterpret_cast<HFONT>(::SendMessageW(h, WM_GETFONT, 0, 0)));
@@ -180,6 +228,12 @@ void Window::Run() {
     wc.lpszClassName = L"FluentSetupFallbackWindow";
     wc.hIcon = ::LoadIconW(wc.hInstance, MAKEINTRESOURCEW(IDI_APP));
     ::RegisterClassExW(&wc);
+    WNDCLASSEXW pc{sizeof(pc)};
+    pc.lpfnWndProc = PanelProc;
+    pc.hInstance = wc.hInstance;
+    pc.hCursor = wc.hCursor;
+    pc.lpszClassName = L"FluentSetupFallbackPanel";
+    ::RegisterClassExW(&pc);
 
     POINT cursor{};
     ::GetCursorPos(&cursor);
@@ -197,13 +251,14 @@ void Window::Run() {
     ::GetMonitorInfoW(monitor, &mi);
     const int w = r.right - r.left, h = r.bottom - r.top;
     std::wstring title = hello_["ui"]["title"].asWide();
-    if (title.empty()) title = F(IsUninstall() ? "window.title.uninstall" : "window.title.install", {AppName()});
+    if (title.empty()) title = F(IsUninstall() ? "window.title.uninstall" : IsModify() ? "modify.title" : "window.title.install", {AppName()});
     hwnd_ = ::CreateWindowExW(WS_EX_CONTROLPARENT, wc.lpszClassName, title.c_str(), style,
                               mi.rcWork.left + (mi.rcWork.right - mi.rcWork.left - w) / 2,
                               mi.rcWork.top + (mi.rcWork.bottom - mi.rcWork.top - h) / 2, w, h, nullptr, nullptr, wc.hInstance, this);
     if (!hwnd_) return;
     dpi_ = ::GetDpiForWindow(hwnd_);
 
+    LoadBanner();
     Create();
     ApplyHello();
     ApplyTheme();
@@ -213,11 +268,14 @@ void Window::Run() {
     std::optional<install::Outcome> outcome;
     bool started = false;
     c_.Attach(this, &last, &outcome, &started);
+    repairing_ = c_.operation() == boot::Operation::Repair;
     if (outcome) {
         OnDoneMsg(c_.DoneMessage(*outcome));
     } else if (started) {
         ShowPage(Page::Progress);
         OnProgressMsg(last);
+    } else if (hello_["modify"]["startRepair"].asBool()) {
+        StartRepair();  // uninstall.exe /repair
     } else if (hello_["passive"].asBool()) {
         StartInstall();  // passive mode (/passive, Inno /SILENT): no questions
     } else {
@@ -242,6 +300,7 @@ void Window::Run() {
     }
     if (iconLarge_) ::DestroyIcon(iconLarge_);
     if (iconSmall_) ::DestroyIcon(iconSmall_);
+    if (banner_) ::DeleteObject(banner_);
 }
 
 void Window::Create() {
@@ -249,11 +308,12 @@ void Window::Create() {
     // Creation order = tab order.
     Make(WC_STATICW, kStatus, SS_OWNERDRAW);
     Make(WC_STATICW, kTitle, text);
+    Make(WC_STATICW, kSignature, text);
     Make(WC_STATICW, kDescription, text);
     for (int id : {kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation}) Make(WC_STATICW, id, text);
     Make(WC_STATICW, kLocation, text | SS_PATHELLIPSIS);
     Make(WC_BUTTONW, kChange, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
-    for (int id : {kLblSize, kSize, kInfo, kDirError, kResultBody, kResultCode}) Make(WC_STATICW, id, text);
+    for (int id : {kLblSize, kSize, kInfo, kDirError, kRepairNote, kResultBody, kResultCode}) Make(WC_STATICW, id, text);
     Make(WC_EDITW, kResultDetail, WS_TABSTOP | WS_GROUP | ES_MULTILINE | ES_READONLY | WS_VSCROLL, WS_EX_CLIENTEDGE);
     Make(WC_BUTTONW, kOpenFolder, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, kViewLog, BS_PUSHBUTTON | WS_TABSTOP);
@@ -280,6 +340,10 @@ void Window::Create() {
     Make(WC_EDITW, kLText, WS_TABSTOP | WS_GROUP | ES_MULTILINE | ES_READONLY | WS_VSCROLL, WS_EX_CLIENTEDGE);
     Make(WC_BUTTONW, kLAccept, BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP);
 
+    Make(WC_STATICW, kIHeading, text);
+    Make(WC_STATICW, kISub, text);
+    CreateInputs();
+
     Make(WC_BUTTONW, kLaunch, BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP);
     Make(WC_STATICW, kPStage, text | SS_ENDELLIPSIS);
     Make(WC_STATICW, kPPercent, text | SS_RIGHT);
@@ -305,6 +369,9 @@ void Window::Create() {
     SetText(kLHeading, S("license.title"));
     SetText(kLSub, S("license.subtitle"));
     SetText(kLAccept, S("fallback.accept"));
+    SetText(kIHeading, S("inputs.title"));
+    SetText(kISub, F(IsModify() ? "inputs.subtitle.modify" : "inputs.subtitle", {AppName()}));
+    SetText(kRepairNote, S("modify.repairBody"));
     SetText(kLaunch, S("launchWhenReady"));
     SetText(kLblPublisher, S("label.publisher"));
     SetText(kLblVersion, S("label.version"));
@@ -320,6 +387,14 @@ void Window::ApplyFonts() {
     const auto set = [&](int id, HFONT f) { ::SendMessageW(Ctl(id), WM_SETFONT, reinterpret_cast<WPARAM>(f), FALSE); };
     set(kTitle, theme_.title);
     set(kLHeading, theme_.subtitle);
+    set(kIHeading, theme_.subtitle);
+    set(kISub, theme_.body);
+    set(kSignature, theme_.body);
+    set(kRepairNote, theme_.caption);
+    for (size_t i = 0; i < Inputs().size(); ++i) {
+        for (const InputPart part : {kInputLabel, kInputControl}) ::SendMessageW(InputCtl(i, part), WM_SETFONT, reinterpret_cast<WPARAM>(theme_.body), FALSE);
+        for (const InputPart part : {kInputDescription, kInputError}) ::SendMessageW(InputCtl(i, part), WM_SETFONT, reinterpret_cast<WPARAM>(theme_.caption), FALSE);
+    }
     for (size_t i = 0; i < hello_["options"]["choices"].array().size(); ++i) set(kChoiceBase + static_cast<int>(i), theme_.body);
     for (int id : std::initializer_list<int>{kPDetail, kResultCode, kOVariantDesc}) set(id, theme_.caption);
     set(kOVariantLabel, theme_.body);
@@ -346,12 +421,16 @@ void Window::ApplyTheme() {
     theme_.Refresh();
     ApplyFonts();
     theme_.ApplyWindowAttributes(hwnd_);
-    for (HWND child = ::GetWindow(hwnd_, GW_CHILD); child; child = ::GetWindow(child, GW_HWNDNEXT)) {
-        wchar_t cls[32] = {};
-        ::GetClassNameW(child, cls, 32);
-        if (_wcsicmp(cls, WC_BUTTONW) == 0) theme_.ApplyControlTheme(child, false);
-        else if (_wcsicmp(cls, WC_EDITW) == 0) theme_.ApplyControlTheme(child, true);
+    for (HWND parent : {hwnd_, panel_}) {
+        for (HWND child = parent ? ::GetWindow(parent, GW_CHILD) : nullptr; child; child = ::GetWindow(child, GW_HWNDNEXT)) {
+            wchar_t cls[32] = {};
+            ::GetClassNameW(child, cls, 32);
+            if (_wcsicmp(cls, WC_BUTTONW) == 0) theme_.ApplyControlTheme(child, false);
+            else if (_wcsicmp(cls, WC_EDITW) == 0 || _wcsicmp(cls, WC_COMBOBOXW) == 0) theme_.ApplyControlTheme(child, true);
+        }
     }
+    if (panel_) theme_.ApplyControlTheme(panel_, false);  // its scroll bar
+    RenderBanner();
     Layout();
     ::InvalidateRect(hwnd_, nullptr, TRUE);
 }
@@ -362,7 +441,11 @@ void Window::ApplyHello() {
     const std::wstring name = AppName();
     std::wstring description = hello_["ui"]["welcomeText"].asWide();
     if (IsUninstall()) description = F("uninstall.body", {name});
+    if (IsModify()) description = F("modify.subtitle", {name, hello_["app"]["version"].asWide()});
     SetText(kDescription, description);
+    const Value& signature = hello_["signature"];
+    signatureVerified_ = signature["state"].asString() == "valid" && !signature["publisher"].asWide().empty();
+    SetText(kSignature, signatureVerified_ ? F("welcome.verifiedPublisher", {signature["publisher"].asWide()}) : S("welcome.unknownPublisher"));
 
     const std::string relation = existing["relation"].asString();
     std::wstring info;
@@ -404,6 +487,23 @@ void Window::ApplyHello() {
         if (on) requiredBytes_ = hello_["variants"].array()[i]["requiredBytes"].asUint(requiredBytes_);
     }
     UpdateNotice();
+    applyingHello_ = true;
+    for (size_t i = 0; i < Inputs().size(); ++i) {
+        const Value& input = Inputs()[i];
+        const std::wstring value = input["value"].asWide();
+        if (input["type"].asString() == "choice") {
+            const auto& list = input["choices"].array();
+            int selected = -1;
+            for (size_t k = 0; k < list.size(); ++k) {
+                if (list[k]["value"].asWide() == value) selected = static_cast<int>(k);
+            }
+            ::SendMessageW(InputCtl(i, kInputControl), CB_SETCURSEL, static_cast<WPARAM>(selected), 0);
+        } else {
+            ::SetWindowTextW(InputCtl(i, kInputControl), value.c_str());
+        }
+        inputOk_[i] = input["ok"].asBool(true);
+    }
+    applyingHello_ = false;
     std::wstring license = hello_["ui"]["licenseText"].asWide(), crlf;
     for (size_t i = 0; i < license.size(); ++i) {
         if (license[i] == L'\n' && (i == 0 || license[i - 1] != L'\r')) crlf.push_back(L'\r');
@@ -415,12 +515,16 @@ void Window::ApplyHello() {
 
 // Running copies of the app and missing prerequisites of the chosen variant, in the info box on the first page.
 void Window::UpdateNotice() {
-    if (IsUninstall()) return;
     std::wstring notice = baseInfo_;
     const auto add = [&](const std::wstring& line) {
         if (!line.empty()) notice += (notice.empty() ? L"" : L"\r\n") + line;
     };
     if (!hello_["runningApps"].asWide().empty()) add(F("welcome.running", {hello_["runningApps"].asWide()}));
+    if (!hello_["lockingApps"].asWide().empty()) add(F("welcome.lockingApps", {AppName(), hello_["lockingApps"].asWide()}));
+    if (!IsInstall()) {
+        SetText(kInfo, notice);
+        return;
+    }
     std::wstring prereq = hello_["prerequisites"].asWide(), description;
     for (const auto& v : hello_["variants"].array()) {
         if (v["id"].asString() == variant_) prereq = v["prerequisites"].asWide(), description = v["description"].asWide();
@@ -452,18 +556,19 @@ void Window::UpdateInfoLines() {
     }
     SetText(kVersion, versionText != version ? versionText : std::wstring());  // the title already shows the plain version
     SetText(kLocation, installDir_);
-    SetText(kSize, IsUninstall() || requiredBytes_ == 0 || page_ == Page::Result ? std::wstring() : FormatBytes(requiredBytes_));
+    SetText(kSize, !IsInstall() || requiredBytes_ == 0 || page_ == Page::Result ? std::wstring() : FormatBytes(requiredBytes_));
 }
 
 bool Window::HasOptions() const {
     if (IsUninstall()) return false;
     const Value& o = hello_["options"];
-    return o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
+    return VariantCount() > 1 || o["canChangeScope"].asBool() || o["desktopShortcut"]["visible"].asBool() ||
            o["startMenuShortcut"]["visible"].asBool() || !o["choices"].array().empty();
 }
 
 std::wstring Window::PrimaryVerb() const {
     if (IsUninstall()) return S("button.uninstall");
+    if (IsModify()) return S("modify.change");
     const std::string relation = hello_["existing"]["relation"].asString();
     if (relation == "upgrade") return S("button.update");
     if (relation == "same") return S("button.reinstall");
@@ -474,17 +579,19 @@ void Window::ShowPage(Page p) {
     page_ = p;
     const Value& o = hello_["options"];
     const bool summary = p == Page::Welcome || p == Page::Progress || p == Page::Result;
-    const bool welcome = p == Page::Welcome, license = p == Page::License, result = p == Page::Result;
+    const bool welcome = p == Page::Welcome, license = p == Page::License, result = p == Page::Result, inputs = p == Page::Inputs;
 
     if (welcome) {
         const std::string relation = hello_["existing"]["relation"].asString();
         const char* key = IsUninstall() ? "ask.uninstall" : relation == "upgrade" ? "ask.update" : relation == "same" ? "ask.reinstall" : "ask.install";
-        SetText(kTitle, F(key, {AppName(), hello_["app"]["version"].asWide()}));
+        SetText(kTitle, IsModify() ? F("modify.title", {AppName()}) : F(key, {AppName(), hello_["app"]["version"].asWide()}));
     } else if (p == Page::Progress) {
-        SetText(kTitle, F(IsUninstall() ? "progress.uninstalling" : "progress.installing", {AppName(), hello_["app"]["version"].asWide()}));
+        if (IsModify()) SetText(kTitle, F(repairing_ ? "modify.repairing" : "progress.title.modify", {AppName()}));
+        else SetText(kTitle, F(IsUninstall() ? "progress.uninstalling" : "progress.installing", {AppName(), hello_["app"]["version"].asWide()}));
     }
     UpdateInfoLines();
     Show(kTitle, summary);
+    Show(kSignature, welcome);
     Show(kStatus, result);
     for (const auto [label, value] : {std::pair{kLblPublisher, kPublisher}, std::pair{kLblVersion, kVersion},
                                       std::pair{kLblLocation, kLocation}, std::pair{kLblSize, kSize}}) {
@@ -497,6 +604,7 @@ void Window::ShowPage(Page p) {
     Show(kDescription, welcome && ::GetWindowTextLengthW(Ctl(kDescription)) > 0);
     Show(kInfo, welcome && ::GetWindowTextLengthW(Ctl(kInfo)) > 0);
     Show(kDirError, welcome && !pathOk_);
+    Show(kRepairNote, welcome && CanRepair());
     if (!result) {
         for (int id : {kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog}) Show(id, false);
     }
@@ -513,22 +621,36 @@ void Window::ShowPage(Page p) {
     Show(kOStartMenu, editable && o["startMenuShortcut"]["visible"].asBool());
     for (size_t i = 0; i < o["choices"].array().size(); ++i) Show(kChoiceBase + static_cast<int>(i), editable);
     for (int id : {kLHeading, kLSub, kLText, kLAccept}) Show(id, license);
+    for (int id : {kIHeading, kISub, kIPanel}) Show(id, inputs);
 
     UpdateFooter();
     ::InvalidateRect(hwnd_, nullptr, TRUE);
-    ::SetFocus(Visible(IDOK) && ::IsWindowEnabled(Ctl(IDOK)) ? Ctl(IDOK) : Ctl(IDCANCEL));
+    if (inputs && !Inputs().empty()) ::SetFocus(InputCtl(0, kInputControl));
+    else ::SetFocus(Visible(IDOK) && ::IsWindowEnabled(Ctl(IDOK)) ? Ctl(IDOK) : Ctl(IDCANCEL));
 }
 
 void Window::UpdateFooter() {
     const bool blocked = hello_["existing"]["blocked"].asBool();
-    const bool beforeStart = page_ == Page::Welcome || page_ == Page::License;
+    const bool beforeStart = page_ == Page::Welcome || page_ == Page::Inputs || page_ == Page::License;
     bool secondary = false, primary = true, primaryEnabled = true, shield = false;
     std::wstring secondaryText, primaryText, cancelText = S("button.cancel");
     switch (page_) {
-        case Page::Welcome:
+        case Page::Welcome: {
+            // "Change <App>": Repair on the left of the primary button; Change applies the toggles (after Settings).
+            const bool more = HasInputsPage() || ShowsLicense();
+            secondary = CanRepair();
+            secondaryText = S("modify.repair");
+            primaryText = more ? S("button.next") : PrimaryVerb();
+            shield = !more && NeedsElevation();
+            primaryEnabled = !blocked && pathOk_;
+            break;
+        }
+        case Page::Inputs:
+            secondary = true;
+            secondaryText = S("button.back");
             primaryText = ShowsLicense() ? S("button.next") : PrimaryVerb();
             shield = !ShowsLicense() && NeedsElevation();
-            primaryEnabled = !blocked && pathOk_;
+            primaryEnabled = InputsValid() && pathOk_;
             break;
         case Page::License:
             secondary = true;
@@ -585,12 +707,14 @@ void Window::Layout() {
         case Page::Welcome:
         case Page::Progress:
         case Page::Result: {
+            y += BannerSpace();
             int titleLeft = left;
             if (Visible(kStatus)) {
                 place(kStatus, left, y + Px(6), Px(32), Px(32));
                 titleLeft = left + Px(44);
             }
-            stack(kTitle, Px(8), textRight - titleLeft, -1, titleLeft);
+            stack(kTitle, Px(4), textRight - titleLeft, -1, titleLeft);
+            stack(kSignature, Px(8), textWidth);
             stack(kDescription, Px(8), textWidth);
             y += Px(12);
             // Aligned label / value rows.
@@ -687,6 +811,7 @@ void Window::Layout() {
                 y += ph + Px(8);
             }
             stack(kDirError, Px(12), right - left);
+            stack(kRepairNote, Px(8), right - left);
             stack(kResultBody, Px(8), right - left);
             stack(kResultCode, Px(8), right - left);
             stack(kResultDetail, Px(8), right - left, Px(56));
@@ -701,6 +826,16 @@ void Window::Layout() {
             const int footerTop = client.bottom - Px(24) - Px(32) - Px(16);
             stack(kLText, Px(12), width, std::max(Px(120), footerTop - y - Px(12) - Px(22)));
             stack(kLAccept, 0, width, Px(22));
+            break;
+        }
+        case Page::Inputs: {
+            const int width = right - left;
+            stack(kIHeading, Px(8), width);
+            stack(kISub, Px(12), width);
+            // The fields scroll inside the panel; it ends above the bottom bar. A few pixels of room on the left keep
+            // the edit borders and focus rectangles visible.
+            const int footerTop = client.bottom - Px(24) - Px(32) - Px(16);
+            place(kIPanel, left - Px(4), y, right - left + Px(4) + Px(kMargin) / 2, std::max(Px(80), footerTop - y));
             break;
         }
     }
@@ -741,14 +876,24 @@ void Window::Layout() {
         place(kPDetail, left, py, leftWidth, captionH);
     }
     ::EndDeferWindowPos(dwp);
+    if (page_ == Page::Inputs) LayoutPanel();
 }
 
 void Window::Paint(HDC dc) {
     RECT client{};
     ::GetClientRect(hwnd_, &client);
     ::FillRect(dc, &client, theme_.baseBrush());
-    if (iconLarge_ && page_ != Page::License) {
-        ::DrawIconEx(dc, client.right - Px(kMargin) - Px(kIconSize), Px(20), iconLarge_, Px(kIconSize), Px(kIconSize), 0, nullptr, DI_NORMAL);
+    if (banner_ && page_ == Page::Welcome) {
+        // Decorative: already composed onto the page colour (RenderBanner), so a plain copy is enough.
+        HDC mem = ::CreateCompatibleDC(dc);
+        HGDIOBJ old = ::SelectObject(mem, banner_);
+        ::BitBlt(dc, Px(kMargin), Px(16), bannerW_, bannerH_, mem, 0, 0, SRCCOPY);
+        ::SelectObject(mem, old);
+        ::DeleteDC(mem);
+    }
+    if (iconLarge_ && page_ != Page::License && page_ != Page::Inputs) {
+        ::DrawIconEx(dc, client.right - Px(kMargin) - Px(kIconSize), Px(20) + BannerSpace(), iconLarge_, Px(kIconSize), Px(kIconSize), 0, nullptr,
+                     DI_NORMAL);
     }
     if (page_ == Page::Welcome && Visible(kInfo)) {
         HPEN border = ::CreatePen(PS_SOLID, 1, theme_.colors().infoStroke);
@@ -826,6 +971,12 @@ void Window::DrawStatus(const DRAWITEMSTRUCT* di) {
 void Window::OnPrimary() {
     switch (page_) {
         case Page::Welcome:
+            if (HasInputsPage()) ShowPage(Page::Inputs);
+            else if (ShowsLicense()) ShowPage(Page::License);
+            else StartInstall();
+            break;
+        case Page::Inputs:
+            if (!InputsValid()) break;
             if (ShowsLicense()) ShowPage(Page::License);
             else StartInstall();
             break;
@@ -843,7 +994,14 @@ void Window::OnPrimary() {
 }
 
 void Window::OnSecondary() {
-    ShowPage(Page::Welcome);  // "Back" from the license
+    switch (page_) {
+        case Page::Welcome:
+            if (CanRepair()) StartRepair();
+            break;
+        case Page::Inputs: ShowPage(Page::Welcome); break;
+        case Page::License: ShowPage(HasInputsPage() ? Page::Inputs : Page::Welcome); break;
+        default: break;
+    }
 }
 
 void Window::Finish(bool launch) {
@@ -854,7 +1012,7 @@ void Window::Finish(bool launch) {
 void Window::RequestClose() {
     if (page_ == Page::Progress) {
         if (!cancellable_ || cancelRequested_) return;
-        const std::wstring title = S(IsUninstall() ? "cancel.title.uninstall" : "cancel.title");
+        const std::wstring title = S(IsUninstall() ? "cancel.title.uninstall" : IsModify() ? "cancel.title.modify" : "cancel.title");
         const std::wstring body = S("cancel.body"), yes = S("cancel.confirm"), no = S("cancel.continue");
         const std::wstring caption = [this] {
             std::wstring t(static_cast<size_t>(::GetWindowTextLengthW(hwnd_)) + 1, L'\0');
@@ -898,6 +1056,9 @@ void Window::StartInstall() {
         for (size_t i = 0; i < defined.size(); ++i) choices.set(defined[i]["id"].asString(), Checked(kChoiceBase + static_cast<int>(i)));
         v.set("choices", choices);
         v.set("variant", variant_);
+        Value inputs = Value::MakeObject();
+        for (size_t i = 0; i < Inputs().size(); ++i) inputs.set(Inputs()[i]["id"].asString(), InputValue(i));
+        v.set("inputs", inputs);
         if (!c_.SanitizeOptions(v, o)) {
             pathOk_ = false;
             SetText(kDirError, S("error.InvalidArguments"));
@@ -905,6 +1066,18 @@ void Window::StartInstall() {
             return;
         }
     }
+    repairing_ = false;
+    BeginProgress();
+    c_.Start(o, hwnd_);
+}
+
+void Window::StartRepair() {
+    repairing_ = true;
+    BeginProgress();
+    c_.Repair(hwnd_);
+}
+
+void Window::BeginProgress() {
     cancelRequested_ = false;
     cancellable_ = true;
     result_ = ResultKind::None;
@@ -915,7 +1088,6 @@ void Window::StartInstall() {
     ::SetWindowLongW(bar, GWL_STYLE, ::GetWindowLongW(bar, GWL_STYLE) | PBS_MARQUEE);
     ::SendMessageW(bar, PBM_SETMARQUEE, TRUE, 30);
     ShowPage(Page::Progress);
-    c_.Start(o, hwnd_);
 }
 
 void Window::OnProgressMsg(const install::Progress& p) {
@@ -951,7 +1123,9 @@ void Window::OnDoneMsg(const Value& m) {
     logPath_ = m["log"].asWide();
     if (!m["installDir"].asWide().empty()) installDir_ = m["installDir"].asWide();
     retryable_ = m["retryable"].asBool(true);
-    canLaunch_ = !uninstall && r == "success" && m["canLaunch"].asBool();
+    canLaunch_ = IsInstall() && r == "success" && m["canLaunch"].asBool();
+    const bool modify = IsModify(), repair = m["operation"].asString() == "repair";
+    const std::string repairResult = m["repair"].asString();
     if (r == "success" && hello_["passive"].asBool()) {  // passive mode closes itself after a success
         Finish(false);
         return;
@@ -970,13 +1144,27 @@ void Window::OnDoneMsg(const Value& m) {
         SetText(kTitle, F(uninstall ? "done.uninstalled" : updated ? "done.updated" : "done.installed", {name, hello_["app"]["version"].asWide()}));
         body = uninstall ? std::wstring() : hello_["ui"]["finishText"].asWide();
         if (uninstall && m["leftovers"].asBool()) body = F("result.leftovers", {installDir_});
+        if (repair && repairResult == "noProblems") {
+            SetText(kTitle, S("result.noProblems.title"));
+            body = F("modify.noProblems", {name});
+        } else if (repair) {
+            SetText(kTitle, F("result.success.title.repair", {name}));
+            body = F("result.success.body.repair", {name});
+        } else if (modify) {
+            SetText(kTitle, F("result.success.title.modify", {name}));
+            body = F("result.success.body.modify", {name});
+        }
+        if (m["rebootRequired"].asBool()) body += (body.empty() ? L"" : L"\r\n\r\n") + S("result.rebootRequired");
     } else {
         const bool cancelled = r == "cancelled";
         result_ = cancelled ? ResultKind::Cancelled : ResultKind::Failed;
         statusGlyph_ = cancelled ? L"" : L"";
         statusColor_ = cancelled ? c.caution : c.critical;
-        SetText(kTitle, S(cancelled ? (uninstall ? "result.cancelled.title.uninstall" : "result.cancelled.title")
-                                    : (uninstall ? "result.failed.title.uninstall" : "result.failed.title")));
+        SetText(kTitle, S(cancelled ? (uninstall ? "result.cancelled.title.uninstall" : modify ? "result.cancelled.title.modify" : "result.cancelled.title")
+                                    : (uninstall ? "result.failed.title.uninstall"
+                                       : repair  ? "result.failed.title.repair"
+                                       : modify  ? "result.failed.title.modify"
+                                                 : "result.failed.title")));
         body = cancelled ? std::wstring() : m["message"].asWide();
         const std::wstring extra = m["restored"].asBool() ? S("result.restored") : m["noChanges"].asBool() || cancelled ? S("result.noChanges") : std::wstring();
         if (!extra.empty()) body += (body.empty() ? L"" : L"\r\n") + extra;
@@ -992,7 +1180,7 @@ void Window::OnDoneMsg(const Value& m) {
     Show(kResultBody, !body.empty());
     Show(kResultCode, failed);
     Show(kResultDetail, failed && !m["detail"].asWide().empty());
-    Show(kOpenFolder, result_ == ResultKind::Success && !uninstall && !installDir_.empty());
+    Show(kOpenFolder, result_ == ResultKind::Success && IsInstall() && !installDir_.empty());
     Show(kViewLog, failed && !logPath_.empty());
     UpdateFooter();
     ::InvalidateRect(Ctl(kStatus), nullptr, TRUE);
@@ -1047,6 +1235,293 @@ void Window::Browse() {
     dialog->Release();
 }
 
+// ---- Settings page (package inputs) -------------------------------------------------------------------------------
+
+void Window::CreateInputs() {
+    const auto& inputs = Inputs();
+    inputOk_.assign(inputs.size(), true);
+    inputTouched_.assign(inputs.size(), false);
+    panel_ = ::CreateWindowExW(WS_EX_CONTROLPARENT, L"FluentSetupFallbackPanel", L"", WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN, 0, 0, 10, 10,
+                               hwnd_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kIPanel)), ::GetModuleHandleW(nullptr), this);
+    if (!panel_) return;
+    const auto make = [&](const wchar_t* cls, size_t index, InputPart part, DWORD style, DWORD exStyle = 0) {
+        return ::CreateWindowExW(exStyle, cls, L"", WS_CHILD | style, 0, 0, 10, 10, panel_,
+                                 reinterpret_cast<HMENU>(static_cast<INT_PTR>(kInputBase + static_cast<int>(index) * 4 + part)),
+                                 ::GetModuleHandleW(nullptr), nullptr);
+    };
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        const Value& input = inputs[i];
+        const std::string type = input["type"].asString();
+        // The label is created right before its control: screen readers take the control's name from it.
+        std::wstring label = input["label"].asWide();
+        HWND labelCtl = make(WC_STATICW, i, kInputLabel, WS_VISIBLE | SS_LEFT | SS_NOPREFIX);
+        ::SetWindowTextW(labelCtl, label.c_str());
+        if (type == "choice") {
+            HWND combo = make(WC_COMBOBOXW, i, kInputControl, WS_VISIBLE | WS_TABSTOP | WS_GROUP | WS_VSCROLL | CBS_DROPDOWNLIST);
+            for (const auto& choice : input["choices"].array()) {
+                const std::wstring text = choice["label"].asWide();
+                ::SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(text.c_str()));
+            }
+        } else {
+            HWND edit = make(WC_EDITW, i, kInputControl, WS_VISIBLE | WS_TABSTOP | WS_GROUP | ES_AUTOHSCROLL | (type == "password" ? ES_PASSWORD : 0),
+                             WS_EX_CLIENTEDGE);
+            ::SendMessageW(edit, EM_LIMITTEXT, 4096, 0);
+        }
+        HWND description = make(WC_STATICW, i, kInputDescription, WS_VISIBLE | SS_LEFT | SS_NOPREFIX);
+        ::SetWindowTextW(description, input["description"].asWide().c_str());
+        make(WC_STATICW, i, kInputError, SS_LEFT | SS_NOPREFIX);
+    }
+}
+
+std::wstring Window::InputValue(size_t index) const {
+    const Value& input = Inputs()[index];
+    HWND control = InputCtl(index, kInputControl);
+    if (input["type"].asString() == "choice") {
+        const LRESULT selected = ::SendMessageW(control, CB_GETCURSEL, 0, 0);
+        const auto& choices = input["choices"].array();
+        return selected >= 0 && static_cast<size_t>(selected) < choices.size() ? choices[static_cast<size_t>(selected)]["value"].asWide() : std::wstring();
+    }
+    std::wstring text(static_cast<size_t>(::GetWindowTextLengthW(control)) + 1, L'\0');
+    ::GetWindowTextW(control, text.data(), static_cast<int>(text.size()));
+    text.resize(wcslen(text.c_str()));
+    return text;
+}
+
+void Window::OnInputChanged(size_t index, bool touched) {
+    if (index >= Inputs().size()) return;
+    // The bootstrapper's rules (required, choices, pattern) decide, exactly as for the WinUI front end and /input.
+    const Value reply = c_.CheckInput(Inputs()[index]["id"].asString(), InputValue(index));
+    inputOk_[index] = reply["ok"].asBool();
+    if (touched) inputTouched_[index] = true;
+    HWND error = InputCtl(index, kInputError);
+    const bool showError = inputTouched_[index] && !inputOk_[index];
+    ::SetWindowTextW(error, showError ? reply["message"].asWide().c_str() : L"");
+    const bool wasShown = (::GetWindowLongW(error, GWL_STYLE) & WS_VISIBLE) != 0;
+    ::ShowWindow(error, showError ? SW_SHOWNA : SW_HIDE);
+    if (wasShown != showError) LayoutPanel();
+    if (page_ == Page::Inputs) UpdateFooter();
+}
+
+void Window::LayoutPanel() {
+    if (!panel_) return;
+    RECT wr{};
+    ::GetWindowRect(panel_, &wr);
+    const int panelH = wr.bottom - wr.top;
+    // The scroll bar's room is always kept, so showing it never re-flows the fields.
+    const int width = std::max(Px(80), static_cast<int>(wr.right - wr.left) - ::GetSystemMetricsForDpi(SM_CXVSCROLL, dpi_) - Px(8));
+    const int x = Px(4);
+    const auto measure = [&](int y0) {
+        int y = y0;
+        HDWP dwp = ::BeginDeferWindowPos(static_cast<int>(Inputs().size()) * 4 + 1);
+        const auto place = [&](HWND h, int top, int w, int hgt) {
+            dwp = ::DeferWindowPos(dwp, h, nullptr, x, top, w, hgt, SWP_NOZORDER | SWP_NOACTIVATE);
+        };
+        for (size_t i = 0; i < Inputs().size(); ++i) {
+            HWND label = InputCtl(i, kInputLabel), control = InputCtl(i, kInputControl);
+            HWND description = InputCtl(i, kInputDescription), error = InputCtl(i, kInputError);
+            const int lh = TextHeightOf(label, width);
+            place(label, y, width, lh);
+            y += lh + Px(6);
+            const int cw = std::min(width, Px(kInputWidth));
+            if (Inputs()[i]["type"].asString() == "choice") {
+                // The height given to a drop-down list is the height of its open list; the closed box sizes itself.
+                const int boxH = static_cast<int>(::SendMessageW(control, CB_GETITEMHEIGHT, static_cast<WPARAM>(-1), 0)) + Px(8);
+                place(control, y, cw, Px(240));
+                y += boxH + Px(4);
+            } else {
+                place(control, y, cw, Px(30));
+                y += Px(30) + Px(4);
+            }
+            if (::GetWindowTextLengthW(description) > 0) {
+                const int dh = TextHeightOf(description, width);
+                place(description, y, width, dh);
+                y += dh + Px(2);
+            }
+            if (::GetWindowLongW(error, GWL_STYLE) & WS_VISIBLE) {
+                const int eh = TextHeightOf(error, width);
+                place(error, y, width, eh);
+                y += eh;
+            }
+            y += Px(16);
+        }
+        ::EndDeferWindowPos(dwp);
+        return y;
+    };
+    panelContent_ = measure(Px(4) - panelScroll_) + panelScroll_;
+    const int maxScroll = std::max(0, panelContent_ - panelH);
+    if (panelScroll_ > maxScroll) {
+        panelScroll_ = maxScroll;
+        measure(Px(4) - panelScroll_);
+    }
+    SCROLLINFO si{sizeof(si)};
+    si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin = 0;
+    si.nMax = std::max(0, panelContent_ - 1);
+    si.nPage = static_cast<UINT>(std::max(0, panelH));
+    si.nPos = panelScroll_;
+    ::SetScrollInfo(panel_, SB_VERT, &si, TRUE);
+    ::InvalidateRect(panel_, nullptr, TRUE);
+}
+
+void Window::ScrollPanelTo(int pos) {
+    RECT wr{};
+    ::GetWindowRect(panel_, &wr);
+    pos = std::clamp(pos, 0, std::max(0, panelContent_ - static_cast<int>(wr.bottom - wr.top)));
+    if (pos == panelScroll_) return;
+    panelScroll_ = pos;
+    LayoutPanel();
+}
+
+void Window::OnPanelScroll(int code) {
+    SCROLLINFO si{sizeof(si)};
+    si.fMask = SIF_ALL;
+    ::GetScrollInfo(panel_, SB_VERT, &si);
+    int pos = panelScroll_;
+    switch (code) {
+        case SB_LINEUP: pos -= Px(24); break;
+        case SB_LINEDOWN: pos += Px(24); break;
+        case SB_PAGEUP: pos -= static_cast<int>(si.nPage); break;
+        case SB_PAGEDOWN: pos += static_cast<int>(si.nPage); break;
+        case SB_THUMBTRACK:
+        case SB_THUMBPOSITION: pos = si.nTrackPos; break;
+        case SB_TOP: pos = 0; break;
+        case SB_BOTTOM: pos = panelContent_; break;
+        default: return;
+    }
+    ScrollPanelTo(pos);
+}
+
+// Keyboard focus moved to a field: scroll it (with its label) into view.
+void Window::EnsureInputVisible(size_t index) {
+    RECT panel{}, label{}, control{};
+    ::GetClientRect(panel_, &panel);
+    ::GetWindowRect(InputCtl(index, kInputLabel), &label);
+    ::GetWindowRect(InputCtl(index, kInputControl), &control);
+    ::MapWindowPoints(nullptr, panel_, reinterpret_cast<POINT*>(&label), 2);
+    ::MapWindowPoints(nullptr, panel_, reinterpret_cast<POINT*>(&control), 2);
+    if (label.top < 0) ScrollPanelTo(panelScroll_ + label.top - Px(4));
+    else if (control.bottom > panel.bottom) ScrollPanelTo(panelScroll_ + control.bottom - panel.bottom + Px(24));
+}
+
+LRESULT CALLBACK Window::PanelProc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_NCCREATE) {
+        ::SetWindowLongPtrW(h, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(reinterpret_cast<CREATESTRUCTW*>(l)->lpCreateParams));
+    }
+    auto* self = reinterpret_cast<Window*>(::GetWindowLongPtrW(h, GWLP_USERDATA));
+    if (self && self->panel_ == h) {
+        switch (m) {
+            case WM_COMMAND:
+            case WM_CTLCOLORSTATIC:
+            case WM_CTLCOLOREDIT:
+            case WM_CTLCOLORLISTBOX:
+                return self->Handle(m, w, l);  // the window's handler knows every control and colour
+            case WM_ERASEBKGND: {
+                RECT r{};
+                ::GetClientRect(h, &r);
+                ::FillRect(reinterpret_cast<HDC>(w), &r, self->theme_.baseBrush());
+                return 1;
+            }
+            case WM_VSCROLL:
+                self->OnPanelScroll(LOWORD(w));
+                return 0;
+            case WM_MOUSEWHEEL:
+                self->ScrollPanelTo(self->panelScroll_ - GET_WHEEL_DELTA_WPARAM(w) * self->Px(48) / WHEEL_DELTA);
+                return 0;
+            default: break;
+        }
+    }
+    return ::DefWindowProcW(h, m, w, l);
+}
+
+// ---- banner (ui.banner) ---------------------------------------------------------------------------------------
+
+void Window::LoadBanner() {
+    const std::wstring& file = c_.package().bannerFile;
+    if (file.empty()) return;
+    std::vector<uint8_t> bytes;
+    if (!c_.ReadFrontendFile(file, bytes, 4u << 20)) {
+        log::Warn(L"The banner %s could not be read", file.c_str());
+        return;
+    }
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IWICImagingFactory> factory;
+    ComPtr<IWICStream> stream;
+    ComPtr<IWICBitmapDecoder> decoder;
+    ComPtr<IWICBitmapFrameDecode> frame;
+    ComPtr<IWICFormatConverter> converter;
+    UINT w = 0, h = 0;
+    if (FAILED(::CoCreateInstance(kClsidWicImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))) ||
+        FAILED(factory->CreateStream(&stream)) || FAILED(stream->InitializeFromMemory(bytes.data(), static_cast<DWORD>(bytes.size()))) ||
+        FAILED(factory->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnDemand, &decoder)) ||
+        FAILED(decoder->GetFrame(0, &frame)) || FAILED(factory->CreateFormatConverter(&converter)) ||
+        FAILED(converter->Initialize(frame.Get(), kWicPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0, WICBitmapPaletteTypeCustom)) ||
+        FAILED(converter->GetSize(&w, &h)) || w == 0 || h == 0 || w > 8192 || h > 8192) {
+        log::Warn(L"The banner %s is not an image Windows can decode", file.c_str());
+        return;
+    }
+    bannerPixels_.resize(static_cast<size_t>(w) * h * 4);
+    if (FAILED(converter->CopyPixels(nullptr, w * 4, static_cast<UINT>(bannerPixels_.size()), bannerPixels_.data()))) {
+        bannerPixels_.clear();
+        return;
+    }
+    bannerSrcW_ = w;
+    bannerSrcH_ = h;
+    log::Info(L"Banner %s: %ux%u", file.c_str(), w, h);
+}
+
+void Window::RenderBanner() {
+    if (banner_) ::DeleteObject(banner_);
+    banner_ = nullptr;
+    if (bannerPixels_.empty() || !hwnd_) return;
+    RECT client{};
+    ::GetClientRect(hwnd_, &client);
+    // Scaled to the content width; a banner that would be taller than the cap is shown smaller instead.
+    int w = client.right - 2 * Px(kMargin);
+    int h = MulDiv(w, static_cast<int>(bannerSrcH_), static_cast<int>(bannerSrcW_));
+    if (h > Px(kBannerMaxHeight)) {
+        h = Px(kBannerMaxHeight);
+        w = MulDiv(h, static_cast<int>(bannerSrcW_), static_cast<int>(bannerSrcH_));
+    }
+    if (w <= 0 || h <= 0) return;
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IWICImagingFactory> factory;
+    ComPtr<IWICBitmap> source;
+    ComPtr<IWICBitmapScaler> scaler;
+    if (FAILED(::CoCreateInstance(kClsidWicImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))) ||
+        FAILED(factory->CreateBitmapFromMemory(bannerSrcW_, bannerSrcH_, kWicPixelFormat32bppPBGRA, bannerSrcW_ * 4,
+                                               static_cast<UINT>(bannerPixels_.size()), bannerPixels_.data(), &source)) ||
+        FAILED(factory->CreateBitmapScaler(&scaler)) ||
+        FAILED(scaler->Initialize(source.Get(), static_cast<UINT>(w), static_cast<UINT>(h), WICBitmapInterpolationModeFant))) {
+        return;
+    }
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = w;
+    bi.bmiHeader.biHeight = -h;  // top-down
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP bitmap = ::CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bitmap) return;
+    if (FAILED(scaler->CopyPixels(nullptr, static_cast<UINT>(w) * 4, static_cast<UINT>(w) * 4 * static_cast<UINT>(h), static_cast<BYTE*>(bits)))) {
+        ::DeleteObject(bitmap);
+        return;
+    }
+    // Premultiplied pixels over the page colour: out = src + background * (1 - alpha).
+    const COLORREF bg = theme_.colors().base;
+    const unsigned back[3] = {GetBValue(bg), GetGValue(bg), GetRValue(bg)};
+    auto* p = static_cast<uint8_t*>(bits);
+    for (size_t i = 0, n = static_cast<size_t>(w) * h; i < n; ++i, p += 4) {
+        const unsigned inverse = 255u - p[3];
+        for (int c = 0; c < 3; ++c) p[c] = static_cast<uint8_t>(std::min(255u, p[c] + (back[c] * inverse + 127u) / 255u));
+        p[3] = 255;
+    }
+    banner_ = bitmap;
+    bannerW_ = w;
+    bannerH_ = h;
+}
+
 LRESULT CALLBACK Window::Proc(HWND h, UINT m, WPARAM w, LPARAM l) {
     Window* self = nullptr;
     if (m == WM_NCCREATE) {
@@ -1071,16 +1546,19 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
         }
         case WM_CTLCOLORSTATIC:
         case WM_CTLCOLOREDIT:
+        case WM_CTLCOLORLISTBOX:
         case WM_CTLCOLORBTN: {
             HDC dc = reinterpret_cast<HDC>(w);
             const int id = ::GetDlgCtrlID(reinterpret_cast<HWND>(l));
+            const int inputPart = id >= kInputBase ? (id - kInputBase) % 4 : -1;
             const auto& c = theme_.colors();
             HBRUSH brush = theme_.baseBrush();
             COLORREF bg = c.base, fg = c.text;
             if (id == kInfo) brush = theme_.infoBrush(), bg = c.infoFill;
-            if (id == kLText || id == kResultDetail) brush = theme_.editBrush(), bg = c.editFill;
-            if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kOScopeLabel || id == kOVariantLabel || id == kOVariantDesc || id == kUserDataPaths || id == kDescription || id == kPDetail || id == kPPercent || id == kResultCode) fg = c.textSecondary;
-            if (id == kDirError) fg = c.critical;
+            if (id == kLText || id == kResultDetail || inputPart == kInputControl || m == WM_CTLCOLORLISTBOX) brush = theme_.editBrush(), bg = c.editFill;
+            if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kOScopeLabel || id == kOVariantLabel || id == kOVariantDesc || id == kUserDataPaths || id == kDescription || id == kPDetail || id == kPPercent || id == kResultCode || id == kRepairNote || inputPart == kInputDescription) fg = c.textSecondary;
+            if (id == kSignature) fg = signatureVerified_ ? c.textSecondary : c.caution;
+            if (id == kDirError || inputPart == kInputError) fg = c.critical;
             ::SetTextColor(dc, fg);
             ::SetBkColor(dc, bg);
             return reinterpret_cast<LRESULT>(brush);
@@ -1105,6 +1583,12 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             else if ((id == kOScopeUser || id == kOScopeMachine) && code == BN_CLICKED) OnScopeChanged();
             else if (id >= kVariantBase && id < kVariantBase + static_cast<int>(VariantCount()) && code == BN_CLICKED) OnVariantChanged(static_cast<size_t>(id - kVariantBase));
             else if (id == kLAccept && code == BN_CLICKED) UpdateFooter();
+            else if (id >= kInputBase && static_cast<size_t>((id - kInputBase) / 4) < Inputs().size() && (id - kInputBase) % 4 == kInputControl) {
+                const size_t index = static_cast<size_t>((id - kInputBase) / 4);
+                if (code == EN_CHANGE || code == CBN_SELCHANGE) OnInputChanged(index, !applyingHello_);
+                else if (code == EN_SETFOCUS || code == CBN_SETFOCUS) EnsureInputVisible(index);
+                else if (code == EN_KILLFOCUS || code == CBN_KILLFOCUS) OnInputChanged(index, true);
+            }
             else if (id == kViewLog && !logPath_.empty()) {
                 ::ShellExecuteW(hwnd_, L"open", L"notepad.exe", (L"\"" + logPath_ + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
             } else if (id == kOpenFolder && !installDir_.empty()) {
@@ -1134,12 +1618,19 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             const RECT* r = reinterpret_cast<const RECT*>(l);
             ApplyFonts();
             ::SetWindowPos(hwnd_, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+            RenderBanner();
             Layout();
             ::InvalidateRect(hwnd_, nullptr, TRUE);
             return 0;
         }
         case WM_SETTINGCHANGE:
             if (l && wcscmp(reinterpret_cast<const wchar_t*>(l), L"ImmersiveColorSet") == 0) ApplyTheme();
+            break;
+        case WM_MOUSEWHEEL:
+            if (page_ == Page::Inputs && panel_) {
+                ScrollPanelTo(panelScroll_ - GET_WHEEL_DELTA_WPARAM(w) * Px(48) / WHEEL_DELTA);
+                return 0;
+            }
             break;
         case WM_THEMECHANGED:
         case WM_SYSCOLORCHANGE:

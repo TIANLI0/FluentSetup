@@ -11,6 +11,8 @@
 #include "Strings.h"
 #include "UiChannel.h"
 
+#include <algorithm>
+
 using namespace winrt;
 using namespace winrt::Microsoft::UI;
 using namespace winrt::Microsoft::UI::Windowing;
@@ -42,6 +44,7 @@ void SetLine(TextBlock const& t, const std::wstring& text) {
 }
 
 Brush ThemeBrush(const wchar_t* key) { return Application::Current().Resources().Lookup(box_value(key)).as<Brush>(); }
+Style ThemeStyle(const wchar_t* key) { return Application::Current().Resources().Lookup(box_value(key)).as<Style>(); }
 
 [[noreturn]] void SimulatedCrash() {
     ::TerminateProcess(::GetCurrentProcess(), static_cast<UINT>(0xC0000005));
@@ -49,6 +52,36 @@ Brush ThemeBrush(const wchar_t* key) { return Application::Current().Resources()
 }
 
 }  // namespace
+
+winrt::fire_and_forget MainWindow::LoadBanner(std::wstring path, int maxPixels) {
+    using namespace winrt::Windows::Graphics::Imaging;
+    auto weak = get_weak();
+    try {
+        auto stream = co_await winrt::Windows::Storage::Streams::FileRandomAccessStream::OpenAsync(
+            path, winrt::Windows::Storage::FileAccessMode::Read);
+        auto decoder = co_await BitmapDecoder::CreateAsync(stream);
+        auto frame = co_await decoder.GetFrameAsync(0);
+        BitmapTransform transform;
+        const uint32_t width = frame.PixelWidth(), height = frame.PixelHeight();
+        if (width == 0 || height == 0) co_return;
+        if (width > static_cast<uint32_t>(maxPixels)) {  // never upscaled; the Image scales down to the page width
+            transform.ScaledWidth(static_cast<uint32_t>(maxPixels));
+            transform.ScaledHeight(std::max<uint32_t>(1, static_cast<uint32_t>(static_cast<uint64_t>(height) * maxPixels / width)));
+            transform.InterpolationMode(BitmapInterpolationMode::Fant);
+        }
+        auto bitmap = co_await frame.GetSoftwareBitmapAsync(BitmapPixelFormat::Bgra8, BitmapAlphaMode::Premultiplied, transform,
+                                                            ExifOrientationMode::RespectExifOrientation,
+                                                            ColorManagementMode::DoNotColorManage);
+        Imaging::SoftwareBitmapSource source;
+        co_await source.SetBitmapAsync(bitmap);
+        if (auto self = weak.get()) {
+            self->BannerImage().Source(source);
+            SetVisible(self->BannerImage(), self->page_ == Page::Welcome);
+        }
+    } catch (...) {
+        // The banner is decorative: an unreadable one is simply not shown.
+    }
+}
 
 winrt::fire_and_forget MainWindow::LoadIconFrame(std::wstring path, int pixels, std::function<void(ImageSource const&)> apply) {
     using namespace winrt::Windows::Graphics::Imaging;
@@ -124,8 +157,10 @@ MainWindow::MainWindow() {
                         });
                     }
                 });
-            // Passive mode (/passive, Inno /SILENT from an app's updater): no questions, straight to the progress page.
-            if (Hello()["passive"].asBool() && !channel.preview()) self->StartInstall();
+            // uninstall.exe /repair: straight to the repair. Passive mode (/passive, Inno /SILENT from an app's
+            // updater): no questions, straight to the progress page.
+            if (!channel.preview() && Hello()["modify"]["startRepair"].asBool()) self->StartRepair();
+            else if (Hello()["passive"].asBool() && !channel.preview()) self->StartInstall();
         });
     });
 }
@@ -184,6 +219,10 @@ void MainWindow::InitWindow() {
     } else {
         SetVisible(AppIcon(), false);
     }
+    const std::wstring banner = ui["bannerPath"].asWide();
+    if (!banner.empty() && ::GetFileAttributesW(banner.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        LoadBanner(banner, static_cast<int>((kWindowWidth - 64) * scale));
+    }
     // Framework strings and CJK glyph selection follow the installer's language.
     const std::wstring language = Hello()["language"].asWide();
     if (!language.empty()) RootGrid().Language(language);
@@ -198,6 +237,8 @@ void MainWindow::InitWindow() {
 
 std::wstring MainWindow::AppName() const { return Hello()["app"]["name"].asWide(); }
 bool MainWindow::IsUninstall() const { return Hello()["mode"].asString() == "uninstall"; }
+bool MainWindow::IsModify() const { return Hello()["mode"].asString() == "modify"; }
+bool MainWindow::CanRepair() const { return IsModify() && Hello()["modify"]["canRepair"].asBool(); }
 
 void MainWindow::ApplyStaticText() {
     ScopeLabel().Text(Str("options.scope"));
@@ -224,6 +265,9 @@ void MainWindow::ApplyStaticText() {
     VariantLabel().Text(Str("options.variant"));
     RemoveDataCheck().Content(winrt::box_value(Str("uninstall.removeData")));
     Automation::AutomationProperties::SetName(VariantRadios(), Str("options.variant"));
+    InputsHeading().Text(Str("inputs.title"));
+    InputsSubtitle().Text(Fmt(IsModify() ? "inputs.subtitle.modify" : "inputs.subtitle", {AppName()}));
+    RepairNote().Text(Str("modify.repairBody"));
 }
 
 void MainWindow::ApplyHello() {
@@ -233,14 +277,23 @@ void MainWindow::ApplyHello() {
     const std::wstring name = AppName();
 
     std::wstring title = h["ui"]["title"].asWide();
-    if (title.empty()) title = Fmt(IsUninstall() ? "window.title.uninstall" : "window.title.install", {name});
+    if (title.empty()) title = Fmt(IsUninstall() ? "window.title.uninstall" : IsModify() ? "modify.title" : "window.title.install", {name});
     if (fsui::UiChannel::Get().preview()) title += L" – " + Str("preview.suffix");
     Title(title);
     AppTitleBar().Title(title);
 
     std::wstring description = h["ui"]["welcomeText"].asWide();
     if (IsUninstall()) description = Fmt("uninstall.body", {name});
+    if (IsModify()) description = Fmt("modify.subtitle", {name, h["app"]["version"].asWide()});
     SetLine(DescriptionText(), description);
+
+    // Publisher line: who signed the running setup (not the self-declared publisher of the package).
+    const Value& signature = h["signature"];
+    const bool verified = signature["state"].asString() == "valid" && !signature["publisher"].asWide().empty();
+    SignatureText().Text(verified ? Fmt("welcome.verifiedPublisher", {signature["publisher"].asWide()}) : Str("welcome.unknownPublisher"));
+    SignatureIcon().Glyph(verified ? L"\xE73E" : L"\xE7BA");  // CheckMark / Warning
+    SignatureIcon().Foreground(ThemeBrush(verified ? L"SystemFillColorSuccessBrush" : L"SystemFillColorCautionBrush"));
+    SignatureText().Foreground(ThemeBrush(L"TextFillColorSecondaryBrush"));
 
     const std::string relation = existing["relation"].asString();
     if (!IsUninstall() && relation == "downgrade") {  // upgrades/reinstalls are explained inline in the version row
@@ -303,6 +356,7 @@ void MainWindow::ApplyHello() {
     if (variants.size() > 1) VariantRadios().SelectedIndex(selected);
     UpdateNotice();
     // Uninstall: optionally delete the app's settings and data too.
+    BuildInputs();
     RemoveDataCheck().IsChecked(h["userData"]["value"].asBool());
     UserDataPaths().Text(h["userData"]["paths"].asWide());
     LicenseText().Text(h["ui"]["licenseText"].asWide());
@@ -360,7 +414,7 @@ void MainWindow::UpdateInfoLines() {
     SetVisible(ChangeLink(), page_ == Page::Welcome && !IsUninstall() && h["options"]["canChangeDir"].asBool());
 
     SizeLine().Text(fsetup::FormatBytes(requiredBytes_));
-    row(SizeLabel(), SizeLine(), !IsUninstall() && requiredBytes_ > 0 && page_ != Page::Result);
+    row(SizeLabel(), SizeLine(), IsInstall() && requiredBytes_ > 0 && page_ != Page::Result);
 }
 void MainWindow::UpdateSpaceText() { UpdateInfoLines(); }
 
@@ -374,9 +428,11 @@ const fsetup::json::Value* MainWindow::SelectedVariant() const {
 // Running copies of the app and missing prerequisites (for the chosen variant), in one notice on the first page.
 void MainWindow::UpdateNotice() {
     const Value& h = Hello();
-    if (IsUninstall()) return;
-    const Value* v = SelectedVariant();
-    std::wstring notice = v ? (*v)["prerequisites"].asWide() : h["prerequisites"].asWide();
+    const Value* v = IsInstall() ? SelectedVariant() : nullptr;
+    std::wstring notice = !IsInstall() ? std::wstring() : v ? (*v)["prerequisites"].asWide() : h["prerequisites"].asWide();
+    // Programs that will be closed: running copies of the app, and others using its files (Restart Manager).
+    const std::wstring locking = h["lockingApps"].asWide();
+    if (!locking.empty()) notice = Fmt("welcome.lockingApps", {AppName(), locking}) + (notice.empty() ? L"" : L"\n" + notice);
     const std::wstring running = h["runningApps"].asWide();
     if (!running.empty()) notice = Fmt("welcome.running", {running}) + (notice.empty() ? L"" : L"\n" + notice);
     RunningInfo().Message(notice);
@@ -402,12 +458,14 @@ bool MainWindow::HasOptions() const {
            o["startMenuShortcut"]["visible"].asBool() || !o["choices"].array().empty();
 }
 
-bool MainWindow::ShowsLicense() const { return !IsUninstall() && !Hello()["ui"]["licenseText"].asString().empty(); }
-bool MainWindow::LaunchOffered() const { return !IsUninstall() && Hello()["options"]["launchAfter"]["visible"].asBool(); }
+bool MainWindow::ShowsLicense() const { return IsInstall() && !Hello()["ui"]["licenseText"].asString().empty(); }
+bool MainWindow::LaunchOffered() const { return IsInstall() && Hello()["options"]["launchAfter"]["visible"].asBool(); }
+bool MainWindow::HasInputsPage() const { return Hello()["inputsPage"].asBool() && !inputs_.empty(); }
 bool MainWindow::NeedsElevation() const { return scope_ == L"machine" && !Hello()["elevated"].asBool(); }
 
 std::wstring MainWindow::PrimaryVerb() const {
     if (IsUninstall()) return Str("button.uninstall");
+    if (IsModify()) return Str("modify.change");
     const std::string relation = Hello()["existing"]["relation"].asString();
     if (relation == "upgrade") return Str("button.update");
     if (relation == "same") return Str("button.reinstall");
@@ -418,6 +476,10 @@ void MainWindow::ShowPage(Page page) {
     page_ = page;
     const bool summary = page == Page::Welcome || page == Page::Progress || page == Page::Result;
     SetVisible(SummaryPage(), summary);
+    SetVisible(InputsPage(), page == Page::Inputs);
+    SetVisible(BannerImage(), page == Page::Welcome && BannerImage().Source() != nullptr);
+    SetVisible(SignaturePanel(), page == Page::Welcome);
+    SetVisible(RepairNote(), page == Page::Welcome && CanRepair());
     SetVisible(InlineOptions(), page == Page::Welcome && HasOptions());
     SetVisible(LicensePage(), page == Page::License);
     SetVisible(PageScroller(), page != Page::License);
@@ -440,16 +502,22 @@ void MainWindow::ShowPage(Page page) {
                           : relation == "upgrade"  ? "ask.update"
                           : relation == "same"     ? "ask.reinstall"
                                                    : "ask.install";
-        QuestionText().Text(Fmt(key, {AppName(), Hello()["app"]["version"].asWide()}));
+        QuestionText().Text(IsModify() ? Fmt("modify.title", {AppName()}) : Fmt(key, {AppName(), Hello()["app"]["version"].asWide()}));
         UpdateInfoLines();
     } else if (page == Page::Progress) {
-        QuestionText().Text(Fmt(IsUninstall() ? "progress.uninstalling" : "progress.installing", {AppName(), Hello()["app"]["version"].asWide()}));
+        if (IsModify()) QuestionText().Text(Fmt(repairing_ ? "modify.repairing" : "progress.title.modify", {AppName()}));
+        else QuestionText().Text(Fmt(IsUninstall() ? "progress.uninstalling" : "progress.installing", {AppName(), Hello()["app"]["version"].asWide()}));
         UpdateInfoLines();
     } else {
         UpdateInfoLines();
     }
     UpdateFooter();
-    if (PrimaryButton().Visibility() == Visibility::Visible && PrimaryButton().IsEnabled()) {
+    if (page == Page::Inputs && !inputs_.empty()) {
+        const InputField& first = inputs_.front();
+        if (first.text) first.text.Focus(FocusState::Programmatic);
+        else if (first.password) first.password.Focus(FocusState::Programmatic);
+        else if (first.combo) first.combo.Focus(FocusState::Programmatic);
+    } else if (PrimaryButton().Visibility() == Visibility::Visible && PrimaryButton().IsEnabled()) {
         PrimaryButton().Focus(FocusState::Programmatic);
     } else if (CancelButton().Visibility() == Visibility::Visible && CancelButton().IsEnabled()) {
         CancelButton().Focus(FocusState::Programmatic);
@@ -460,13 +528,24 @@ void MainWindow::UpdateFooter() {
     const bool blocked = Hello()["existing"]["blocked"].asBool();
     bool secondaryVisible = false, primaryVisible = true, primaryEnabled = true, shield = false;
     std::wstring secondary, primary, cancel = Str("button.cancel");
-    const bool beforeStart = page_ == Page::Welcome || page_ == Page::License;
+    const bool beforeStart = page_ == Page::Welcome || page_ == Page::Inputs || page_ == Page::License;
 
     switch (page_) {
-        case Page::Welcome:  // options are on this page; "Change" picks the folder
+        case Page::Welcome: {  // options are on this page; "Change" picks the folder
+            const bool more = HasInputsPage() || ShowsLicense();
+            secondaryVisible = CanRepair();  // "Change <App>": Repair next to Change
+            secondary = Str("modify.repair");
+            primary = more ? Str("button.next") : PrimaryVerb();
+            shield = !more && NeedsElevation();
+            primaryEnabled = !blocked && pathOk_ && !pathDirty_;
+            break;
+        }
+        case Page::Inputs:
+            secondaryVisible = true;
+            secondary = Str("button.back");
             primary = ShowsLicense() ? Str("button.next") : PrimaryVerb();
             shield = !ShowsLicense() && NeedsElevation();
-            primaryEnabled = !blocked && pathOk_ && !pathDirty_;
+            primaryEnabled = InputsValid() && pathOk_ && !pathDirty_;
             break;
         case Page::License:
             secondaryVisible = true;
@@ -507,6 +586,12 @@ void MainWindow::UpdateFooter() {
 void MainWindow::OnPrimaryClick(IInspectable const&, RoutedEventArgs const&) {
     switch (page_) {
         case Page::Welcome:
+            if (HasInputsPage()) ShowPage(Page::Inputs);
+            else if (ShowsLicense()) ShowPage(Page::License);
+            else StartInstall();
+            break;
+        case Page::Inputs:
+            if (!InputsValid()) break;
             if (ShowsLicense()) ShowPage(Page::License);
             else StartInstall();
             break;
@@ -524,7 +609,14 @@ void MainWindow::OnPrimaryClick(IInspectable const&, RoutedEventArgs const&) {
 }
 
 void MainWindow::OnSecondaryClick(IInspectable const&, RoutedEventArgs const&) {
-    ShowPage(Page::Welcome);  // only "Back" from the license page
+    switch (page_) {
+        case Page::Welcome:
+            if (CanRepair()) StartRepair();
+            break;
+        case Page::Inputs: ShowPage(Page::Welcome); break;
+        case Page::License: ShowPage(HasInputsPage() ? Page::Inputs : Page::Welcome); break;
+        default: break;
+    }
 }
 
 void MainWindow::OnCancelClick(IInspectable const&, RoutedEventArgs const&) { RequestClose(); }
@@ -559,7 +651,7 @@ winrt::fire_and_forget MainWindow::ConfirmCancel() {
     ContentDialog dialog;
     dialog.XamlRoot(Content().XamlRoot());
     dialog.RequestedTheme(RootGrid().ActualTheme());
-    dialog.Title(box_value(Str(IsUninstall() ? "cancel.title.uninstall" : "cancel.title")));
+    dialog.Title(box_value(Str(IsUninstall() ? "cancel.title.uninstall" : IsModify() ? "cancel.title.modify" : "cancel.title")));
     dialog.Content(box_value(Str("cancel.body")));
     dialog.PrimaryButtonText(Str("cancel.confirm"));
     dialog.CloseButtonText(Str("cancel.continue"));
@@ -576,7 +668,7 @@ winrt::fire_and_forget MainWindow::ConfirmCancel() {
     }
 }
 
-void MainWindow::StartInstall() {
+void MainWindow::BeginProgress() {
     cancelRequested_ = false;
     cancellable_ = true;
     result_ = ResultKind::None;
@@ -586,6 +678,21 @@ void MainWindow::StartInstall() {
     ProgressDetail().Text(L"");
     ProgressPercent().Text(L"");
     ShowPage(Page::Progress);
+}
+
+void MainWindow::StartRepair() {
+    repairing_ = true;
+    BeginProgress();
+    if (fsui::UiChannel::Get().preview()) {
+        RunPreviewProgress();
+        return;
+    }
+    fsui::UiChannel::Get().SendType("repair");
+}
+
+void MainWindow::StartInstall() {
+    repairing_ = false;
+    BeginProgress();
 
     if (fsui::UiChannel::Get().preview()) {
         RunPreviewProgress();
@@ -605,6 +712,9 @@ void MainWindow::StartInstall() {
     }
     options.set("choices", choices);
     options.set("variant", variant_);
+    Value inputs = Value::MakeObject();
+    for (const auto& field : inputs_) inputs.set(field.id, InputValue(field));
+    options.set("inputs", inputs);
     Value m;
     m.set("t", "start");
     m.set("options", options);
@@ -642,6 +752,7 @@ void MainWindow::HandleMessage(Value message) {
     if (type == "progress") OnProgress(message);
     else if (type == "done") OnDone(message);
     else if (type == "pathCheck") OnPathCheck(message);
+    else if (type == "inputCheck") OnInputCheck(message);
 }
 
 void MainWindow::OnProgress(const Value& m) {
@@ -672,8 +783,10 @@ void MainWindow::OnDone(const Value& m) {
     const bool uninstall = IsUninstall();
     logPath_ = m["log"].asWide();
     if (!m["installDir"].asWide().empty()) installDir_ = m["installDir"].asWide();
-    canLaunch_ = !uninstall && result == "success" && m["canLaunch"].asBool();
+    canLaunch_ = IsInstall() && result == "success" && m["canLaunch"].asBool();
     retryable_ = m["retryable"].asBool(true);
+    const bool modify = IsModify(), repair = m["operation"].asString() == "repair";
+    const std::string repairResult = m["repair"].asString();
 
     // Passive mode closes itself after a success (the bootstrapper relaunches the app if the updater asked for it).
     if (result == "success" && Hello()["passive"].asBool()) {
@@ -700,19 +813,33 @@ void MainWindow::OnDone(const Value& m) {
         QuestionText().Text(Fmt(uninstall ? "done.uninstalled" : updated ? "done.updated" : "done.installed", {name, Hello()["app"]["version"].asWide()}));
         body = uninstall ? std::wstring() : Hello()["ui"]["finishText"].asWide();
         if (uninstall && m["leftovers"].asBool()) body = Fmt("result.leftovers", {installDir_});
-        SetVisible(OpenFolderLink(), !uninstall && !installDir_.empty());
+        if (repair && repairResult == "noProblems") {
+            QuestionText().Text(Str("result.noProblems.title"));
+            body = Fmt("modify.noProblems", {name});
+        } else if (repair) {
+            QuestionText().Text(Fmt("result.success.title.repair", {name}));
+            body = Fmt("result.success.body.repair", {name});
+        } else if (modify) {
+            QuestionText().Text(Fmt("result.success.title.modify", {name}));
+            body = Fmt("result.success.body.modify", {name});
+        }
+        if (m["rebootRequired"].asBool()) body += (body.empty() ? L"" : L"\n\n") + Str("result.rebootRequired");
+        SetVisible(OpenFolderLink(), IsInstall() && !installDir_.empty());
         SetVisible(ViewLogLink(), false);
     } else if (result == "cancelled") {
         result_ = ResultKind::Cancelled;
         StatusIcon().Glyph(L"");
         StatusIcon().Foreground(ThemeBrush(L"SystemFillColorCautionBrush"));
-        QuestionText().Text(Str(uninstall ? "result.cancelled.title.uninstall" : "result.cancelled.title"));
+        QuestionText().Text(Str(uninstall ? "result.cancelled.title.uninstall" : modify ? "result.cancelled.title.modify" : "result.cancelled.title"));
         body = Str(m["restored"].asBool() ? "result.restored" : "result.noChanges");
     } else {
         result_ = ResultKind::Failed;
         StatusIcon().Glyph(L"");
         StatusIcon().Foreground(ThemeBrush(L"SystemFillColorCriticalBrush"));
-        QuestionText().Text(Str(uninstall ? "result.failed.title.uninstall" : "result.failed.title"));
+        QuestionText().Text(Str(uninstall ? "result.failed.title.uninstall"
+                                : repair  ? "result.failed.title.repair"
+                                : modify  ? "result.failed.title.modify"
+                                          : "result.failed.title"));
         body = m["message"].asWide();
         if (m["restored"].asBool()) body += L"\n" + Str("result.restored");
         else if (m["noChanges"].asBool()) body += L"\n" + Str("result.noChanges");
@@ -729,6 +856,138 @@ void MainWindow::OnDone(const Value& m) {
     ResultWarnings().Message(warnings);
     ResultWarnings().IsOpen(!warnings.empty());
     ShowPage(Page::Result);
+}
+
+// ---- Settings page (package inputs) -------------------------------------------------------------------------------
+
+void MainWindow::BuildInputs() {
+    auto weak = get_weak();
+    for (const auto& input : Hello()["inputs"].array()) {
+        InputField field;
+        field.id = input["id"].asString();
+        field.type = input["type"].asString();
+        field.required = input["required"].asBool();
+        field.ok = input["ok"].asBool(true);
+        const size_t index = inputs_.size();
+        const std::wstring label = input["label"].asWide(), description = input["description"].asWide(), value = input["value"].asWide();
+        Control control{nullptr};
+        if (field.type == "choice") {
+            ComboBox combo;
+            int selected = -1, k = 0;
+            for (const auto& choice : input["choices"].array()) {
+                ComboBoxItem item;
+                item.Content(box_value(choice["label"].asWide()));
+                item.Tag(box_value(winrt::hstring(choice["value"].asWide())));
+                combo.Items().Append(item);
+                if (choice["value"].asWide() == value) selected = k;
+                ++k;
+            }
+            combo.SelectedIndex(selected);
+            combo.HorizontalAlignment(HorizontalAlignment::Stretch);
+            combo.SelectionChanged([weak, index](auto&&, auto&&) {
+                if (auto self = weak.get()) self->OnInputEdited(index);
+            });
+            field.combo = combo;
+            control = combo;
+        } else if (field.type == "password") {
+            PasswordBox box;
+            box.Password(value);
+            box.MaxLength(4096);
+            box.PasswordChanged([weak, index](auto&&, auto&&) {
+                if (auto self = weak.get()) self->OnInputEdited(index);
+            });
+            field.password = box;
+            control = box;
+        } else {
+            TextBox box;
+            box.Text(value);
+            box.MaxLength(4096);
+            box.TextChanged([weak, index](auto&&, auto&&) {
+                if (auto self = weak.get()) self->OnInputEdited(index);
+            });
+            field.text = box;
+            control = box;
+        }
+        if (field.combo) field.combo.Header(box_value(label));
+        if (field.password) field.password.Header(box_value(label));
+        if (field.text) field.text.Header(box_value(label));
+        control.MaxWidth(480);
+        control.HorizontalAlignment(HorizontalAlignment::Stretch);
+        Automation::AutomationProperties::SetName(control, label);
+        if (!description.empty()) Automation::AutomationProperties::SetHelpText(control, description);
+        Automation::AutomationProperties::SetIsRequiredForForm(control, field.required);
+
+        StackPanel group;
+        group.Spacing(4);
+        group.Children().Append(control);
+        if (!description.empty()) {
+            TextBlock help;
+            help.Style(ThemeStyle(L"CaptionTextBlockStyle"));
+            help.TextWrapping(TextWrapping::Wrap);
+            help.Foreground(ThemeBrush(L"TextFillColorSecondaryBrush"));
+            help.Text(description);
+            group.Children().Append(help);
+        }
+        TextBlock error;
+        error.Style(ThemeStyle(L"CaptionTextBlockStyle"));
+        error.TextWrapping(TextWrapping::Wrap);
+        error.Foreground(ThemeBrush(L"SystemFillColorCriticalBrush"));
+        error.Visibility(Visibility::Collapsed);
+        Automation::AutomationProperties::SetLiveSetting(error, Automation::Peers::AutomationLiveSetting::Polite);
+        group.Children().Append(error);
+        field.error = error;
+        InputsPanel().Children().Append(group);
+        inputs_.push_back(std::move(field));
+    }
+}
+
+std::wstring MainWindow::InputValue(const InputField& field) const {
+    if (field.text) return std::wstring(field.text.Text());
+    if (field.password) return std::wstring(field.password.Password());
+    if (field.combo) {
+        if (auto item = field.combo.SelectedItem().try_as<ComboBoxItem>()) return std::wstring(winrt::unbox_value<winrt::hstring>(item.Tag()));
+    }
+    return {};
+}
+
+bool MainWindow::InputsValid() const {
+    return std::all_of(inputs_.begin(), inputs_.end(), [](const InputField& f) { return f.ok; });
+}
+
+void MainWindow::OnInputEdited(size_t index) {
+    if (index >= inputs_.size()) return;
+    InputField& field = inputs_[index];
+    const std::wstring value = InputValue(field);
+    if (!field.touched && value == Hello()["inputs"].array()[index]["value"].asWide()) return;  // the initial value, not an edit
+    field.touched = true;
+    if (fsui::UiChannel::Get().preview()) {
+        // Builder preview: no bootstrapper to ask; only "required" is checked.
+        field.ok = !(field.required && value.empty());
+        field.error.Text(field.ok ? L"" : Str("inputs.required"));
+        SetVisible(field.error, !field.ok);
+        UpdateFooter();
+        return;
+    }
+    // The bootstrapper checks (required, choices, pattern) exactly as it will when the install starts.
+    field.ok = false;
+    UpdateFooter();
+    Value m;
+    m.set("t", "checkInput");
+    m.set("id", field.id);
+    m.set("value", value);
+    fsui::UiChannel::Get().Send(m);
+}
+
+void MainWindow::OnInputCheck(const Value& m) {
+    for (auto& field : inputs_) {
+        if (field.id != m["id"].asString()) continue;
+        if (m["value"].asWide() != InputValue(field)) return;  // a reply for a value the field no longer shows
+        field.ok = m["ok"].asBool();
+        field.error.Text(m["message"].asWide());
+        SetVisible(field.error, field.touched && !field.ok);
+        UpdateFooter();
+        return;
+    }
 }
 
 void MainWindow::OnPathCheck(const Value& m) {

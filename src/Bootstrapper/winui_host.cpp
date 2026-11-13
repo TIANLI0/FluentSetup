@@ -121,6 +121,24 @@ std::wstring ExitReason(DWORD code) {
     }
 }
 
+// The visible window of the UI process, to parent the UAC prompt (if any) so that it comes to the foreground.
+HWND UiWindow(DWORD pid) {
+    std::pair<DWORD, HWND> owner{pid, nullptr};
+    ::EnumWindows(
+        [](HWND h, LPARAM lp) -> BOOL {
+            DWORD windowPid = 0;
+            ::GetWindowThreadProcessId(h, &windowPid);
+            auto* ctx = reinterpret_cast<std::pair<DWORD, HWND>*>(lp);
+            if (windowPid == ctx->first && ::IsWindowVisible(h)) {
+                ctx->second = h;
+                return FALSE;
+            }
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&owner));
+    return owner.second;
+}
+
 void StopProcess(HANDLE process) {
     if (::WaitForSingleObject(process, 3000) != WAIT_OBJECT_0) {
         ::TerminateProcess(process, ipc::kUiExitProtocolError);
@@ -155,6 +173,7 @@ WinUiResult RunWinUi(Controller& controller, const std::wstring& simulate) {
     }
     const std::wstring exe = path::Join(bundle.dir(), pkg.frontendEntry);
     const std::wstring icon = pkg.iconFile.empty() ? std::wstring() : path::Join(bundle.dir(), pkg.iconFile);
+    const std::wstring banner = pkg.bannerFile.empty() ? std::wstring() : path::Join(bundle.dir(), pkg.bannerFile);
 
     const std::wstring pipeName = L"FluentSetup-" + RandomToken();
     ipc::Channel channel = ipc::Channel::CreateServer(pipeName);
@@ -198,7 +217,7 @@ WinUiResult RunWinUi(Controller& controller, const std::wstring& simulate) {
         return fail(code == STILL_ACTIVE ? L"UI did not connect" : L"UI exited before connecting: " + ExitReason(code));
     }
     if (channel.PeerProcessId() != pi.dwProcessId) return fail(L"unexpected pipe client");
-    channel.Send(controller.Hello(icon));
+    channel.Send(controller.Hello(icon, banner));
 
     const ULONGLONG deadline = ::GetTickCount64() + ipc::kUiReadyTimeoutMs;
     for (;;) {
@@ -240,10 +259,14 @@ WinUiResult RunWinUi(Controller& controller, const std::wstring& simulate) {
         if (t == "checkPath") {
             const std::string& scope = m["scope"].asString();
             channel.Send(controller.CheckPath(m["path"].asWide(), scope == "machine" ? install::Scope::Machine : install::Scope::User));
+        } else if (t == "checkInput") {
+            channel.Send(controller.CheckInput(m["id"].asString(), m["value"].asWide()));
+        } else if (t == "repair") {
+            if (controller.mode() == Mode::Modify) controller.Repair(UiWindow(pi.dwProcessId));
         } else if (t == "start") {
             install::InstallOptions options = controller.DefaultOptions();
             if (controller.mode() == Mode::Uninstall) options.removeUserData = m["options"]["removeUserData"].asBool(false);
-            if (controller.mode() == Mode::Install && !controller.SanitizeOptions(m["options"], options)) {
+            if (controller.mode() != Mode::Uninstall && !controller.SanitizeOptions(m["options"], options)) {
                 log::Warn(L"UI sent options that are not allowed; ignoring the request");
                 install::Outcome rejected;
                 rejected.code = ErrorCode::InvalidArguments;
@@ -252,21 +275,7 @@ WinUiResult RunWinUi(Controller& controller, const std::wstring& simulate) {
                 channel.Send(controller.DoneMessage(rejected));
                 continue;
             }
-            // Parent the UAC prompt (if any) to the WinUI window so it comes to the foreground.
-            std::pair<DWORD, HWND> owner{pi.dwProcessId, nullptr};
-            ::EnumWindows(
-                [](HWND h, LPARAM lp) -> BOOL {
-                    DWORD pid = 0;
-                    ::GetWindowThreadProcessId(h, &pid);
-                    auto* ctx = reinterpret_cast<std::pair<DWORD, HWND>*>(lp);
-                    if (pid == ctx->first && ::IsWindowVisible(h)) {
-                        ctx->second = h;
-                        return FALSE;
-                    }
-                    return TRUE;
-                },
-                reinterpret_cast<LPARAM>(&owner));
-            controller.Start(options, owner.second);
+            controller.Start(options, UiWindow(pi.dwProcessId));
         } else if (t == "cancel") {
             controller.Cancel();
         } else if (t == "finish") {

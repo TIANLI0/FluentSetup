@@ -188,7 +188,9 @@ when `output.includeWinUI` is set and the WinUI runtime files exist for the arch
 5. If the WinUI process stops later (crash, killed), the Win32 front end takes over the **same** session, showing the
    running operation or its result ("resuming session"). The WinUI front end is never restarted.
 
-Test hook: `--ui-simulate runtime-missing|crash-before-ready|crash-after-ready|hang` exercises these fallback paths.
+Test hook: `--ui-simulate runtime-missing|crash-before-ready|crash-after-ready|hang` exercises these fallback paths. It
+works only in packages built with `fluentsetup build --test-hooks`; other packages log "--ui-simulate is ignored" and
+start normally.
 
 ## 5. Uninstall specifics
 

@@ -140,6 +140,12 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
         } else if (name == L"uninstall" || name == L"u") {
             if (!flag()) return false;
             out.uninstall = true;
+        } else if (name == L"modify") {
+            if (!flag()) return false;
+            out.modify = true;
+        } else if (name == L"repair") {
+            if (!flag()) return false;
+            out.repair = true;
         } else if (name == L"check-update") {
             if (!flag()) return false;
             out.checkUpdate = true;
@@ -188,6 +194,18 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
                 if (!(iswalnum(c) || c == L'_' || c == L'-')) return error = L"invalid /option name", false;
             }
             out.choices[WideToUtf8(id)] = on;
+        } else if (name == L"input") {
+            // "/input id=value": the value is everything after the first '=' and may be empty (clears an optional
+            // input). Whether the id exists and the value is acceptable is checked against the package later.
+            if (!value(v)) return false;
+            const size_t eq = v.find(L'=');
+            const std::wstring id = eq == std::wstring::npos ? std::wstring() : v.substr(0, eq);
+            if (id.empty() || id.size() > 32 ||
+                !std::all_of(id.begin(), id.end(), [](wchar_t c) { return (c < 128 && iswalnum(c)) || c == L'_' || c == L'-'; })) {
+                return error = L"/input must look like name=value", false;
+            }
+            if (out.inputs.size() >= 8 && !out.inputs.count(WideToUtf8(id))) return error = L"too many /input values", false;
+            out.inputs[WideToUtf8(id)] = v.substr(eq + 1);
         } else if (name == L"lang" && inlineValue && !inlineValue->empty() && inlineValue->find(L'-') == std::wstring::npos &&
                    inlineValue->size() > 3) {
             // Inno language names (/LANG=english) -> tags.
@@ -255,9 +273,14 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
         }
     }
     if (out.worker && (out.pipe.empty() || out.parentPid == 0)) return error = L"--worker requires --pipe and --parent-pid", false;
-    if ((out.checkUpdate || out.installUpdate) && (out.checkUpdate == out.installUpdate || out.uninstall || out.worker || out.phase2)) {
-        return error = L"/check-update and /install-update cannot be combined with each other or with /uninstall", false;
+    if ((out.checkUpdate || out.installUpdate) &&
+        (out.checkUpdate == out.installUpdate || out.uninstall || out.modify || out.repair || out.worker || out.phase2)) {
+        return error = L"/check-update and /install-update cannot be combined with each other or with /uninstall, /modify or /repair", false;
     }
+    if (static_cast<int>(out.uninstall) + static_cast<int>(out.modify) + static_cast<int>(out.repair) > 1) {
+        return error = L"/uninstall, /modify and /repair cannot be combined", false;
+    }
+    if (out.worker && out.repair) return error = L"the worker does not repair", false;
     if (out.phase2 && (out.originDir.empty() || out.originProcess == 0 || out.resultPipe == 0)) {
         return error = L"--phase2 requires --origin-dir, --origin-process and --result-pipe", false;
     }

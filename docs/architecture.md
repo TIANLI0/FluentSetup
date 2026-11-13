@@ -129,24 +129,35 @@ sequenceDiagram
 4. Strings are loaded and the log is opened (default `%TEMP%\FluentSetup\<appId>-install|uninstall-<timestamp>.log`,
    or `/log <file>`).
 5. `--worker` hands over to `worker::RunWorker` (section 2.3). Otherwise the `minWindowsBuild` check runs, an
-   uninstaller started without `--phase2` relocates itself (section 2.4), and a `Global\FluentSetup-<appId>` mutex
-   ensures one setup/uninstall per app at a time (exit code 16 `AlreadyRunning`).
-6. `/quiet`: the controller runs with `DefaultOptions()` and no UI. A per-machine silent operation from a
-   non-elevated process (typically an app's own updater) asks for the elevated worker through the UAC prompt, the only
-   UI it ever shows; declining gives `ElevationRequired` (6). `/passive` (Inno `/SILENT`) runs the normal front end,
-   which starts at once with the defaults and closes itself after a success.
+   uninstaller started without `--phase2` for an uninstall, `/modify` or `/repair` relocates itself (section 2.4), and
+   a `Global\FluentSetup-<appId>` mutex ensures one setup/uninstall per app at a time across users and sessions (exit
+   code 16 `AlreadyRunning`). The mutex is created with an explicit security descriptor (every authenticated or
+   interactive user may wait on it and release it, only SYSTEM and administrators may change it; the creator's owner
+   rights are limited the same way) and opened with `SYNCHRONIZE | MUTEX_MODIFY_STATE`; if it cannot be created or
+   opened (for example a same-named object that denies access), setup assumes another one is running (fail closed). A
+   helper thread owns it, so a repair can hand it over to the Setup.exe it starts. Mode: `/modify` or `/repair` →
+   `Mode::Modify` (needs an installation with a verified record; a `Setup.exe` must be the installed version), an
+   uninstaller or `/uninstall` → `Mode::Uninstall`, else `Mode::Install`. An `/input` id the package does not define
+   is refused here (exit code 3).
+6. `/quiet`: the controller runs with `DefaultOptions()` and no UI (`/repair /quiet`: `Controller::Repair`). A
+   per-machine silent operation from a non-elevated process (typically an app's own updater) asks for the elevated
+   worker through the UAC prompt, the only UI it ever shows; declining gives `ElevationRequired` (6). `/passive` (Inno
+   `/SILENT`) runs the normal front end, which starts at once with the defaults and closes itself after a success.
+   Input values are checked when the operation starts: a missing or invalid one ends a quiet or passive install with
+   `InvalidArguments` (3) and names the input in the log. The exit code is the outcome's `ErrorCode`, or 3010 for a
+   success that needs a restart (`Outcome::rebootRequired`).
 7. Interactive: WinUI is attempted unless `/ui win32` is given (`/ui winui` behaves like `auto`); otherwise, or if
    WinUI fails, the Win32 fallback UI runs (section 6).
 
-Public switches: `/quiet|/verysilent|/s`, `/passive|/silent`, `/relaunch|/update`, `/uninstall`, `/log <file>`, `/dir <path>`, `/scope user|machine`,
-`/desktop-shortcut yes|no`, `/start-menu-shortcut yes|no`, `/option <id>=yes|no` (repeatable), `/lang en-US|zh-CN|ja-JP|ko-KR`,
-`/ui auto|winui|win32`, `/help`. Internal switches (between FluentSetup processes):
+Public switches: `/quiet|/verysilent|/s`, `/passive|/silent`, `/relaunch|/update`, `/uninstall`, `/modify`, `/repair`, `/log <file>`, `/dir <path>`, `/scope user|machine`,
+`/desktop-shortcut yes|no`, `/start-menu-shortcut yes|no`, `/option <id>=yes|no` (repeatable), `/input <id>=<value>` (repeatable),
+`/lang en-US|zh-CN|ja-JP|ko-KR`, `/ui auto|winui|win32`, `/help`. Internal switches (between FluentSetup processes):
 
 | Switch | Used by |
 |---|---|
-| `--worker --pipe <name> --parent-pid <n> [--origin-dir <dir>] [--wait-pid <n>]` (+ `/uninstall`, `/log`, `/lang`) | Controller -> elevated worker |
+| `--worker --pipe <name> --parent-pid <n> [--origin-dir <dir>] [--wait-pid <n>]` (+ `/uninstall` or `/modify`, `/log`, `/lang`) | Controller -> elevated worker |
 | `--phase2 --origin-dir <dir> --origin-process <handle> --result-pipe <handle>` | uninstall phase 1 -> phase 2 |
-| `--ui-simulate runtime-missing|crash-before-ready|crash-after-ready|hang` | tests of the WinUI fallback (accepted in release builds) |
+| `--ui-simulate runtime-missing|crash-before-ready|crash-after-ready|hang` | tests of the WinUI fallback; honoured only by packages built with `fluentsetup build --test-hooks` (header `testHooks`), ignored with a log warning otherwise. The same applies to the `FLUENTSETUP_TEST_FAULT_AFTER` environment variable (e2e rollback test). |
 
 ### 2.2 WinUI front end as a child process (`winui_host.cpp`)
 
@@ -158,26 +169,32 @@ Public switches: `/quiet|/verysilent|/s`, `/passive|/silent`, `/relaunch|/update
 3. A single-instance pipe `FluentSetup-<32 hex>` is created; `FluentSetup.UI.exe --pipe <name> --server-pid <pid>` is
    started suspended, put into a job with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and resumed.
 4. The client PID is verified, `hello` is sent, and the bootstrapper waits up to 20 s for `ready`.
-5. Messages from the UI: `checkPath` (answered with `pathCheck`), `start` (options are re-validated by
-   `Controller::SanitizeOptions`; rejected options produce a `done` with `InvalidArguments`), `cancel`, `finish`
-   (optionally launches the app), `close`. Messages to the UI: `hello`, `progress`, `pathCheck`, `done`.
+5. Messages from the UI: `checkPath` (answered with `pathCheck`), `checkInput` (answered with `inputCheck`), `start`
+   (options are re-validated by `Controller::SanitizeOptions`; rejected options produce a `done` with
+   `InvalidArguments`; input values are checked when the operation starts), `repair` (modify mode), `cancel`, `finish`
+   (optionally launches the app), `close`. Messages to the UI: `hello`, `progress`, `pathCheck`, `inputCheck`, `done`.
+   The banner (`ui.banner`, a file of the frontend set) is passed as the extracted path in `hello.ui.bannerPath`; the
+   Win32 front end decodes the same file from the package in memory (`Controller::ReadFrontendFile`, WIC) because the
+   frontend set can exist without the WinUI front end.
 
 The full message catalogue is referenced in `protocol.h` as `shared/protocols/ui-protocol.md`; the list above is
 taken from `winui_host.cpp`, `controller.cpp` and `src/Setup.WinUI`.
 
 ### 2.3 Elevated worker (`controller.cpp` `RunElevated`, `src/Install.Worker/worker.cpp`)
 
-Used when the operation is per-machine (install with machine scope, or uninstall of a machine-scope product) and the
-current process is not elevated:
+Used when the operation is per-machine (install with machine scope, or uninstall or modify of a machine-scope product)
+and the current process is not elevated. A repair never uses it: it only reads the installed files and then runs the
+installed version's Setup.exe, which asks for elevation itself:
 
 1. The controller publishes `WaitingForElevation`, creates pipe `FluentSetup-<32 hex>`, and starts **the same
    executable** through `ShellExecuteExW` with verb `runas` and `--worker --pipe <name> --parent-pid <pid>`
-   (plus `/uninstall`, `--origin-dir`, `--wait-pid`, `/log`, `/lang` as applicable). UAC cancel maps to
+   (plus `/uninstall` or `/modify`, `--origin-dir`, `--wait-pid`, `/log`, `/lang` as applicable). UAC cancel maps to
    `ElevationRequired`.
 2. The controller accepts one connection within 60 s and checks the client PID equals the launched process.
 3. The worker refuses to run unless it is elevated, the parent PID can be opened, the pipe server PID equals
-   `--parent-pid`, a `run` message arrives within 60 s, the requested operation matches its command line
-   (`/uninstall`) and is not "install" for an uninstaller package, and the options parse.
+   `--parent-pid`, a `run` message arrives within 60 s, the requested operation (`install`, `uninstall`, `cleanup`,
+   `modify`) matches its command line (`/uninstall`, `/modify`) and is not "install" for an uninstaller package, and
+   the options parse and pass `Engine::SanitizeOptions` and the input checks (`CheckInputValue`, no unknown ids).
 4. The worker runs the engine on **its own embedded package** and streams `progress`; a reader thread turns a
    `cancel` message, or a broken pipe, into cancellation (so a vanished controller causes a rollback). At the end it
    sends `done` with the outcome.
@@ -197,6 +214,9 @@ uncompressed header with `kind: "uninstaller"` and an empty payload. The ARP ent
   --result-pipe <inherited write end of an anonymous pipe>` (only these two handles are inherited, via
   `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`). Phase 1 blocks until phase 2 writes the exit code into the pipe, then exits
   with it, so callers such as Settings or scripts get the real result.
+* `/modify` and `/repair` relocate the same way: a repair reinstalls the same version, which replaces
+  `uninstall.exe`. Phase 1 closes its handle on its own file before it waits, so the reinstall can move the running
+  `uninstall.exe` aside (a running program can be renamed, but not written or deleted).
 * **Phase 2** runs the normal uninstall (UI or quiet), with `--origin-dir` selecting which installation to remove.
   Files that could not be deleted because phase 1 is still running (`uninstall.exe`, then the directory if empty) are
   returned as `deferredDeletes`; after reporting the exit code, phase 2 waits for the phase-1 process (up to 60 s) and
@@ -364,7 +384,7 @@ budget) and `ui-tests.ps1`.
 
 | Location | What it covers | How it runs |
 |---|---|---|
-| `tests/Native` (`FluentSetup.Tests.Native.exe`) | Minimal in-house harness (`test.h`, optional name filter as first argument). `core_tests.cpp`: relative/absolute path rules, containment, name sanitizing, versions, JSON round trip and hostile input, strict arguments and quoting. `security_tests.cpp`: header validation (traversal, reserved names, duplicates, file/dir clash, stream accounting, identity, main executable), hostile install records, shortcut confinement, journal rollback and torn lines, link detection, container validation/damage/stream ranges. | `out/bin/<platform>/<config>/FluentSetup.Tests.Native.exe` (CI or manually). |
+| `tests/Native` (`FluentSetup.Tests.Native.exe`) | Minimal in-house harness (`test.h`, optional name filter as first argument). `core_tests.cpp`: relative/absolute path rules, containment, name sanitizing, versions, JSON round trip and hostile input, strict arguments (including `/modify`, `/repair`, `/input`) and quoting, input value checks (`CheckInputValue`). `security_tests.cpp`: header validation (traversal, reserved names, duplicates, file/dir clash, stream accounting, identity, main executable), hostile install records, shortcut confinement, journal rollback and torn lines, link detection, container validation/damage/stream ranges. | `out/bin/<platform>/<config>/FluentSetup.Tests.Native.exe` (CI or manually). |
 | `tests/Builder.Core.Tests` (xUnit) | `PathRules`, app ids, globs, project validation, versions, file collection (include/exclude/preserve, junctions not followed, output folder skipped, two sources for one target), serializer round trip and schema version, icons, version resource, building and inspecting a package, invalid project, cancellation. | `dotnet test`. |
 | `tests/Integration/e2e.ps1` | Real per-user installs of the DemoApp sample: install, reinstall, upgrade (obsolete files removed, user data kept), downgrade blocked, corrupted package refused, injected failure rolls back (`FLUENTSETUP_TEST_FAULT_AFTER`), uninstall through `QuietUninstallString` after deleting `Setup.exe`, custom path with spaces/CJK, unsafe locations (Windows folder, profile root, junction), unknown argument, many small files, optional 600 MB file (`-Large`). Per-machine scope is not exercised. | PowerShell, after `scripts/build.ps1`. |
-| `tests/UI` | `ui-tests.ps1` drives a real per-user install through each front end (WinUI when the runtime is present, Win32 always) with UI Automation: first page with version, path and inline options, desktop shortcut on, launch off, license, install, result, then files/shortcut/ARP checks and a silent uninstall. `Uia.psm1` holds the UI Automation helpers (with a window-message fallback for classic Win32 controls). | PowerShell, after `scripts/build.ps1`. |
+| `tests/UI` | `ui-tests.ps1` drives a real per-user install through each front end (WinUI when the runtime is present, Win32 always) with UI Automation: first page with version, publisher line, path and inline options, desktop shortcut on, launch off, the Settings page (required text with a pattern, choice, password; live validation), license, install, result, then files/shortcut/ARP checks, the input values in the log (and in the record / config file once the engine writes them), `uninstall.exe /modify` (Change page, shortcut off, Change) and a silent uninstall; then quiet installs with missing/unknown/invalid `/input`, `/modify /quiet` and `/repair /quiet`. `Uia.psm1` holds the UI Automation helpers (with a window-message fallback for classic Win32 controls). | PowerShell, after `scripts/build.ps1`. |
