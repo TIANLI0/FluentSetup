@@ -39,6 +39,13 @@ function Check([string] $name, [scriptblock] $condition) {
     Write-Host ("  [{0}] {1}" -f ($(if ($ok) { 'PASS' } else { 'FAIL' })), $name) -ForegroundColor ($(if ($ok) { 'Green' } else { 'Red' }))
 }
 
+# Waits up to $seconds for a condition (an app started through Explorer appears a little later on slow runners).
+function Wait-Until([scriptblock] $condition, [int] $seconds = 20) {
+    $deadline = (Get-Date).AddSeconds($seconds)
+    while (-not (& $condition) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 250 }
+    return [bool](& $condition)
+}
+
 function Run-Setup([string] $exe, [string[]] $arguments, [string] $logName) {
     $log = Join-Path $logs "$logName.log"
     $p = Start-Process -FilePath $exe -ArgumentList (@($arguments) + @('/log', "`"$log`"")) -Wait -PassThru
@@ -392,7 +399,7 @@ $p = Start-Process $compat -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/N
 Start-Sleep -Seconds 2
 Check 'Inno switches: installed into /DIR, exit 0' { $p.ExitCode -eq 0 -and (Test-Path "$innoDir\DemoApp.exe") }
 Check 'Inno /TASKS: desktop icon on, autostart (not listed) off' { (Test-Path $desktopLink) -and $null -eq (Get-ItemProperty $runKey).'FluentSetupE2E-Auto2' }
-Check 'Inno /RELAUNCH=1: app started again with relaunchArguments' { Test-Path "$innoDir\version-check.txt" }
+Check 'Inno /RELAUNCH=1: app started again with relaunchArguments' { Wait-Until { Test-Path "$innoDir\version-check.txt" } }
 # Upgrade: a plain quiet run keeps the earlier choices (desktop icon on, autostart off) and the folder
 $code = Run-Setup $compat @('/quiet') 'prefill'
 Check 'update keeps earlier choices (desktop icon, autostart off, folder)' { $code -eq 0 -and (Test-Path $desktopLink) -and $null -eq (Get-ItemProperty $runKey).'FluentSetupE2E-Auto2' -and (Get-ItemProperty $arpKey).InstallLocation -eq $innoDir }
@@ -470,7 +477,7 @@ $code = Run-Setup $migrate @('/quiet', '/dir', "`"$isDir`"") 'quiet-first'
 Check 'quietDefault: unattended first install skips the "Enable now" action' { $code -eq 0 -and -not (Test-Path "$isDir\version-check.txt") }
 $p = Start-Process $migrate -ArgumentList '/S', '/UPDATE' -Wait -PassThru
 Start-Sleep -Seconds 2
-Check 'NSIS-style /S /UPDATE starts the app again with relaunchArguments' { $p.ExitCode -eq 0 -and (Test-Path "$isDir\version-check.txt") }
+Check 'NSIS-style /S /UPDATE starts the app again with relaunchArguments' { $p.ExitCode -eq 0 -and (Wait-Until { Test-Path "$isDir\version-check.txt" }) }
 Remove-Existing
 Remove-ItemProperty $runKey -Name 'FluentSetupE2E-Managed' -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force $isDir, $group, $isKey, $vendorKey -ErrorAction SilentlyContinue

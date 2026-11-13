@@ -100,7 +100,8 @@ public class CrossPlatformPathTests
         var r = FileCollector.Collect(p, dir.Path);
         Assert.Contains(r.Diagnostics.Items, d => d.Code == "FS1107" && d.Message.Contains("a\\b.txt", StringComparison.Ordinal));
         Assert.Contains(r.Diagnostics.Items, d => d.Code == "FS1107" && d.Message.Contains("what?", StringComparison.Ordinal));
-        Assert.Contains(r.Diagnostics.Items, d => d.Code == "FS1109");
+        // Two names that differ only in case are one file on a case-insensitive file system (macOS by default).
+        if (Directory.GetFiles(Path.Combine(dir.Path, "app"), "*.*").Length >= 6) Assert.Contains(r.Diagnostics.Items, d => d.Code == "FS1109");
         Assert.Equal((FileAttributes)0, r.Files.Single(f => f.RelativePath == ".hidden-on-linux").Attributes);  // a dot is not the Hidden attribute
     }
 
