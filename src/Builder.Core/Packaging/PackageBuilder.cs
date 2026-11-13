@@ -138,6 +138,7 @@ public sealed class PackageBuilder
         report.AppName = project.App.Name;
         report.Version = project.App.Version;
         var diagnostics = ProjectValidator.Validate(project, projectDir);
+        diagnostics = SigningValidator.ForBuild(diagnostics, project.Signing, projectDir, options.Sign ?? project.Signing.Enabled);
         diagnostics.AddRange(variableDiagnostics.Items);
         report.Diagnostics.AddRange(diagnostics.Items);
         if (!assets.HasStub(arch)) diagnostics.Error("FS2001", "output.architecture", $"The installer runtime for {arch} is missing: {assets.StubPath(arch)}");

@@ -467,18 +467,130 @@ ignored; unknown ids give warnings (FS1323, FS1324).
 
 ## signing
 
-Signing uses `signtool.exe` with a SHA-256 file digest.
+Setup.exe is signed after it is written (Authenticode, SHA-256 file digest); the build fails if the file carries no
+signature afterwards. `provider` picks the tool:
+
+| Provider | Builds on | Signs with |
+|---|---|---|
+| `signtool` (default) | Windows | `signtool.exe` and a certificate from the current user's store (`certificateThumbprint`) or a `.pfx` file (`certificateFile`) |
+| `trustedSigning` | Windows | Azure Artifact Signing (formerly Trusted Signing): `signtool.exe` with Microsoft's `Azure.CodeSigning.Dlib.dll` |
+| `command` | Windows, Linux, macOS | Any signing tool: osslsigncode, jsign, AzureSignTool, the SignPath client, a script of your own |
 
 | Property | Type | Default | Meaning |
 |---|---|---|---|
-| `enabled` | bool | `false` | Sign Setup.exe. `build --sign` and `build --no-sign` override it. |
-| `certificateThumbprint` | string | `""` | SHA-1 thumbprint of a certificate in the certificate store (spaces are removed). Takes precedence over `certificateFile`. |
-| `certificateFile` | string | `""` | `.pfx` file. |
-| `passwordEnvironmentVariable` | string | `""` | Name of an environment variable that holds the PFX password. The password is never stored in the project or written to the log. |
-| `timestampUrl` | string | `"http://timestamp.digicert.com"` | RFC 3161 timestamp server. Empty means no timestamp. |
-| `signToolPath` | string | `""` | Path of `signtool.exe`. Empty means the Windows 10/11 SDK and `PATH` are searched. |
+| `enabled` | bool | `false` | Sign Setup.exe. `build --sign` and `build --no-sign` override it; with `--no-sign` the signing settings are not checked either. |
+| `provider` | `signtool` \| `trustedSigning` \| `command` | `"signtool"` | See above. Empty means `signtool`. |
+| `certificateThumbprint` | string | `""` | signtool: SHA-1 thumbprint (40 hex digits) of a certificate in the current user's store. Spaces and the invisible direction marks the Windows certificate dialog copies are removed. Takes precedence over `certificateFile`. |
+| `certificateFile` | string | `""` | signtool: `.pfx` file. |
+| `passwordEnvironmentVariable` | string | `""` | signtool: name of an environment variable that holds the PFX password (see [Secrets](#secrets)). |
+| `timestampUrl` | string | `"http://timestamp.digicert.com"` | RFC 3161 timestamp server. Empty means no timestamp. For Artifact Signing use `http://timestamp.acs.microsoft.com`. The command provider gets it as `{timestampUrl}`. |
+| `signToolPath` | string | `""` | signtool, trustedSigning: path of `signtool.exe`. Empty means the Windows 10/11 SDK and `PATH` are searched. |
+| `signUninstaller` | bool | `true` | Also sign the `uninstall.exe` that setup writes into the install folder, with the same provider. |
+| `trustedSigning` | object | `null` | Settings of the trustedSigning provider ([below](#trustedsigning)). |
+| `command` | object | `null` | Settings of the command provider ([below](#command)). |
 
-When `enabled` is true, a thumbprint or a certificate file is required (FS1501).
+### trustedSigning
+
+| Property | Type | Meaning |
+|---|---|---|
+| `endpoint` | string | **Required.** The account's regional endpoint, e.g. `https://eus.codesigning.azure.net`. A region mismatch fails with 403 Forbidden. |
+| `accountName` | string | **Required.** Artifact Signing account name. |
+| `certificateProfile` | string | **Required.** Certificate profile name. |
+| `dlibPath` | string | **Required.** `Azure.CodeSigning.Dlib.dll` for the architecture of `signtool.exe`: NuGet package `Microsoft.ArtifactSigning.Client`, folder `bin/x64`. Use a `$(Name)` variable if it differs between machines. |
+| `correlationId` | string | Optional value attached to the signing requests, e.g. a build number. |
+| `excludeCredentials` | string[] | `DefaultAzureCredential` sources to skip, e.g. `["ManagedIdentityCredential", "AzureCliCredential"]`. |
+
+The builder writes the dlib's `metadata.json` into a temporary folder and runs
+`signtool sign /fd SHA256 /tr <timestampUrl> /td SHA256 /dlib <dlibPath> /dmdf <metadata.json> <file>`. That needs
+signtool 10.0.22621.755 or later and the .NET 8 runtime. Authentication is `DefaultAzureCredential`: for example
+`AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` in the environment (CI secrets), or `az login` on a
+developer machine. The identity needs the *Artifact Signing Certificate Profile Signer* role.
+
+```json
+"signing": {
+  "enabled": true,
+  "provider": "trustedSigning",
+  "timestampUrl": "http://timestamp.acs.microsoft.com",
+  "trustedSigning": {
+    "endpoint": "https://eus.codesigning.azure.net",
+    "accountName": "contoso",
+    "certificateProfile": "contoso-public",
+    "dlibPath": "tools/Microsoft.ArtifactSigning.Client/bin/x64/Azure.CodeSigning.Dlib.dll",
+    "excludeCredentials": ["ManagedIdentityCredential", "WorkloadIdentityCredential"]
+  }
+}
+```
+
+### command
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `run` | string | | **Required.** The program: a name found on `PATH` (`osslsigncode`) or a path relative to the project file. |
+| `arguments` | string[] | | **Required.** One argument per item, passed as written: no shell, no quoting, no `*` or `$VAR` expansion. Must contain `{file}`. |
+| `environment` | object | `{}` | Extra environment variables for the program, e.g. `{ "JAVA_HOME": "/usr/lib/jvm/java-21" }`. Not for secrets. |
+| `timeoutSeconds` | integer | `600` | The program is stopped and the build fails after this time (10–3600). |
+
+Placeholders in `arguments`:
+
+| Placeholder | Value |
+|---|---|
+| `{file}` | The file to sign, absolute path. The program signs it in place, unless `{output}` is used. |
+| `{output}` | A temporary path next to `{file}` for tools that write the signed copy elsewhere (osslsigncode); it then replaces `{file}`. |
+| `{description}` | The signature's description: the app name (`<app name> Uninstall` for the uninstaller). |
+| `{timestampUrl}` | `signing.timestampUrl`. |
+
+The program runs in the project folder and inherits the build's environment. It must exit with code 0 and leave an
+Authenticode signature in the file. Its output goes to the build log (`build -v`).
+
+```json
+"signing": {
+  "enabled": true,
+  "provider": "command",
+  "command": {
+    "run": "jsign",
+    "arguments": ["--storetype", "PKCS12", "--keystore", "certs/codesign.pfx", "--storepass", "env:PFX_PASSWORD",
+                  "--alg", "SHA-256", "--tsaurl", "{timestampUrl}", "--name", "{description}", "{file}"]
+  }
+}
+```
+
+More examples (osslsigncode, jsign with Artifact Signing or a cloud key, AzureSignTool, SignPath):
+[Building on Linux and macOS](cross-platform.md#signing).
+
+### Secrets
+
+- Passwords and keys never go into the project file. `passwordEnvironmentVariable` names the variable; the command
+  provider's program inherits the environment, so CI secrets reach it directly.
+- signtool accepts a `.pfx` password only on its command line (`/p`), where other processes on the machine,
+  process-creation auditing and endpoint-protection logs can read it. FluentSetup never passes it there: it imports
+  the `.pfx` into a temporary certificate store of the current user (`CurrentUser\FluentSetup-Signing-<random>`),
+  signs with `/s <store> /sha1 <thumbprint>`, and then deletes the store and the imported private key. A store left
+  behind by a build that was killed while signing (`FluentSetup-Signing-<process id>-<random>`) is removed, key
+  included, by the next signing run.
+- A `.pfx` without a password is passed with `/f`.
+- The log shows the commands without secrets. With the command provider, keep secrets out of `arguments`: use the
+  tool's own way of reading them from the environment or a file (jsign `env:NAME`, osslsigncode `-readpass`).
+
+### Validation codes
+
+| Code | Meaning |
+|---|---|
+| FS1501 | signtool: neither a thumbprint nor a certificate file |
+| FS1502 | signtool: certificate file not found |
+| FS1503 | `timestampUrl` is not an http(s) URL |
+| FS1504 | Unknown `provider` |
+| FS1505–FS1508 | trustedSigning: `endpoint` (https), `accountName`, `certificateProfile`, `dlibPath` missing or not found |
+| FS1509 | trustedSigning: unknown `excludeCredentials` entry (warning) |
+| FS1510 | command: `run` missing |
+| FS1511 | command: no `{file}` in `arguments` |
+| FS1512 | command: unknown placeholder |
+| FS1513 | command: `run` is a path that does not exist |
+| FS1514 | command: `run` not found on `PATH` (warning) |
+| FS1515 | command: invalid `environment` variable name |
+| FS1516 | command: `timeoutSeconds` outside 10–3600 |
+| FS1517 | Settings of another provider are ignored (info) |
+| FS1518 | signtool: the thumbprint is not 40 hex digits |
+| FS1519 | signtool or trustedSigning on Linux or macOS: a warning from `validate`, an error when the build signs |
 
 ## CLI: `fluentsetup`
 

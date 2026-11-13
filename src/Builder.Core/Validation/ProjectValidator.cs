@@ -157,17 +157,7 @@ public static partial class ProjectValidator
         ExtensionValidator.Validate(p, d);
         Localization.Load(p, projectDirectory, d);  // reports problems in the localization folder
 
-        // signing
-        var s = p.Signing;
-        if (s.Enabled)
-        {
-            if (string.IsNullOrEmpty(s.CertificateThumbprint) && string.IsNullOrEmpty(s.CertificateFile))
-                d.Error("FS1501", "signing", "Signing needs a certificate thumbprint (from the certificate store) or a .pfx file.");
-            if (!string.IsNullOrEmpty(s.CertificateFile) && !File.Exists(Resolve(projectDirectory, s.CertificateFile)))
-                d.Error("FS1502", "signing.certificateFile", "Certificate file not found.");
-            if (!string.IsNullOrEmpty(s.TimestampUrl) && !Uri.TryCreate(s.TimestampUrl, UriKind.Absolute, out _))
-                d.Error("FS1503", "signing.timestampUrl", "Timestamp URL is not valid.");
-        }
+        if (p.Signing.Enabled) SigningValidator.Validate(p.Signing, projectDirectory, d);
         ValidateUpdate(p, d);
         return d;
     }

@@ -319,13 +319,16 @@ package explicitly adopts it (`engine.cpp:598-600`).
 
 ## 4. Recommendations
 
-1. **Sign every package.** Enable the `signing` section of the project (`src/Builder.Core/Model/ProjectModel.cs:125-135`):
-   `enabled`, either `certificateThumbprint` (certificate store; preferred, works with hardware tokens) or
-   `certificateFile` (.pfx) with `passwordEnvironmentVariable` (the password is never stored in the project),
-   `timestampUrl` (default `http://timestamp.digicert.com`; always timestamp so signatures outlive the certificate), and
-   optionally `signToolPath`. The builder signs with SHA-256 file and timestamp digests
-   (`src/Builder.Core/Packaging/Signer.cs:38-65`) and, with output verification on, re-inspects the written package
-   (`PackageBuilder.cs:273-279`). Check the result with `fluentsetup inspect --verify` and `signtool verify /pa`.
+1. **Sign every package.** Enable the `signing` section of the project (`SigningSettings` in
+   `src/Builder.Core/Model/ProjectModel.cs`): `enabled`, a `provider` and its settings: `signtool` with
+   `certificateThumbprint` (certificate store; preferred, works with hardware tokens) or `certificateFile` (.pfx) with
+   `passwordEnvironmentVariable` (the password is never stored in the project and never put on a command line),
+   `trustedSigning` (Azure Artifact Signing, keys never leave Azure), or `command` (any signing tool, e.g. against a
+   cloud HSM; also on Linux and macOS). Set `timestampUrl` (default `http://timestamp.digicert.com`; always timestamp so
+   signatures outlive the certificate). The builder signs with a SHA-256 file digest
+   (`src/Builder.Core/Packaging/Signer.cs`), fails if the file has no signature afterwards and, with output
+   verification on, re-inspects the written package. Check the result with `fluentsetup inspect --verify` and
+   `signtool verify /pa`.
 2. Prefer per-user packages unless the app really needs machine-wide installation; per-machine packages run their
    actions as administrator.
 3. For per-machine packages keep the default `{ProgramFiles}\{AppName}` location and consider `allowCustomDir: false`
@@ -361,7 +364,7 @@ Found while reading the code for this document. G1, G6 and G10 have been fixed s
 | G6 | Fixed | `src/Install.Worker/worker.cpp`; `Engine::SanitizeOptions` | *Was:* the worker did not re-apply the package's option policy. *Now:* the worker rejects options that `Engine::SanitizeOptions` refuses (scope, custom folder when `allowCustomDir` is false, undeclared option ids) and forces hidden shortcut offers to their defaults. |
 | G7 | Low | `src/Bootstrapper/main.cpp:198-203` | The `Global\FluentSetup-<appId>` mutex is created with default security. Another user or session can create and hold it (setup then exits with `AlreadyRunning`), and if the existing object denies access, `CreateMutexW` fails and the single-instance check is silently skipped. |
 | G8 | Low | `src/Install.Core/engine.cpp:795-798`; `src/Install.Core/extensions.cpp:326-352` | Bundled prerequisite installers are run without the `IsStrictlyUnder`/`HasLinkInPath` check that actions get (`engine.cpp:549`). The action job object has no `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so processes spawned by an action that outlive it keep running (as administrator for per-machine installs). |
-| G9 | Low | `src/Builder.Core/Packaging/Signer.cs:51-56` | The PFX password is passed to `signtool.exe` on its command line (`/p`), visible to other processes on the build machine; it is only masked in the log. |
+| G9 | Fixed | `src/Builder.Core/Packaging/Signer.cs` (`TemporaryCertificateStore`) | *Was:* the PFX password was passed to `signtool.exe` on its command line (`/p`), visible to other processes on the build machine and to process-creation auditing; it was only masked in the log. *Now:* a password-protected .pfx is imported (password from the environment variable) into a certificate store of its own under the current user (`FluentSetup-Signing-<pid>-<random>`), signtool signs with `/s <store> /sha1 <thumbprint>`, and the store and the persisted private key are deleted afterwards, also when signing fails. A store left by a build that was killed while signing (its process is gone) is removed with its key by the next signing run. The command provider never receives secrets from FluentSetup; tools read them from the environment. |
 | G10 | Fixed | `src/Bootstrapper/main.cpp` (`RunUninstallPhase1`) | A running copy cannot delete itself, so each uninstall removes the `%TEMP%\FluentSetup-u-<random>` copies earlier uninstalls left behind (skipping links and copies still in use). The copy of the most recent uninstall remains until the next one. |
 | G11 | Low | `src/Bootstrapper/controller.cpp:285-289`; `src/Bootstrapper/args.cpp:139-144` | Test hooks are active in release builds: the `FLUENTSETUP_TEST_FAULT_AFTER` environment variable (forces a failure and rollback after N files, in-process installs only) and `--ui-simulate`. |
 | G12 | Informational | `src/Bootstrapper/winui_host.cpp:177`; `src/Setup.WinUI/app.manifest` | The UI manifest comment says the UI "never runs elevated", but if `Setup.exe` itself is started elevated the WinUI child inherits the elevated token. |
