@@ -282,6 +282,8 @@ public static partial class WingetManifests
         y.Value("InstallerType", "exe");
         y.List("InstallModes", ["interactive", "silent", "silentWithProgress"]);
         y.Value("UpgradeBehavior", "install");
+        // winget repair downloads this version's Setup.exe and runs it with /repair (files checked, damaged ones restored).
+        y.Value("RepairBehavior", "installer");
         y.Value("ProductCode", appId);
         y.Line("AppsAndFeaturesEntries:");
         y.Line("- DisplayName: " + YamlWriter.Scalar(name));
@@ -305,6 +307,7 @@ public static partial class WingetManifests
             y.Line("    Silent: /quiet");
             y.Line("    SilentWithProgress: /passive");
             if (allowCustomDir) y.Line("    InstallLocation: " + YamlWriter.Scalar("/dir \"<INSTALLPATH>\""));
+            y.Line("    Repair: /repair");
             y.Line("    Log: " + YamlWriter.Scalar("/log \"<LOGPATH>\""));
             if (i.PassScope) y.Line("    Custom: /scope " + i.Scope);
             // Setup.exe asks for administrator rights itself (UAC), also in quiet mode.

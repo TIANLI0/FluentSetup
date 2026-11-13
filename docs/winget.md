@@ -69,6 +69,7 @@ the SHA-256.
 | `InstallerSwitches.Custom` | `/scope user` or `/scope machine` | Only for `userOrMachine`: `winget install --scope` picks the installer and Setup.exe gets the matching scope. |
 | `ElevationRequirement` | `elevatesSelf` | Per-machine installers: Setup.exe shows the UAC prompt itself, also in quiet mode. |
 | `UpgradeBehavior` | `install` | Setup.exe upgrades in place (`winget upgrade` runs the new Setup.exe). |
+| `RepairBehavior`, `InstallerSwitches.Repair` | `installer`, `/repair` | `winget repair` runs this version's Setup.exe with `/repair`: the installed files are checked against the install record and missing or damaged ones are restored. |
 | `InstallModes` | interactive, silent, silentWithProgress | |
 | `Platform` | `Windows.Desktop` | |
 
