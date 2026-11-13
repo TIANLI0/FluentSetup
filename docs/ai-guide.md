@@ -48,7 +48,16 @@ machine-specific.
 | Things the app did with administrator rights (ETW sessions, service permissions, scheduled tasks, ProgramData files) | `uninstall.elevated` (§8): undone with one UAC prompt during an interactive per-user uninstall, directly in a per-machine one. |
 | The app updates itself by running the new Setup.exe silently | It can keep its Inno Setup / NSIS command line (§11). `install.relaunchArguments` = arguments when it passes `/relaunch` (Inno `/RELAUNCH=1`). |
 | License / agreement | `ui.license` or per-language files; `ui.licenseMode: "always"` to show it on every update. |
-| Languages | Built in: en-US, zh-CN, ja-JP, ko-KR. Any other language: a localization file with a `strings` table (§10). |
+| File types the app opens, links it handles | `associations[]` (`extensions`, `progId`, `description`, `icon`) and `protocols[]` (`scheme`), §8a. |
+| More shortcuts (a second program, arguments, Startup folder) | `shortcuts[]` with `target`, `arguments`, `location: startMenu\|desktop\|startup`, `ifOption`. |
+| Toast notifications from an unpackaged app | `app.appUserModelId` (and `app.toastActivatorClsid` for activation) on the app's shortcuts. |
+| Registry settings, environment variables, `App Paths` | `registry[]` (below `Software\<Vendor>`, HKCU or HKLM by scope), `environment[]`, `install.appPaths: true`. |
+| A Windows service or firewall rule | `services[]`, `firewall[]` (per-machine installs only). |
+| Ask the user for a value (server address, licence key) | `inputs[]` (Settings page, `/input id=value`) used as `{Input:id}` in `registry`, `environment`, `configFiles`, arguments. |
+| Write settings into a config file | `configFiles[]`: JSON (dotted keys) or INI (section/key), existing files keep their other settings. |
+| Files the app keeps open during updates | `install.restartManager: "auto"` (default) closes and restarts the programs holding them; `install.lockedFiles: "reboot"` (per-machine) replaces what is still locked at the next restart (exit code 3010). |
+| Signed uninstaller | `signing.signUninstaller: true` (default when signing): uninstall.exe shows the publisher in UAC. |
+| Languages | Built in: see §10. Any other language: a localization file with a `strings` table (§10). |
 
 ## 4. Project file at a glance
 
@@ -69,6 +78,8 @@ machine-specific.
   "requirements": { "netFramework": "", "dotNet": [], "windowsAppRuntime": { "required": false }, "webView2": { "required": false } },
   "options": [],
   "actions": [],
+  "shortcuts": [], "associations": [], "protocols": [], "registry": [], "environment": [],
+  "services": [], "firewall": [], "inputs": [], "configFiles": [],
   "uninstall": { "removeData": [], "removeScheduledTasks": [], "removeRunValues": [], "removeShortcuts": [] },
   "ui": { "license": "", "licenseMode": "firstInstall", "localization": "", "defaultLanguage": "auto", "strings": {},
           "theme": "system", "backdrop": "mica", "useSystemAccent": true },
@@ -104,10 +115,18 @@ Key rules:
 
 Each requirement is checked before anything changes. Missing or too old → the first page says so, and setup:
 
-1. runs a bundled installer (`installer`: a path **among the installed files**, usually added with `files.extra`), or
-2. downloads one (`download`: `{ "url": "https://…", "sha256": "<64 hex>", "size": <bytes or 0> }`; https only, size
-   capped, hash verified before it runs; downloaded before any change), or
-3. stops with exit code 17 and shows `helpUrl`.
+1. runs Microsoft's official installer without you adding it: `"auto": "bundle"` (downloaded when the package is
+   built, stored in Setup.exe, extracted only when needed) or `"auto": "download"` (downloaded by setup, accepted by its
+   Microsoft signature); available for `netFrameworkSetup`, `dotNet[]`, `windowsAppRuntime`, `webView2`, `vcRedist`, or
+2. runs a bundled installer (`installer`: a path **among the installed files**, usually added with `files.extra`), or
+3. downloads one (`download`: `{ "url": "https://…", "sha256": "<64 hex>", "size": <bytes or 0>, "signer": "" }`; https
+   only, size capped, hash (or, with `signer`, a trusted signature of that publisher) verified before it runs;
+   downloaded before any change), or
+4. stops with exit code 17 and shows `helpUrl`.
+
+Prefer `"auto": "bundle"` for offline-capable installers of .NET, the Windows App Runtime and VC++ (WebView2's official
+installer is a small bootstrapper that needs the internet anyway). `fluentsetup versions <webview2|windowsappruntime|dotnet|vcredist>`
+lists current versions to put in `version`/`minVersion`.
 
 After the installer ran the requirement is checked again: `onFailure: "warn"` (default) keeps the app installed and
 reports it; `"fail"` rolls the whole installation back. `variants: [ids]` limits a requirement to some variants.
@@ -119,12 +138,14 @@ Installers that need administrator rights get a UAC prompt even in a per-user in
 | `dotNet: [{ runtime: "core"\|"desktop"\|"aspnetcore", version: "8.0.0", rollForward: "minor", …source }]` | default args `/install /quiet /norestart` | `%ProgramFiles%\dotnet\shared\<runtime>\<version>` for the package architecture |
 | `windowsAppRuntime: { required, version: "2.5.1", …source }` | default args `--quiet`; Microsoft's `WindowsAppRuntimeInstall-x64.exe` | framework package family `Microsoft.WindowsAppRuntime.<major>` (1.x: `<major.minor>`) |
 | `webView2: { required, minVersion, …source }` | default args `/silent /install` | EdgeUpdate `pv` (machine or user) |
+| `vcRedist: { required, minVersion: "14.40", architecture: ""\|x64\|x86\|arm64, …source }` | default args `/install /quiet /norestart` | `VisualStudio\14.0\VC\Runtimes\<arch>` (`Installed`, `Version`) |
+| `custom: [{ id, name, detect: { registry: {hive,key,value,version} } \| { file: {path: "{System}\\x.sys", version} }, …source }]` | no `auto` | the registry value / file (version) |
 
 Which runtime does a .NET app need? Read `<App>.runtimeconfig.json`: `Microsoft.NETCore.App` → `core`,
 `Microsoft.WindowsDesktop.App` (WPF/WinForms) → `desktop`. A WinUI 3 app published framework-dependent needs `core`
 **and** `windowsAppRuntime` (version = the `Microsoft.WindowsAppSDK` package version). Self-contained builds need neither.
 
-Getting a download hash: download the exact file once, check it (Authenticode signature; for .NET compare with the
+Getting a download hash (only needed for `download` without `auto`): download the exact file once, check it (Authenticode signature; for .NET compare with the
 SHA-512 in `https://builds.dotnet.microsoft.com/dotnet/release-metadata/<channel>/releases.json`), then
 `Get-FileHash <file> -Algorithm SHA256` and `(Get-Item <file>).Length`. Use versioned URLs: a "latest" URL changes
 content and breaks the hash.
@@ -213,6 +234,34 @@ Built-in updates (instead of writing an updater in the app):
 - The download must be the same `app.id`, the advertised (newer) version, and signed by `update.signer` if set.
 - Do not add `update` for apps that keep their own updater; their `Setup.exe /SILENT` or `/S /UPDATE` calls keep working.
 
+## 8a. Desktop integration (1.2)
+
+Every item may have `ifOption` (applied only while that option is selected; the Change page adds/removes it).
+Placeholders in arguments, registry data, environment values and config values: `{InstallDir}`, `{MainExecutable}`,
+`{AppVersion}`, `{AppId}`, `{Input:<id>}`.
+
+```jsonc
+"shortcuts": [{ "name": "App (safe mode)", "arguments": ["--safe"], "location": "startMenu" },
+              { "name": "App Agent", "target": "agent/Agent.exe", "location": "startup" }],
+"associations": [{ "extensions": [".cnote"], "progId": "Contoso.Notes.Document", "description": "Contoso note",
+                   "icon": "doc.ico" }],           // command: "<target>" "%1"
+"protocols": [{ "scheme": "contoso-notes", "description": "Contoso Notes link" }],
+"registry": [{ "key": "Software\\Contoso\\Notes", "values": [{ "name": "Server", "data": "{Input:server}" },
+             { "name": "Port", "type": "dword", "data": "8443" }], "uninstall": "values" }],
+"environment": [{ "name": "CONTOSO_HOME", "value": "{InstallDir}" }],
+"services": [{ "name": "ContosoAgent", "run": "agent/Agent.exe", "startType": "delayedAuto", "account": "localService" }],
+"firewall": [{ "name": "Contoso Notes sync", "protocol": "tcp", "localPorts": "8443" }],
+"inputs": [{ "id": "server", "label": { "en-US": "Server address" }, "default": "https://", "required": true,
+             "pattern": "^https://" }],
+"configFiles": [{ "path": "settings.json", "values": [{ "key": "server.url", "value": "{Input:server}" }] }]
+```
+
+Rules worth knowing: file types and schemes refuse program/shell names (`.exe`, `.lnk`, `http`, `ms-*`, …); ProgIDs
+need a dot; registry keys are `Software\<Vendor>\...` only; services and firewall rules need a per-machine install;
+passwords (`type: "password"`) are never remembered; changes to the registry and to config files inside the install
+folder are rolled back on failure, environment variables, services and firewall rules are applied after the install is
+committed. Apps & features "Modify" runs `uninstall.exe /modify` (Change page + Repair).
+
 ## 9. Validation codes
 
 `fluentsetup validate --json` returns `{ valid, diagnostics: [{ severity, code, field, message }] }`.
@@ -225,9 +274,10 @@ Built-in updates (instead of writing an updater in the app):
 | FS13xx | `ui` (FS1304 language, FS1306 license size, FS1311 licenseMode, FS1320–FS1328 localization) |
 | FS14xx | `output` |
 | FS15xx | `signing` |
-| FS16xx | requirements, options, actions, cleanup, variants filters (FS1640–FS1642: a referenced file is not in the package) |
+| FS16xx | requirements, options, actions, cleanup, variants filters (FS1640–FS1642: a referenced file is not in the package; FS1670–FS1683 VC++, custom prerequisites, `auto`, download signer) |
 | FS17xx | `update` (FS1701 both sources, FS1702 repository, FS1703 feed URL, FS1704 asset name, FS1705 literal version in the name, FS1706 checksums, FS1707–FS1710 settings without effect, signer) |
 | FS18xx | `variables` |
+| FS19xx | 1.2 sections: FS1901–FS1914 `shortcuts`, FS1920–FS1937 `associations`/`protocols`, FS1940–FS1954 `registry`/`environment`, FS1960–FS1979 `services`/`firewall`, FS1980–FS1999 `inputs`/`configFiles` (FS1998: `{Input:id}` without that input). Also FS1220–FS1226 (`app.appUserModelId`, `install.restartManager`/`lockedFiles`/`appPaths`) and FS1312–FS1314 (`ui.banner`). |
 | FS2xxx | build (installer runtime missing, WinUI front end missing) |
 
 ## 10. Languages
@@ -296,4 +346,5 @@ Uninstall entries: `"<dir>\uninstall.exe" /uninstall` (and `/quiet`). Logs defau
 - Fresh install, update from the previous version, uninstall: all with `/quiet /log` and exit code 0.
 - Per-machine: test the UAC path once interactively.
 - `onFailure: "fail"` only for steps without which the app cannot run.
-- Sign the package (`signing`): unsigned downloads trigger SmartScreen.
+- Sign the package (`signing`): unsigned downloads trigger SmartScreen. Keep `signUninstaller` on.
+- File types, schemes, services: install, check the registry/Services, uninstall, check they are gone.

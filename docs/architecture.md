@@ -62,6 +62,7 @@ flowchart LR
 | `src/IPC` | headers + `pipe.cpp` | `ipc::Channel`: framed JSON messages (uint32 little-endian length + UTF-8 JSON, max 16 MiB) over an overlapped, single-instance local named pipe. `protocol.h` defines the protocol version (1), the UI exit codes (`0x20`-`0x26`) and timeouts (UI ready 20 s, connect 10 s). |
 | `src/Archive` | static lib | The self-extracting container (`container.h/.cpp`): locates the footer (before the Authenticode certificate table, if any), validates header bounds and SHA-256, decodes streams with a streaming zstd decoder (`StreamReader`), copies the bare stub for the uninstaller, and runs `WinVerifyTrust`. Only the zstd **decompressor** from `third_party/zstd` is compiled (`common/*` + `decompress/*`, `ZSTD_LEGACY_SUPPORT=0`, `ZSTD_DISABLE_ASM`, `XXH_NAMESPACE=FSETUP_`). |
 | `src/Install.Core` | static lib | The only code that changes the system. `package` parses and validates the header into a `Package`; `installed` reads/writes the Apps & features (ARP) entry, the install record (`uninstall.json`) and the pending-operation marker; `journal` is the write-ahead journal and rollback; `shortcuts` creates `.lnk` files through `IShellLinkW`; `extensions` implements the declarative extras (close processes, requirement checks, user options, actions, uninstall cleanup); `engine` runs install and uninstall. |
+| `src/Install.Core/integration.*` | (part of Install.Core) | 1.2 system integration: `RegistryWriter` (registry writes with journaled snapshots, confined by `IsOwnedRegistryKey`), file associations, URL schemes, App Paths and `registry[]` (`ApplyRegistration` / `RemoveRegistryItems`), environment variables, services (SCM), firewall rules (`INetFwPolicy2`, one rule group per app), JSON/INI config files and `RestartManagerSession` (Windows Restart Manager). |
 
 ### 1.2 Native executables
 
@@ -75,7 +76,7 @@ flowchart LR
 | Component | Responsibility |
 |---|---|
 | `src/Builder.Core` (`net10.0-windows10.0.19041.0`) | `Model/` project model and serializer (unknown properties are round-tripped, newer `schemaVersion` rejected). `Validation/` project validation with stable diagnostic codes (`FSxxxx`) and extension validation against the collected files. `Packaging/`: `FileCollector` (include/exclude/preserve globs, extra sources; does not follow junctions), `PathRules` (the managed mirror of the native path rules), `PackageBuilder` (solid zstd blocks of ~32 MiB, files >= 16 MiB in their own stream, compression level 3/12/19 for fast/default/max, header compressed at level 19, footer), `PeResources` (replaces icon and version resources in the copied stub), `IconConverter`, `Signer` (signtool), `PackageInspector` (reads a built `Setup.exe` back and optionally verifies stream hashes), `RuntimeAssets` (locates `runtime/<arch>/FluentSetup.Stub.exe`, `runtime/<arch>/ui/*`, `runtime/localization/*.json`, `runtime/default-app.ico`). |
-| `src/CLI` (`fluentsetup.exe`) | `build`, `validate`, `inspect [--verify]`, `init`, `--version`. Exit codes 0 success, 1 validation/build failure, 2 usage error, 3 unexpected error, 4 cancelled. The project file copies the native runtime from `out/bin/x64/Release` (and `ARM64/Release` when present) into `runtime/` next to the CLI. |
+| `src/CLI` (`fluentsetup.exe`) | `build`, `validate`, `inspect [--verify]`, `init`, `locale add`, `guide`, `schema`, `update`, `winget`, `versions`, `import`, `--version` (see docs/project-file.md). Exit codes 0 success, 1 validation/build failure, 2 usage error, 3 unexpected error, 4 cancelled. The project file copies the native runtime from `out/bin/x64/Release` (and `ARM64/Release` when present) into `runtime/` next to the CLI. |
 | `src/Builder` (WinUI 3 C#, `net10.0-windows10.0.26100.0`, unpackaged) | GUI over `Builder.Core` using CommunityToolkit.Mvvm: one `MainViewModel` and pages Overview, AppInfo, Files, Install, Upgrade, Appearance, Build, History, Settings; services for settings, localization (`Strings/en-US`, `Strings/zh-CN` `.resw`), and `PreviewLauncher`, which writes a `hello` document and starts the real `FluentSetup.UI.exe --preview`. |
 
 ### 1.4 Package layout (format v1)
@@ -254,7 +255,8 @@ registry back, but whatever the action itself did is not undone.
 ### 3.3 Journal and rollback (`journal.cpp`)
 
 The journal is a JSON-lines file. Entries: `begin {mode, dir, scope, appId}`, `mkdir {path}`, `backup {from, to}`,
-`place {path}`, `shortcut {path, backup?}`, `reg {snapshot}`, `commit`. `begin`, `shortcut`, `reg` and `commit` are
+`place {path}`, `shortcut {path, backup?}`, `reg {snapshot}`, `regkey {key, snapshot}`, `regvalue {key, name,
+snapshot}`, `svcstop {name}`, `commit`. `begin`, `shortcut`, the registry entries, `svcstop` and `commit` are
 flushed immediately; file entries are flushed every 64 entries (a process crash loses nothing, a power loss can lose
 the tail). A torn final line is ignored when reading.
 
@@ -265,12 +267,43 @@ the tail). A torn final line is ignored when reading.
   `to` is inside `.fsetup`; skipped if the move never happened);
 * `mkdir` -> remove the directory if it is empty;
 * `shortcut` -> delete the link and restore its backup if there was one;
-* `reg` -> delete the ARP key and restore the snapshot values.
+* `reg` -> delete the ARP key and restore the snapshot values;
+* `regkey` -> delete the key tree and recreate it from the snapshot (a null snapshot: the key did not exist), only for
+  keys `IsOwnedRegistryKey(key, true)` allows (or, for a null snapshot, a `Software\Classes\.ext` key setup created);
+* `regvalue` -> restore or delete one value, only in keys `IsOwnedRegistryKey` allows;
+* `svcstop` -> start the service again (per-machine operations only).
+
+Transient errors (a new shortcut or file the shell or a scanner has open) are retried for up to 3 s. If some steps
+still fail, the journal is rewritten to hold `begin` and only those steps (`RewriteJournal`), so the next recovery
+retries them without undoing again what was already restored.
 
 If every step succeeds the work directory is deleted, an empty install directory is removed and the pending marker is
 cleared; otherwise the marker stays. On the next run of any FluentSetup package with the same app id and scope,
 `RecoverPending()` reads `<dir>\.fsetup\journal.jsonl`, and if its `begin` entry matches the app id and directory and
 there is no `commit`, rolls it back before doing anything else. A journal that already has `commit` is only cleaned up.
+
+### 3.3a System integration, Restart Manager and Modify (1.2)
+
+* **Install, Registering:** after the uninstaller, the shortcuts from `PlanShortcuts` (the app's own offers and
+  `shortcuts[]` whose option is selected), then `ApplyRegistration` (file types, URL schemes, Default apps capabilities,
+  App Paths, `registry[]`) through a journaling `RegistryWriter`, removal of registry items of the previous record that
+  this version no longer writes, and config files inside the install folder (journaled backup/place). The record gets
+  the registry items, planned environment variables, services, `firewall`, remembered `inputs` and `sourcePackage`
+  (Setup.exe path + header digest, for Repair).
+* **Install, before files are replaced:** the app's running services are stopped (`svcstop`), and with
+  `install.restartManager: auto` the files of the existing installation are registered with Restart Manager and the
+  programs using them are shut down (politely, then forced); they are restarted after the commit or after a rollback.
+  With `install.lockedFiles: reboot` (elevated only) a file that still cannot be moved is written as
+  `<name>.fsetup-<random>` and moved over the original at the next restart (scheduled after the commit), and
+  `Outcome.rebootRequired` makes the exit code 3010.
+* **Install, after the commit:** environment variables, services (create/update, start; delete the ones the new version
+  dropped), the firewall rule group, config files in app data folders, reboot-pending moves. Failures there are warnings.
+* **Prerequisites:** a bundled official installer is decoded from the `redist` set into the private download folder;
+  a download with `signer` is accepted only with a trusted signature issued to that name.
+* **Modify** (`Engine::Modify`, `uninstall.exe /modify`): new choices from the record and the options; shortcuts,
+  registry, config files, startup values replanned; the old record journaled and rewritten, the ARP hash updated
+  (`UpdateArpRecordHash`); `afterInstall` actions of options that were just turned on; after the commit environment and
+  firewall. `Engine::VerifyFiles` compares the installed files with the record for Repair.
 
 ### 3.4 Uninstall
 
@@ -341,13 +374,13 @@ found (`MddBootstrapInitialize2` returned `ERROR_NO_MATCH`), `0x23` runtime init
 
 ## 7. Localization
 
-* **Language choice** (`Strings::Load`): `/lang` (only `en-US` or `zh-CN` are accepted), else the package's
-  `ui.defaultLanguage` unless it is `auto`, else the user's Windows display languages in preference order from
-  `GetUserPreferredUILanguages(MUI_LANGUAGE_NAME)` followed by `GetUserDefaultUILanguage()`, else `en-US`. A tag
-  starting with `zh` maps to `zh-CN`, one starting with `en` to `en-US`; other languages fall through.
-* **Tables:** `shared/localization/en-US.json` and `zh-CN.json` are embedded into the stub as `RCDATA` resources
-  (`IDR_STRINGS_EN_US`, `IDR_STRINGS_ZH_CN` in `stub.rc`). English is the base and the Chinese table is merged over it,
-  so a missing translation shows English. Package overrides from `ui.strings.<lang>` (string values up to 4096 bytes)
+* **Language choice** (`Strings::Load`): `/lang` (any BCP-47 tag), else the package's `ui.defaultLanguage` unless it
+  is `auto`, else the user's Windows display languages in preference order from
+  `GetUserPreferredUILanguages(MUI_LANGUAGE_NAME)` followed by `GetUserDefaultUILanguage()`, else `en-US`. The exact
+  tag wins, then the same primary language; languages the package brings strings for count like built-in ones.
+* **Tables:** every `shared/localization/<tag>.json` is embedded into the stub as an `RCDATA` resource (`stub.rc`,
+  `localization.cpp`). English is the base and the chosen table is merged over it, so a missing translation shows
+  English. Package overrides from `ui.strings.<lang>` (string values up to 4096 bytes)
   are merged last.
 * **Front ends:** the Win32 UI reads the controller's table; the WinUI front end receives the full table and the chosen
   language in `hello` and has no string tables of its own. User-facing error text comes from `error.<CodeName>` keys;

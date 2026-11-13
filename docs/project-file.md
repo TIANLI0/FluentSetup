@@ -53,6 +53,16 @@ The installer offers to launch the app at the end, and the output is `dist\Conto
 | `options` | array | `[]` | [User-selectable options](#options) |
 | `actions` | array | `[]` | [Programs to run](#actions) |
 | `uninstall` | object | | [Extra uninstall cleanup](#uninstall) |
+| `update` | object | | [Built-in updates](#update) |
+| `shortcuts` | array | `[]` | [More shortcuts](#shortcuts) |
+| `associations` | array | `[]` | [File types](#associations) |
+| `protocols` | array | `[]` | [URL schemes](#protocols) |
+| `registry` | array | `[]` | [Registry values](#registry) |
+| `environment` | array | `[]` | [Environment variables](#environment) |
+| `services` | array | `[]` | [Windows services](#services) |
+| `firewall` | array | `[]` | [Firewall rules](#firewall) |
+| `inputs` | array | `[]` | [Values entered during setup](#inputs) |
+| `configFiles` | array | `[]` | [JSON and INI files setup writes](#configfiles) |
 | `ui` | object | | [Installer look and text](#ui) |
 | `output` | object | | [Output file](#output) |
 | `signing` | object | | [Code signing](#signing) |
@@ -85,6 +95,8 @@ stamp the version, or the version of a bundled driver, without rewriting the pro
 | `website` | string | `""` | Absolute `http://` or `https://` URL, or empty. |
 | `icon` | string | `""` | `.ico` or `.png` file (up to 256×256) for Setup.exe and the installer window. Empty means the default FluentSetup icon is used. |
 | `mainExecutable` | string | `""` | Relative path of the app's `.exe` inside the installed files. It must be one of those files. Shortcuts, "launch after install" and the Settings icon use it. When it is empty, no shortcuts are created and the app is not launched after install (you get a warning). |
+| `appUserModelId` | string | `""` | AppUserModelID set on the app's Start menu and desktop shortcuts, e.g. `Contoso.Notes` (letters, digits, `.`, `-`, `_`; max 128, no spaces). Unpackaged apps need it for toast notifications. |
+| `toastActivatorClsid` | string | `""` | CLSID of the app's toast activator COM server, `{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}`, set on the same shortcuts (with `appUserModelId`). |
 
 ## files
 
@@ -203,6 +215,9 @@ syntax as above. A preserved file:
 | `cleanup.removeShortcuts` | string[] | `[]` | Shortcut file names (`.lnk`) deleted from the per-user and all-users Start menu Programs, Desktop and Startup folders. `"Folder\\Old.lnk"` reaches into a Start menu folder, which is removed once it is empty. Never list the app's own shortcut names here. |
 | `cleanup.removeFiles` | string[] | `[]` | Files in the install folder that no install record knows about, typically the uninstaller of an adopted Inno Setup install (`"unins*.exe"`, `"unins*.dat"`, `"unins*.msg"`). Relative paths; `*` and `?` only in the file name, which needs at least one literal character. Removed after the new files are placed, journaled like every other change (a rollback restores them). Files of the package are never touched. |
 | `cleanup.removeUninstallKeys` | string[] | `[]` | Uninstall entries of other product names, deleted after the install is committed (not this app's id). |
+| `appPaths` | bool | `false` | Registers `app.mainExecutable` under `App Paths` (per user or for the PC), so Win+R and other programs start it by its file name. |
+| `restartManager` | `auto` \| `off` | `"auto"` | `auto`: before files are replaced or removed, programs that use them (an Explorer extension, an editor, the app itself) are closed through Windows Restart Manager and, if they registered for it, restarted afterwards. The first page lists them. `off`: only `closeProcesses` and `closeCommand`. |
+| `lockedFiles` | `fail` \| `reboot` | `"fail"` | A file that is still in use after that: `fail` stops and rolls back (exit code 8). `reboot` (per-machine installs; setup needs administrator rights for it) writes the new file next to it and replaces it at the next restart; uninstall deletes such files at the next restart. Setup.exe then exits with 3010 and the result page asks for a restart. |
 
 The `cleanup` steps are not undone by a rollback.
 
@@ -285,19 +300,47 @@ installer together with what setup will do about it.
 | `dotNet[].version` | string | | **Required.** Minimum version, e.g. `"8.0.0"`. |
 | `dotNet[].rollForward` | `patch` \| `minor` \| `major` | `"minor"` | Which newer versions count: same `major.minor`, same major (the .NET default), or any newer one. |
 | `dotNet[].*` | source | | `installer`, `arguments` (default `["/install", "/quiet", "/norestart"]`), `download`, `helpUrl`, `onFailure`. |
+| `vcRedist.required` | bool | `false` | The app needs the Microsoft Visual C++ 2015–2022 (v14) Redistributable (`VisualStudio\14.0\VC\Runtimes\<arch>`). |
+| `vcRedist.minVersion` | string | `""` | Minimum version, e.g. `"14.40"`; empty = any v14 runtime. |
+| `vcRedist.architecture` | `""` \| `x64` \| `x86` \| `arm64` | `""` | Empty = the package architecture (an x64 app with a 32-bit helper can need `x86` too: use a custom prerequisite for the second one). |
+| `vcRedist.*` | source | | `installer`, `arguments` (default `["/install", "/quiet", "/norestart"]`), `auto`, `download`, `helpUrl`, `onFailure`, `variants`. |
+| `custom[]` | object[] | `[]` | Up to 8 other prerequisites: `id`, `name` (shown to the user), `detect` (see below) and a source (`installer`, `download`, `helpUrl`, `onFailure`; no `auto`). |
+| `custom[].detect.registry` | object | | Present when this value exists, or holds at least `version`: `{ "hive": "HKLM", "key": "SOFTWARE\\Contoso\\Driver", "value": "Version", "version": "2.0" }` (both registry views are checked; empty `value` with no version = the key itself). |
+| `custom[].detect.file` | object | | Present when the file exists (and its version resource is at least `version`): `{ "path": "{System}\\drivers\\contoso.sys", "version": "2.0" }`. `{ProgramFiles}`, `{ProgramFilesX86}`, `{System}`, `{CommonAppData}`, `{LocalAppData}` or `{AppData}` first. |
 
 ### Prerequisite sources
 
 | Property | Type | Default | Meaning |
 |---|---|---|---|
-| `installer` | string | `""` | Installer **among the installed files** (add it with `files.extra`). Runs after the app's files are placed, visible, up to 30 minutes. |
+| `auto` | `""` \| `bundle` \| `download` | `""` | Microsoft's official installer, without adding it yourself (see [official installers](#official-installers)). `bundle`: downloaded when the package is built, stored in Setup.exe and extracted only if the prerequisite is missing (never installed into the app folder). `download`: downloaded by setup when needed. |
+| `installer` | string | `""` | Installer **among the installed files** (add it with `files.extra`). Runs after the app's files are placed, visible, up to 30 minutes. Wins over `auto`. |
 | `arguments` | string[] | see above | Installer arguments. |
-| `download` | object | `null` | `{ "url": "https://…", "sha256": "<64 hex>", "size": <bytes or 0> }`. Used when no installer is bundled. Downloaded **before anything is changed** (progress is shown), over TLS 1.2+, https only (no redirect to http), into a private temporary folder, size-capped (exact `size`, else 512 MiB) and verified against `sha256` before it runs. A mismatch or network error stops setup with exit code 17 and nothing installed. |
+| `download` | object | `null` | `{ "url": "https://…", "sha256": "<64 hex>", "size": <bytes or 0>, "signer": "…" }`. `signer` (optional): the file must also carry a valid Authenticode signature with a trusted chain issued to this name; with a `signer`, `sha256` may be left empty for vendor links that always serve the newest installer. Used when no installer is bundled. Downloaded **before anything is changed** (progress is shown), over TLS 1.2+, https only (no redirect to http), into a private temporary folder, size-capped (exact `size`, else 512 MiB) and verified against `sha256` before it runs. A mismatch or network error stops setup with exit code 17 and nothing installed. |
 | `helpUrl` | string | `""` | https link shown when the prerequisite is missing and setup cannot install it. |
 | `onFailure` | `warn` \| `fail` | `"warn"` | After the installer ran, the prerequisite is checked again. `warn`: the app stays installed and the result page lists the problem. `fail`: the whole installation is rolled back (exit code 17). |
 
 With neither `installer` nor `download`, a missing prerequisite stops setup before anything is changed (exit code 17,
 `PrerequisiteMissing`, with `helpUrl` in the message).
+
+### Official installers
+
+`"auto": "bundle"` and `"auto": "download"` use these links. They always serve Microsoft's current installer, so an
+installer that setup downloads is accepted by its signature (a valid, trusted Authenticode signature issued to
+"Microsoft Corporation"), not by a SHA-256. For `bundle` the builder downloads the file, checks the same signature (on
+Windows) and keeps it for a day under `%LocalAppData%\FluentSetup\cache\installers` (`fluentsetup build
+--refresh-installers` downloads it again; an offline build uses the last copy). The build report lists every bundled
+installer with its SHA-256.
+
+| Prerequisite | Installer | Silent arguments |
+|---|---|---|
+| WebView2 | Evergreen bootstrapper `https://go.microsoft.com/fwlink/p/?LinkId=2124703` (about 2 MB; it downloads the runtime, so it needs the internet) | `/silent /install` |
+| .NET Framework | 4.8 offline installer (`linkid=2088631`) for 4.5–4.8, 4.8.1 offline installer (`linkid=2203305`) for 4.8.1 | `/q /norestart` |
+| .NET | `https://aka.ms/dotnet/<M.m>/<windowsdesktop\|dotnet\|aspnetcore>-runtime-win-<x64\|arm64>.exe` (latest patch of the channel of `version`) | `/install /quiet /norestart` |
+| Windows App Runtime | `https://aka.ms/windowsappsdk/<M.m>/latest/windowsappruntimeinstall-<x64\|arm64>.exe` | `--quiet` |
+| VC++ Redistributable | `https://aka.ms/vs/17/release/vc_redist.<x64\|x86\|arm64>.exe` | `/install /quiet /norestart` |
+
+`arguments` overrides the silent arguments. The Builder app and `fluentsetup versions <webview2|windowsappruntime|dotnet|vcredist>`
+list current versions from Microsoft (Edge Stable for WebView2, NuGet for the Windows App SDK, the .NET release index).
 
 ## options
 
@@ -348,6 +391,187 @@ These rules are enforced by the builder and again by the installer engine, which
 - A step that fails (failed to start, timed out, or exited with a code not in `successExitCodes`) is handled according to `onFailure`. With `fail` after install, setup rolls back its *own* changes. Anything the program itself did, such as installing a driver or registering a task, cannot be undone (info FS1627).
 - `ifOption` is evaluated against the user's choice. In quiet mode it uses the option's `default` or `/option`. The choices are stored in the install record, so `beforeUninstall` actions see what was chosen at install time (records from older versions fall back to the defaults).
 - `skipIfInstalled` is checked right before the step runs.
+
+## Placeholders
+
+These placeholders are replaced at install time in `shortcuts[].arguments`, `associations[].arguments`,
+`protocols[].arguments`, `actions[].arguments`, `registry[].values[].data`, `environment[].value` and
+`configFiles[].values[].value`:
+
+| Placeholder | Value |
+|---|---|
+| `{InstallDir}` | The install folder |
+| `{MainExecutable}` | Full path of `app.mainExecutable` |
+| `{AppVersion}` | `app.version` |
+| `{AppId}` | `app.id` |
+| `{Input:<id>}` | The value of an [input](#inputs); an unknown id is error FS1998 |
+
+Every item of the sections below can carry `ifOption` (an `options[].id`): it is only applied while that option is
+selected, and the Change page of an installed app adds or removes it when the option is switched.
+
+## shortcuts
+
+More shortcuts besides the app's own (at most 16): other programs of the app, the app with arguments, the Startup
+folder. They are recorded like the app's own shortcuts: removed on uninstall and when an update no longer wants them.
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `name` | string | | **Required.** File name without `.lnk` (max 128). |
+| `target` | string | `""` | Relative path of a file among the installed files; empty = `app.mainExecutable`. |
+| `arguments` | string[] | `[]` | Arguments (placeholders allowed). |
+| `description` | string | `""` | Tooltip; empty = `app.description`. |
+| `icon`, `iconIndex` | string, int | `""`, `0` | `.ico`, `.exe` or `.dll` among the installed files; empty = the target. |
+| `workingDirectory` | string | `""` | Relative folder; empty = the target's folder. |
+| `location` | `startMenu` \| `desktop` \| `startup` | `"startMenu"` | Per-user folders for per-user installs, all-users folders for per-machine installs. |
+| `folder` | string | `""` | Start menu sub-folder; empty = `install.startMenuFolder`. |
+| `appUserModelId` | string | `""` | AppUserModelID of this shortcut. |
+| `ifOption` | string | `""` | See [placeholders](#placeholders). |
+
+## associations
+
+File types the app opens (at most 16). Registered under `HKCU\Software\Classes` for per-user installs and
+`HKLM\Software\Classes` for per-machine installs: the ProgID with its icon and open command, the extensions'
+"Open with" lists, the extension's default handler where no other app is the default yet (Windows asks the user
+otherwise), and a Default apps entry (`Software\RegisteredApplications` → `Software\FluentSetup\Capabilities\<app.id>`).
+Everything is journaled (a rollback restores the previous registry state) and removed on uninstall; an extension's
+default handler is only removed while it is still this app's.
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `extensions` | string[] | | **Required**, 1–16, e.g. `[".cnote"]` (`.` + 1–32 letters, digits, `-`, `_`). Program and shell types such as `.exe`, `.lnk`, `.bat`, `.ps1`, `.url` are refused (FS1922). |
+| `progId` | string | | **Required.** e.g. `Contoso.Notes.Document`: letters and digits in dot-separated parts (at least one dot), max 39, not `Microsoft.*`, `Windows.*`, `AppX*`. |
+| `description` | string | `""` | File type name in Explorer; empty = `app.name`. |
+| `icon`, `iconIndex` | string, int | `""`, `0` | Icon file among the installed files; empty = the target. |
+| `target` | string | `""` | Program (`.exe`) that opens the files; empty = `app.mainExecutable`. |
+| `arguments` | string[] | `["%1"]` | Command line; `"%1"` is the file and is always quoted. |
+| `contentType` | string | `""` | MIME type, set on the extension when it has none. |
+| `ifOption` | string | `""` | See [placeholders](#placeholders). |
+
+## protocols
+
+URL schemes the app handles (at most 16), registered next to the file types.
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `scheme` | string | | **Required.** Lowercase, 2–32 characters (`a-z`, digits, `+`, `-`, `.`), e.g. `contoso-notes`. Schemes of Windows and browsers (`http`, `https`, `file`, `mailto`, `ms-*`, `windows*`, …) and shell class names (`exefile`, `folder`, …) are refused; an existing key that is not a URL scheme is never taken over. |
+| `description` | string | `""` | e.g. "Contoso Notes link". |
+| `icon`, `iconIndex`, `target`, `ifOption` | | | As for file types. |
+| `arguments` | string[] | `["%1"]` | `"%1"` is the URL. |
+
+## registry
+
+Registry keys with values (at most 32 keys, 32 values each), below `HKCU` for per-user installs and `HKLM` for
+per-machine installs. Journaled: a rollback gives changed values their old data back and removes keys setup created.
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `key` | string | | **Required.** `Software\<Vendor>\...`, e.g. `Software\Contoso\Notes`. Not `Microsoft`, `Classes`, `Policies`, `Wow6432Node`, `RegisteredApplications`, `Clients` or `FluentSetup` (use associations and protocols for classes). |
+| `values[].name` | string | `""` | Empty = the key's default value. |
+| `values[].type` | `string` \| `expandString` \| `dword` \| `qword` \| `multiString` | `"string"` | |
+| `values[].data` | string | `""` | Text (placeholders allowed); numbers in decimal or `0x` hex; `multiString` lines separated by `\n`. |
+| `uninstall` | `values` \| `key` \| `keep` | `"values"` | `values`: remove the values written, then the key and its parents up to `Software\<Vendor>` once empty. `key`: remove the whole key. `keep`: leave it. |
+| `ifOption` | string | `""` | See [placeholders](#placeholders). |
+
+`install.appPaths` registers the main executable under `Software\Microsoft\Windows\CurrentVersion\App Paths`.
+
+## environment
+
+Environment variables (at most 16): the user's for per-user installs, the machine's for per-machine installs.
+Written after the install is committed (like `install.addToPath`), removed on uninstall and by updates that no longer
+declare them, in both cases only while the variable still holds the value setup wrote. Running programs are told
+(`WM_SETTINGCHANGE`).
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `name` | string | | **Required.** Letters, digits, `_ . ( ) -`. Not `Path` (use `install.addToPath`) or a Windows variable (`TEMP`, `SystemRoot`, `ProgramFiles`, `PROCESSOR_*`, …). |
+| `value` | string | `""` | Placeholders allowed. |
+| `expand` | bool | `false` | Store as `REG_EXPAND_SZ` (the value refers to `%OTHER%` variables). |
+| `ifOption` | string | `""` | See [placeholders](#placeholders). |
+
+## services
+
+Windows services run from the app's programs (at most 8; per-machine installs only, FS1966; with `userOrMachine`
+only when the user chooses "All users"). Before files are replaced or removed, the app's running services are
+stopped (a rollback starts them again). After the install is committed each service is created or updated (binary
+path, start type, account, description, recovery) and started; services an update no longer declares are deleted.
+Uninstall stops and deletes them.
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `name` | string | | **Required.** Service name: letters, digits, `.`, `-`, `_` (max 80). |
+| `displayName`, `description` | string | `""` | Shown in Services; empty display name = `name`. |
+| `run` | string | | **Required.** The service `.exe` among the installed files. |
+| `arguments` | string[] | `[]` | |
+| `startType` | `auto` \| `delayedAuto` \| `manual` \| `disabled` | `"auto"` | |
+| `account` | `localSystem` \| `localService` \| `networkService` | `"localSystem"` | Built-in accounts only (no passwords in packages). |
+| `start` | bool | `true` | Start after installing (a service that ran before an update is started again in any case). |
+| `dependencies` | string[] | `[]` | Services this one needs. |
+| `restartOnFailure` | bool | `true` | Recovery: restart after 5 s, 30 s and 60 s. |
+
+## firewall
+
+Windows Defender Firewall allow rules for the app's programs (at most 16; per-machine installs only). All rules
+carry the group `FluentSetup:<app.id>`: after the install is committed the group is replaced with the declared rules,
+uninstall removes it. A rule name that another program's rule also uses is never removed.
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `name` | string | | **Required.** Rule name (max 128, no `\|`). |
+| `program` | string | `""` | `.exe` among the installed files; empty = `app.mainExecutable`. |
+| `direction` | `in` \| `out` | `"in"` | |
+| `protocol` | `any` \| `tcp` \| `udp` | `"any"` | |
+| `localPorts` | string | `""` | tcp/udp only: `8080`, `8000-8010,9000`; empty = any port. |
+| `profiles` | string[] | `[]` | `domain`, `private`, `public`; empty = all. |
+| `ifOption` | string | `""` | See [placeholders](#placeholders). |
+
+## inputs
+
+Values the user enters during setup (at most 8), for example a server address or a licence key. They are shown on
+a *Settings* page after the first page (on updates only when a required value is missing) and on the Change page,
+and come from `/input <id>=<value>` in scripted installs. Use them as `{Input:<id>}`.
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `id` | string | | **Required.** Letters, digits, `-`, `_` (max 32). |
+| `label`, `description` | object | `{}` | Text per language (label required). |
+| `type` | `text` \| `password` \| `choice` | `"text"` | |
+| `default` | string | `""` | |
+| `required` | bool | `false` | |
+| `pattern` | string | `""` | Regular expression the value must match (use `^` and `$` to match it whole), e.g. `^https://`. Checked by the builder (.NET, ECMAScript mode) and by setup (C++ `std::regex` ECMAScript): keep to their common subset. |
+| `choices` | object[] | `[]` | `type` choice: `{ "value": "fast", "label": { "en-US": "Fast" } }`. |
+| `remember` | bool | `true` | Store the value in the install record and pre-fill it on updates and on the Change page. Never for passwords. |
+
+A value setup does not accept (missing, not a choice, not matching `pattern`) stops a scripted install with exit
+code 3 before anything is changed.
+
+## configFiles
+
+JSON or INI files setup writes values into (at most 16). Existing files keep their other settings.
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `path` | string | | **Required.** Relative to the install folder (written before the install is committed and journaled: a rollback restores the old file; an edited payload file is recorded with its new hash), or `{LocalAppData}\X`, `{AppData}\X`, `{CommonAppData}\X` (written after the commit; a failure is a warning). |
+| `format` | `json` \| `ini` | `"json"` | |
+| `values[].key` | string | | json: dotted path such as `server.url` (missing objects are created); ini: the key. |
+| `values[].section` | string | `""` | ini: the section (required). |
+| `values[].value` | string | `""` | Placeholders allowed. |
+| `values[].type` | `string` \| `number` \| `bool` | `"string"` | json only. |
+| `ifOption` | string | `""` | See [placeholders](#placeholders). |
+
+New INI files are created as UTF-16, so values in any language survive.
+
+## Changing and repairing an installation
+
+The Apps & features entry has **Modify**, which starts `uninstall.exe /modify`: a *Change* page with the shortcut
+and option choices and the inputs. *Change* applies the new choices without touching the app's files: shortcuts,
+startup values, file types, URL schemes, registry values, environment variables, config files and firewall rules that
+depend on options are added or removed, and the `afterInstall` actions of options that were just turned on run; it is
+journaled like an install and rewrites the install record. *Repair* checks every installed file against the install
+record (size and SHA-256). If something is missing or damaged it reinstalls the same version with `/passive`, from
+the original Setup.exe if it is still where it was run (identified by its header digest) or else from the update
+source (GitHub release `v<version>`/`<version>`, or a feed that advertises the installed version). Without either it
+says to run Setup.exe again. Scripts: `uninstall.exe /modify /quiet [/option …] [/desktop-shortcut …] [/input …]`,
+`uninstall.exe /repair [/quiet]`.
 
 ## uninstall
 
@@ -428,6 +652,7 @@ requests per hour per address without a token, enough for checks at start-up or 
 | `licenses` | object | `{}` | Per-language license files, e.g. `{ "zh-CN": "license_zh.txt" }`. Falls back to `license`. |
 | `localization` | string | `""` | Folder with one `<language>.json` per language; see *Localization*. |
 | `defaultLanguage` | `auto` \| `en-US` \| `zh-CN` \| `ja-JP` \| `ko-KR` | `"auto"` | `auto` follows the user's Windows display languages (first one the installer supports; else en-US). `/lang` overrides this setting. |
+| `banner` | string | `""` | Image (`.png`, `.jpg` or `.bmp`, up to 1 MB; about 4:1, e.g. 960×240) shown at the top of the first page in both interfaces. Stored with the front-end files (also when `output.includeWinUI` is false). |
 | `strings` | object | `{}` | Per-language overrides of built-in strings, e.g. `{ "zh-CN": { "welcome.body": "…" } }`. Keys are listed in `shared/localization/en-US.json`. Values longer than 4096 bytes are ignored. |
 
 ### Localization
@@ -477,6 +702,7 @@ Signing uses `signtool.exe` with a SHA-256 file digest.
 | `passwordEnvironmentVariable` | string | `""` | Name of an environment variable that holds the PFX password. The password is never stored in the project or written to the log. |
 | `timestampUrl` | string | `"http://timestamp.digicert.com"` | RFC 3161 timestamp server. Empty means no timestamp. |
 | `signToolPath` | string | `""` | Path of `signtool.exe`. Empty means the Windows 10/11 SDK and `PATH` are searched. |
+| `signUninstaller` | bool | `true` | Also sign the `uninstall.exe` that setup writes into the install folder, so UAC and SmartScreen show the publisher when the app is removed. The builder produces the exact uninstaller setup will write, signs it, and stores its certificate table in the package (a few KB); setup appends it and checks the result against the recorded SHA-256 (else it writes an unsigned uninstaller and logs why). |
 
 When `enabled` is true, a thumbprint or a certificate file is required (FS1501).
 
@@ -493,6 +719,8 @@ fluentsetup build <project.json> [options]
     -v, --verbose           Detailed log (also prints info diagnostics)
     --json                  Print the build report as JSON instead of text
     --non-interactive       Accepted for CI scripts (the CLI never prompts)
+    --refresh-installers    Download official prerequisite installers ("auto": "bundle") again
+    --msbuild               Diagnostics in MSBuild's format (used by the FluentSetup.MSBuild targets)
 fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
 fluentsetup inspect <Setup.exe> [--verify] [--json]
 fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
@@ -500,6 +728,9 @@ fluentsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [-o <di
                    [--license <name>] [--license-url <url>] [--short-description <text>] [--publisher-url <url>]
                    [--tags <a,b>] [--release-notes-url <url>] [--json]
 fluentsetup versions <webview2|windowsappruntime|dotnet|vcredist> [--json]
+fluentsetup locale add <language> <project.json> [--force]
+fluentsetup guide | schema
+fluentsetup update [--check] [--prerelease] [--json]
 fluentsetup --version | --help
 ```
 
@@ -508,6 +739,9 @@ fluentsetup --version | --help
 - `versions` lists versions for a prerequisite's version field, newest first, as the Builder's version pickers offer them: `webview2` = the current Microsoft Edge Stable and Beta versions for Windows (`edgeupdates.microsoft.com`), `windowsappruntime` = stable Windows App SDK releases from NuGet in the project's format (`1.6` for a 1.x channel, `2.5.1` from 2.x on), `dotnet` = one `M.m.0` minimum per .NET channel with its latest runtime, LTS/STS and support phase (`builds.dotnet.microsoft.com` release metadata), `vcredist` = common minimums (there is no feed; Microsoft's official installer is always the latest). Lists are cached for a day under `%LocalAppData%\FluentSetup\cache\versions`; offline, the saved (or a built-in) list is printed with a warning. `--json` prints `{ product, versions[], source, retrievedAt, feedUrl, error }`.
 - `init` creates `<folder>\fluentsetup.json` (default folder: the current one) and refuses to overwrite an existing file. `mainExecutable` is set to the first `*.exe` found directly in the source folder.
 - `winget` writes winget manifests for a built Setup.exe into `<dir>\manifests\<letter>\<Publisher>\<App>\<version>\` (default `<dir>`: the current folder), the layout of the winget-pkgs repository. Everything else comes from the package. See [winget.md](winget.md); [msbuild.md](msbuild.md) covers the NuGet packages (MSBuild targets, .NET tool, library).
+- `locale add` creates `<ui.localization>/<language>.json` with every text to translate (installer strings, option, action, variant and input ids), for a language the installer does not ship.
+- `guide` prints the complete authoring guide ([ai-guide.md](ai-guide.md)), `schema` the JSON Schema of the project file.
+- `update` updates FluentSetup itself (Builder and CLI) from its GitHub releases; `--check` only reports.
 - Options accept `--name value` or `--name=value`. Unknown or repeated options are usage errors.
 - Exit codes: `0` success, `1` validation or build failure, `2` usage error, `3` unexpected error, `4` cancelled.
 

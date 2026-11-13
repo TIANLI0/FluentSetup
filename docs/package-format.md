@@ -314,6 +314,21 @@ In addition to the file-set fields: `entry` (relative path of the executable to 
 included). Front-end streams must not overlap any payload stream. The bootstrapper only uses the WinUI front end if
 `entry` is non-empty and the set has at least one file.
 
+### 4.7a 1.2 additions
+
+All optional; an older stub never reads a 1.2 header (every Setup.exe reads only its own), and `format` stays 1.
+
+| Key | Content |
+|---|---|
+| `app.appUserModelId`, `app.toastActivatorClsid` | Set on the app's own shortcuts. |
+| `install.appPaths`, `install.restartManager` (`auto`\|`off`), `install.lockedFiles` (`fail`\|`reboot`) | |
+| `shortcuts`, `associations`, `protocols`, `registry`, `environment`, `services`, `firewall`, `inputs`, `configFiles` | The project sections with defaults resolved by the builder (targets, Start menu folders, `args`), paths with `\`. Parsed and validated again by `ParseExtensions`. |
+| `requirements[]` | New `type`s `vcredist` (`architecture`, `minVersion`) and `custom` (`id`, `detect.registry` or `detect.file`); any requirement may have `bundled` (a file of the `redist` set) and `download.signer` (then `download.sha256` is optional). |
+| `ui.banner` | File name in the `frontend` set (`banner.png` …). A `frontend` set without `entry` carries only the icon and banner (no WinUI front end). |
+| `redist` | File set (like `frontend`) of bundled official prerequisite installers, one stream each; never installed, extracted into a private temporary folder only when the prerequisite is missing. Not copied into the uninstaller. |
+| `uninstallerImage` | `{header: base64, certificates: base64, checksum, sha256}`: the exact header of the signed `uninstall.exe`, its Authenticode certificate table and PE checksum, and the SHA-256 of the finished file (section 7). Not copied into the uninstaller. |
+| `testHooks` | `true` only in packages built with `fluentsetup build --test-hooks` (FluentSetup's own tests): enables `FLUENTSETUP_TEST_FAULT_AFTER` and `--ui-simulate`. |
+
 ### 4.8 JSON parser limits
 
 The header is parsed by the project's own JSON reader (`src/Common/json.cpp`) with:
@@ -383,6 +398,16 @@ The log line `Windows build …, elevated=…, signature=<state> (0x<WinVerifyTr
 The file is written to `<InstallDir>\.fsetup\uninstall.new` and then moved to `<InstallDir>\uninstall.exe`; both steps
 are journaled. When `uninstall.exe` starts, `kind = "uninstaller"` puts it into uninstall mode; it first copies itself
 to a private temporary directory and runs the copy (see `docs/diagnostics.md`).
+
+### 7.1 Signed uninstaller (`uninstallerImage`)
+
+With `signing.signUninstaller` the builder writes the uninstaller exactly as the engine will (stub with the
+Authenticode directory and checksum cleared, the front-end streams, an uncompressed header derived from the setup
+header with `kind: "uninstaller"`, an empty payload and no `redist`, footer with flags 0), signs it, and checks that
+the signing tool only set the checksum and the security directory and appended the certificate table. The engine
+writes the same bytes using the stored header, sets the checksum and the security directory (offset = file size,
+size = table size), appends the table and keeps the file only if its SHA-256 equals `uninstallerImage.sha256`;
+otherwise it writes the unsigned uninstaller.
 
 ## 8. Compatibility and versioning
 

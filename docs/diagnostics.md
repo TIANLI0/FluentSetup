@@ -133,6 +133,13 @@ entries at least every 64 entries and before the registration phase.
    could not be undone, the marker and the journal stay for the next run. A failure after `commit` is not rolled back.
 5. If the process dies (crash, kill, power loss, a lost elevated worker), marker and journal stay as they are.
 
+### 3.2a Partial rollbacks
+
+A rollback that cannot undo every step (a file that stays locked, a service that does not start) keeps the pending
+marker and rewrites `journal.jsonl` to hold only the steps that are left. The log lists each of them
+(`Rollback: could not undo ...`); the next run of any package of the app retries exactly those. Registry steps are
+logged as `Rollback: registry key ... restored|removed` and `Rollback: registry value ... [name] restored|removed`.
+
 ### 3.3 What happens on the next run
 
 At the start of the next install or uninstall of the same app id in the same scope (after the initial checks such as

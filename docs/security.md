@@ -352,7 +352,7 @@ access FluentSetup ever makes, and only when that prerequisite is missing on the
   per-machine installs it runs elevated, so the SHA-256 in the (ideally signed) package is what authorises it.
 ## 5. Known gaps and weaknesses
 
-Found while reading the code for this document. G1, G6, G7, G10 and G11 have been fixed since, and G2 partly; the rows say so.
+Found while reading the code for this document. G1, G5, G6, G7, G8, G10, G11 and G14 have been fixed since, and G2 partly; the rows say so.
 
 | Id | Severity (estimate) | Location | Description |
 |---|---|---|---|
@@ -360,13 +360,38 @@ Found while reading the code for this document. G1, G6, G7, G10 and G11 have bee
 | G2 | Medium (partly fixed) | `src/Install.Core/engine.cpp` (Preparing) | For per-machine installs outside Program Files the protected ACL is applied to directories setup creates and to an existing *empty* directory the user picked. A pre-existing non-empty directory (upgrade in place, adopted install) keeps its ACL; if a standard user can write there, they can replace binaries installed by the administrator, including `uninstall.exe` and the executables that `afterInstall` actions run elevated, and they control the `.fsetup` journal (see G4). The engine logs a warning in that case. |
 | G3 | Medium (only with G2-type locations or user-created `ProgramData` folders) | `src/Install.Core/engine.cpp:378-385, 398, 903-920, 952-956`; `src/Common/fs.cpp:163-189` | Link checks are path-based and done before the operation (and cached per directory during extraction); the subsequent create/move/delete is again path-based. In a directory a standard user can modify, a directory can be swapped for a junction between check and use (time-of-check/time-of-use), redirecting elevated writes, moves or the recursive `DeleteTree` of `removeData` (for example a folder under `C:\ProgramData` that a user pre-created). |
 | G4 | Low | `src/Install.Core/engine.cpp:343-364`; `src/Install.Core/journal.cpp:161-163` | Recovery runs elevated over `<dir>\.fsetup\journal.jsonl`. If the install directory is user-writable (G2) and a machine-scope pending marker exists (after a crash), a user can edit the journal: rollback stays inside the install directory and shortcut folders, but `reg` entries restore arbitrary values into the app's HKLM ARP key. |
-| G5 | Low-Medium | `src/Archive/container.cpp:258-260, 276-280` | `CERT_E_REVOKED` and `TRUST_E_EXPLICIT_DISTRUST` are classified as `Intact` and accepted; revocation is never checked online. The signature state is not surfaced in the UI, so a revoked publisher certificate installs silently. |
+| G5 | Fixed | `src/Archive/container.cpp` (`CheckSignature`) | *Was:* `CERT_E_REVOKED` and `TRUST_E_EXPLICIT_DISTRUST` were accepted and the signature state was not shown. *Now:* a certificate the PC knows to be revoked or that is explicitly distrusted is refused (`PackageCorrupt`, also for updates and Repair packages), and the first page shows "Verified publisher: <name>" for a trusted signature or "Unknown publisher" otherwise. Revocation is still not checked online. |
 | G6 | Fixed | `src/Install.Worker/worker.cpp`; `Engine::SanitizeOptions` | *Was:* the worker did not re-apply the package's option policy. *Now:* the worker rejects options that `Engine::SanitizeOptions` refuses (scope, custom folder when `allowCustomDir` is false, undeclared option ids) and forces hidden shortcut offers to their defaults. |
 | G7 | Fixed | `src/Bootstrapper/main.cpp` (`InstanceLock`) | *Was:* the `Global\FluentSetup-<appId>` mutex was created with default security, and if an existing object denied access, `CreateMutexW` failed and the single-instance check was silently skipped. *Now:* it is created with an explicit security descriptor (`D:P(A;;0x001F0001;;;SY)(A;;0x001F0001;;;BA)(A;;0x00100001;;;AU)(A;;0x00100001;;;IU)(A;;0x00100001;;;OW)`: every authenticated or interactive user may wait on it and release it, so setups of different users and sessions see each other; the owner-rights ACE keeps its creator from rewriting that security) and opened with `SYNCHRONIZE \| MUTEX_MODIFY_STATE`. Any failure to create or open it, including access denied or a same-named object of another type, is treated as "another setup is running" (exit code 16, fail closed). A user who creates the mutex first can still make other users' setups of that app wait while their own runs; that is the purpose of the lock. |
-| G8 | Low | `src/Install.Core/engine.cpp:795-798`; `src/Install.Core/extensions.cpp:326-352` | Bundled prerequisite installers are run without the `IsStrictlyUnder`/`HasLinkInPath` check that actions get (`engine.cpp:549`). The action job object has no `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so processes spawned by an action that outlive it keep running (as administrator for per-machine installs). |
+| G8 | Fixed | `src/Install.Core/extensions.cpp` (`RunProgram`); `engine.cpp` | *Was:* bundled prerequisite installers skipped the location checks of actions, and processes an action started outlived it. *Now:* an installer among the installed files must be strictly inside the install folder and not reached through a link, and the job object of an action ends every process the action left running when it exits (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Vendor prerequisite installers are exempt: their updaters keep running on purpose. |
 | G9 | Low | `src/Builder.Core/Packaging/Signer.cs:51-56` | The PFX password is passed to `signtool.exe` on its command line (`/p`), visible to other processes on the build machine; it is only masked in the log. |
 | G10 | Fixed | `src/Bootstrapper/main.cpp` (`RunUninstallPhase1`) | A running copy cannot delete itself, so each uninstall removes the `%TEMP%\FluentSetup-u-<random>` copies earlier uninstalls left behind (skipping links and copies still in use). The copy of the most recent uninstall remains until the next one. |
 | G11 | Fixed | `src/Bootstrapper/controller.cpp` (`Run`); `src/Bootstrapper/main.cpp` | *Was:* test hooks were active in every release package: the `FLUENTSETUP_TEST_FAULT_AFTER` environment variable (forces a failure and rollback after N files, in-process installs only) and `--ui-simulate`. *Now:* both are honoured only by packages built with `fluentsetup build --test-hooks` (header `testHooks: true`, used by the e2e and UI tests); other packages ignore them and log a warning. The parser still accepts `--ui-simulate`, so such a command line is not an error. |
 | G12 | Informational | `src/Bootstrapper/winui_host.cpp:177`; `src/Setup.WinUI/app.manifest` | The UI manifest comment says the UI "never runs elevated", but if `Setup.exe` itself is started elevated the WinUI child inherits the elevated token. |
 | G13 | Informational | `src/Install.Core/extensions.cpp:399-408`; `src/Install.Core/engine.cpp:952-956` | `removeRunValues` deletes from both HKCU and HKLM regardless of scope, and in an over-the-shoulder elevated uninstall HKCU, `{LocalAppData}` and `{AppData}` refer to the administrator's profile, not the user who installed the app. |
-| G14 | Informational | `src/Common/json.cpp:365-371` | Duplicate JSON object keys are accepted (first one wins) rather than rejected. |
+| G14 | Fixed | `src/Common/json.cpp` | *Was:* duplicate JSON object keys were accepted (first one wins). *Now:* they are a parse error (package headers, install records, journals, IPC messages, update feeds). |
+
+## 6. System integration (1.2)
+
+* **Registry.** Everything setup writes into the registry (file types, URL schemes, App Paths, Default apps
+  capabilities, `registry[]` values) goes through one writer that journals the previous state (whole trees for keys
+  setup owns, single values elsewhere) and is confined to: `Software\Classes\<ProgID|scheme|.ext>` (ProgIDs need a
+  dot and are never `Microsoft.*`/`Windows.*`/`AppX*`; program and shell extensions such as `.exe`, `.lnk`, `.ps1`,
+  `.url` and schemes such as `http`, `file`, `ms-*`, `exefile`, `folder` are refused), `App Paths\<x.exe>`,
+  `Software\FluentSetup\Capabilities\<appId>`, values of `Software\RegisteredApplications`, and
+  `Software\<Vendor>\...` outside the shared trees. Rollback and uninstall re-check every key from the journal and the
+  install record against these rules, so a tampered journal or record cannot make an elevated process touch other
+  keys. Only the scope's own hive is used (HKCU for per-user installs, HKLM for per-machine installs). An existing key
+  that is not a URL scheme is never replaced by a protocol registration, and an extension's default handler is only
+  taken where no other app holds it and only removed while it is still this app's.
+* **Services and firewall rules** are per-machine only, run built-in accounts only (no passwords in packages), point
+  at programs among the installed files, and are removed by name (services) or by the app's own rule group (firewall;
+  a rule name another program also uses is never removed).
+* **Bundled and downloaded prerequisite installers.** Official installers are bundled after the builder checked their
+  Microsoft signature, and verified by SHA-256 like every stream when setup extracts them into a private temporary
+  folder. A download without a pinned SHA-256 (`"auto": "download"`, or `download.signer`) only runs if it carries a
+  valid Authenticode signature with a trusted chain issued to the pinned name.
+* **Pre-signed uninstaller.** Setup writes the signed `uninstall.exe` only if the reproduced file matches the SHA-256
+  the (signed) package recorded; otherwise it writes the unsigned one, as before.
+* **Rollback is never repeated.** If some steps of a rollback fail, the journal is rewritten to hold only those steps,
+  so the next run retries them without undoing again what was already restored.
