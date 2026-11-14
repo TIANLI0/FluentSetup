@@ -96,14 +96,16 @@ jobs:
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      # "uses: TIANLI0/FluentSetup@v1" follows the latest 1.x release.
-      - name: Move the major tag
+      # "uses: TIANLI0/FluentSetup@v1" follows the latest 1.x release, "@latest" the latest release.
+      - name: Move the major and latest tags
         if: steps.version.outputs.prerelease == 'false'
         shell: pwsh
         run: |
           $major = 'v' + ('${{ steps.version.outputs.version }}' -split '\.')[0]
-          git tag -f $major HEAD
-          git push -f origin "refs/tags/${major}"
+          foreach ($tag in $major, 'latest') {
+            git tag -f $tag HEAD
+            git push -f origin "refs/tags/${tag}"
+          }
 
       # The same .nupkg files as on the release page (symbols go along with Builder.Core). Re-runs skip what is there.
       - name: Log in to nuget.org (Trusted Publishing)

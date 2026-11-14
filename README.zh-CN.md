@@ -78,9 +78,11 @@ fluentsetup inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
 GitHub Action 会在 Windows 构建机上安装命令行工具（下载后校验 SHA-256）：
 
 ```yaml
-- uses: TIANLI0/FluentSetup@v1.2.0
+- uses: TIANLI0/FluentSetup@latest
 - run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3
 ```
+
+`@latest` 总是使用最新发布的版本（action 和命令行），`@v1` 是最新的 1.x，`@v1.2.1` 则固定为该版本。
 
 `-D Version=1.2.3` 会填入项目文件里的 `$(Version)`（例如 `"version": "$(Version)"`），版本号由发布流程决定。
 

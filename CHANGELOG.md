@@ -3,6 +3,26 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
+## [1.2.1] - 2026-11-14
+
+### Fixed
+
+- Texts and licenses a package provides per language fall back to the same language in another region before English
+  (Traditional Chinese uses `zh-TW`/`zh-HK`, then `zh-CN`; `de-AT` uses `de-DE`). With the Traditional Chinese
+  installer table added in 1.2.0, packages with only `zh-CN` labels showed English to Traditional Chinese users.
+- Uninstall removes the `HKCU\Software\Classes\AppUserModelId\<id>` key an unpackaged app registers for the
+  AppUserModelIDs the package declares.
+- `uninstall.removeRegistryKeys` logs the keys it removed (it removed them but reported a failure).
+- `fluentsetup <command> --help` prints the usage instead of an error.
+
+### Added
+
+- `uses: TIANLI0/FluentSetup@latest` follows the newest release (the release workflow moves the `latest` tag along
+  with `v1`).
+- `FLUENTSETUP_CACHE` moves the cache of bundled Microsoft installers, for isolated builds.
+- Releases push the NuGet packages with nuget.org Trusted Publishing (no stored API key); a manual `nuget-only` run
+  pushes the packages of an existing release.
+
 ## [1.2.0] - 2026-11-14
 
 ### Added

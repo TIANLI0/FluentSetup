@@ -8,8 +8,8 @@ branding:
 inputs:
   version:
     description: >-
-      FluentSetup version, e.g. 1.0.0. Default: the version of the action ref (uses: TIANLI0/FluentSetup@v1.2.0),
-      else the latest release.
+      FluentSetup version, e.g. 1.0.0. Default: the version of the action ref (uses: TIANLI0/FluentSetup@v1.2.1),
+      else (@latest, @v1, a branch) the latest release.
     required: false
     default: ''
 

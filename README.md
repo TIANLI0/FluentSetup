@@ -117,9 +117,11 @@ Run the result to try it, or test it unattended: `Setup.exe /quiet /log setup.lo
 The GitHub Action installs the command-line tool (verified download) on a Windows runner:
 
 ```yaml
-- uses: TIANLI0/FluentSetup@v1.2.0
+- uses: TIANLI0/FluentSetup@latest
 - run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3
 ```
+
+`@latest` always uses the newest release (action and CLI), `@v1` the newest 1.x, and `@v1.2.1` exactly that version.
 
 `-D Version=1.2.3` fills `$(Version)` placeholders in the project (`"version": "$(Version)"`), so the version comes
 from your release pipeline.
