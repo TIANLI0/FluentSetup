@@ -47,16 +47,16 @@ if ($Skip -notcontains 'WinUI' -or $Skip -notcontains 'Native') {
     Invoke-Step 'Restore native NuGet packages' { & $nuget restore src\Setup.WinUI\packages.config -PackagesDirectory packages -NonInteractive -Verbosity quiet }
 }
 
-$parallel = if ($MaxCompilers -gt 0) { @('/m:1', "/p:CL_MPCount=$MaxCompilers") } else { @('/m') }
+[string[]] $parallel = if ($MaxCompilers -gt 0) { '/m:1', "/p:CL_MPCount=$MaxCompilers" } else { '/m' }
 foreach ($platform in $Platforms) {
     if ($Skip -notcontains 'Native') {
-        Invoke-Step "Native stub ($platform)" { & $msbuild src\Bootstrapper\FluentSetup.Stub.vcxproj @parallel /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
+        Invoke-Step "Native stub ($platform)" { & $msbuild src\Bootstrapper\FluentSetup.Stub.vcxproj $parallel /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
     }
     if ($Skip -notcontains 'WinUI') {
-        Invoke-Step "WinUI front end ($platform)" { & $msbuild src\Setup.WinUI\FluentSetup.UI.vcxproj @parallel /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
+        Invoke-Step "WinUI front end ($platform)" { & $msbuild src\Setup.WinUI\FluentSetup.UI.vcxproj $parallel /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
     }
     if ($Skip -notcontains 'Tests') {
-        Invoke-Step "Native tests ($platform)" { & $msbuild tests\Native\FluentSetup.Tests.Native.vcxproj @parallel /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
+        Invoke-Step "Native tests ($platform)" { & $msbuild tests\Native\FluentSetup.Tests.Native.vcxproj $parallel /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
     }
 }
 
