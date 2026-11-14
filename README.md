@@ -121,7 +121,7 @@ The GitHub Action installs the command-line tool (verified download) on a Window
 - run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3
 ```
 
-`@latest` always uses the newest release (action and CLI), `@v1` the newest 1.x, and `@v1.2.1` exactly that version.
+`@latest` always uses the newest release (action and CLI), `@v1` the newest 1.x, and `@v1.3.0` exactly that version.
 
 `-D Version=1.2.3` fills `$(Version)` placeholders in the project (`"version": "$(Version)"`), so the version comes
 from your release pipeline.

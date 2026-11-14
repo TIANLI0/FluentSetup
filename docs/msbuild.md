@@ -24,7 +24,7 @@ Reference the package and point `FluentSetupProject` at the installer's project 
     <FluentSetupProject>installer\fluentsetup.json</FluentSetupProject>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="FluentSetup.MSBuild" Version="1.2.1" />
+    <PackageReference Include="FluentSetup.MSBuild" Version="1.3.0" />
   </ItemGroup>
 </Project>
 ```

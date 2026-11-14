@@ -6,7 +6,7 @@ runtime: no global tool to install.
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="FluentSetup.MSBuild" Version="1.2.1" />
+  <PackageReference Include="FluentSetup.MSBuild" Version="1.3.0" />
 </ItemGroup>
 <PropertyGroup>
   <FluentSetupProject>installer\fluentsetup.json</FluentSetupProject>
