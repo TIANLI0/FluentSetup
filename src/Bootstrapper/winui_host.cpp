@@ -102,6 +102,7 @@ public:
         channel_.Send(m);
     }
     void OnDone(const install::Outcome& o) override { channel_.Send(controller_.DoneMessage(o)); }
+    void OnUpdateCheck(const json::Value& m) override { channel_.Send(m); }
 
 private:
     ipc::Channel& channel_;
@@ -263,6 +264,14 @@ WinUiResult RunWinUi(Controller& controller, const std::wstring& simulate) {
             channel.Send(controller.CheckInput(m["id"].asString(), m["value"].asWide()));
         } else if (t == "repair") {
             if (controller.mode() == Mode::Modify) controller.Repair(UiWindow(pi.dwProcessId));
+        } else if (t == "checkUpdate") {
+            controller.CheckForUpdate();
+        } else if (t == "installUpdate") {
+            // The updater takes over (its own window); this session ends so the new Setup.exe can take the app lock.
+            if (controller.mode() == Mode::Modify && !controller.Running() && controller.StartUpdate()) {
+                controller.MarkClosedByUser();
+                finished = true;
+            }
         } else if (t == "start") {
             install::InstallOptions options = controller.DefaultOptions();
             if (controller.mode() == Mode::Uninstall) options.removeUserData = m["options"]["removeUserData"].asBool(false);

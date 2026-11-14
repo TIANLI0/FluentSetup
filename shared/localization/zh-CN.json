@@ -204,6 +204,8 @@
   "modify.repairing": "正在修复 {0}…",
   "modify.repairNoSource": "{0} 的部分文件缺失或已损坏。请重新运行它的安装程序进行修复。",
   "modify.noProblems": "未发现问题：{0} 的所有文件都完好无损。",
+  "modify.updateAvailable": "有新版本（{0}）可用。",
+  "modify.updateButton": "更新",
   "progress.title.modify": "正在更改 {0}",
   "result.success.title.modify": "{0} 已更改",
   "result.success.body.modify": "对 {0} 的更改已生效。",

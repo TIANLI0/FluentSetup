@@ -161,6 +161,7 @@ MainWindow::MainWindow() {
             // updater): no questions, straight to the progress page.
             if (!channel.preview() && Hello()["modify"]["startRepair"].asBool()) self->StartRepair();
             else if (Hello()["passive"].asBool() && !channel.preview()) self->StartInstall();
+            else if (!channel.preview() && Hello()["modify"]["canUpdate"].asBool()) channel.SendType("checkUpdate");
         });
     });
 }
@@ -268,6 +269,7 @@ void MainWindow::ApplyStaticText() {
     InputsHeading().Text(Str("inputs.title"));
     InputsSubtitle().Text(Fmt(IsModify() ? "inputs.subtitle.modify" : "inputs.subtitle", {AppName()}));
     RepairNote().Text(Str("modify.repairBody"));
+    UpdateButton().Content(winrt::box_value(Str("modify.updateButton")));
 }
 
 void MainWindow::ApplyHello() {
@@ -287,12 +289,13 @@ void MainWindow::ApplyHello() {
     if (IsModify()) description = Fmt("modify.subtitle", {name, h["app"]["version"].asWide()});
     SetLine(DescriptionText(), description);
 
-    // Publisher line: who signed the running setup (not the self-declared publisher of the package).
+    // Publisher line, only for a verified signature: who signed the running setup (not the self-declared publisher of
+    // the package). Unsigned setups are common and Windows already says so in SmartScreen/UAC: no line, no warning.
     const Value& signature = h["signature"];
     const bool verified = signature["state"].asString() == "valid" && !signature["publisher"].asWide().empty();
-    SignatureText().Text(verified ? Fmt("welcome.verifiedPublisher", {signature["publisher"].asWide()}) : Str("welcome.unknownPublisher"));
-    SignatureIcon().Glyph(verified ? L"\xE73E" : L"\xE7BA");  // CheckMark / Warning
-    SignatureIcon().Foreground(ThemeBrush(verified ? L"SystemFillColorSuccessBrush" : L"SystemFillColorCautionBrush"));
+    SignatureText().Text(verified ? Fmt("welcome.verifiedPublisher", {signature["publisher"].asWide()}) : L"");
+    SignatureIcon().Glyph(L"\xE73E");  // CheckMark
+    SignatureIcon().Foreground(ThemeBrush(L"SystemFillColorSuccessBrush"));
     SignatureText().Foreground(ThemeBrush(L"TextFillColorSecondaryBrush"));
 
     const std::string relation = existing["relation"].asString();
@@ -478,8 +481,9 @@ void MainWindow::ShowPage(Page page) {
     SetVisible(SummaryPage(), summary);
     SetVisible(InputsPage(), page == Page::Inputs);
     SetVisible(BannerImage(), page == Page::Welcome && BannerImage().Source() != nullptr);
-    SetVisible(SignaturePanel(), page == Page::Welcome);
+    SetVisible(SignaturePanel(), page == Page::Welcome && !SignatureText().Text().empty());
     SetVisible(RepairNote(), page == Page::Welcome && CanRepair());
+    SetVisible(UpdateInfo(), page == Page::Welcome && UpdateInfo().IsOpen());
     SetVisible(InlineOptions(), page == Page::Welcome && HasOptions());
     SetVisible(LicensePage(), page == Page::License);
     SetVisible(PageScroller(), page != Page::License);
@@ -753,6 +757,22 @@ void MainWindow::HandleMessage(Value message) {
     else if (type == "done") OnDone(message);
     else if (type == "pathCheck") OnPathCheck(message);
     else if (type == "inputCheck") OnInputCheck(message);
+    else if (type == "updateCheck") OnUpdateCheck(message);
+}
+
+void MainWindow::OnUpdateCheck(const Value& m) {
+    if (!IsModify() || !m["available"].asBool()) return;  // up to date or offline: nothing to show
+    UpdateInfo().Message(Fmt("modify.updateAvailable", {m["version"].asWide()}));
+    UpdateInfo().IsOpen(true);
+    SetVisible(UpdateInfo(), page_ == Page::Welcome);
+}
+
+void MainWindow::OnUpdateClick(IInspectable const&, RoutedEventArgs const&) {
+    if (page_ != Page::Welcome) return;
+    UpdateButton().IsEnabled(false);
+    PrimaryButton().IsEnabled(false);
+    SecondaryButton().IsEnabled(false);
+    fsui::UiChannel::Get().SendType("installUpdate");  // the updater opens its own window; setup ends this session
 }
 
 void MainWindow::OnProgress(const Value& m) {

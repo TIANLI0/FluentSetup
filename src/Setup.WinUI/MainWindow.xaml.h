@@ -20,6 +20,7 @@ struct MainWindow : MainWindowT<MainWindow> {
     void OnBrowseClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnOpenFolderClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnViewLogClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+    void OnUpdateClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnScopeChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
     void OnVariantChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
     void UpdateNotice();
@@ -47,6 +48,7 @@ private:
     [[nodiscard]] std::wstring InputValue(const InputField& field) const;
     void OnInputEdited(size_t index);
     void OnInputCheck(const fsetup::json::Value& m);
+    void OnUpdateCheck(const fsetup::json::Value& m);
     [[nodiscard]] bool InputsValid() const;
     [[nodiscard]] bool HasInputsPage() const;
     void StartRepair();

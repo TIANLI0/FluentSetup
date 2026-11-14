@@ -204,6 +204,8 @@
   "modify.repairing": "Reparando {0}…",
   "modify.repairNoSource": "Faltan archivos de {0} o están dañados. Vuelve a ejecutar su programa de instalación para repararlo.",
   "modify.noProblems": "No se encontraron problemas: todos los archivos de {0} están intactos.",
+  "modify.updateAvailable": "Hay una versión más reciente ({0}) disponible.",
+  "modify.updateButton": "Actualizar",
   "progress.title.modify": "Cambiando {0}",
   "result.success.title.modify": "Se ha cambiado {0}",
   "result.success.body.modify": "Se han aplicado los cambios en {0}.",

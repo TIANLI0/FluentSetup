@@ -204,6 +204,8 @@
   "modify.repairing": "{0} 복구 중…",
   "modify.repairNoSource": "{0}의 일부 파일이 없거나 손상되었습니다. 복구하려면 설치 프로그램을 다시 실행하세요.",
   "modify.noProblems": "문제가 발견되지 않았습니다. {0}의 모든 파일이 정상입니다.",
+  "modify.updateAvailable": "새 버전({0})을 사용할 수 있습니다.",
+  "modify.updateButton": "업데이트",
   "progress.title.modify": "{0} 변경 중",
   "result.success.title.modify": "{0}이(가) 변경되었습니다.",
   "result.success.body.modify": "{0}에 대한 변경 내용이 적용되었습니다.",

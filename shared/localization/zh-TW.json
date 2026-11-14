@@ -204,6 +204,8 @@
   "modify.repairing": "正在修復 {0}…",
   "modify.repairNoSource": "{0} 的部分檔案遺失或已損毀。請重新執行它的安裝程式來修復。",
   "modify.noProblems": "未發現問題：{0} 的所有檔案都完好無缺。",
+  "modify.updateAvailable": "有新版本（{0}）可供使用。",
+  "modify.updateButton": "更新",
   "progress.title.modify": "正在變更 {0}",
   "result.success.title.modify": "已變更 {0}",
   "result.success.body.modify": "您對 {0} 所做的變更已套用。",

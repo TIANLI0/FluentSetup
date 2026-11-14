@@ -56,7 +56,56 @@ Controller::Controller(const install::Package& pkg, const archive::Container& co
 }
 
 Controller::~Controller() {
+    {
+        std::lock_guard lock(update_->m);
+        update_->listener = nullptr;
+    }
     if (thread_.joinable()) thread_.join();
+}
+
+void Controller::CheckForUpdate() {
+    if (mode_ != Mode::Modify || !existing_.product || existing_.foreign) return;
+    std::shared_ptr<UpdateShared> shared = update_;
+    {
+        std::lock_guard lock(shared->m);
+        if (shared->answer && shared->listener) shared->listener->OnUpdateCheck(*shared->answer);
+        if (shared->started) return;
+        shared->started = true;
+    }
+    std::function<UpdateCheckResult()> check = MakeUpdateCheck(pkg_, existing_.product->version);
+    if (!check) return;
+    log::Info(L"Checking for a newer version than %s", existing_.product->version.c_str());
+    std::thread([check = std::move(check), shared] {
+        const UpdateCheckResult r = check();
+        json::Value m;
+        m.set("t", "updateCheck");
+        m.set("ok", r.ok);
+        m.set("available", r.available);
+        m.set("version", r.version);
+        m.set("notesUrl", r.notesUrl);
+        std::lock_guard lock(shared->m);
+        shared->answer = m;
+        if (shared->listener) shared->listener->OnUpdateCheck(m);
+    }).detach();
+}
+
+bool Controller::StartUpdate() const {
+    if (mode_ != Mode::Modify || !existing_.product) return false;
+    // This process is the installation's uninstall.exe: the updater is the same program with /install-update.
+    wchar_t self[MAX_PATH * 4]{};
+    const DWORD n = ::GetModuleFileNameW(nullptr, self, ARRAYSIZE(self));
+    if (n == 0 || n >= ARRAYSIZE(self)) return false;
+    std::wstring cmd = L"\"" + std::wstring(self) + L"\" /install-update /passive /lang " + strings_.Language();
+    STARTUPINFOW si{sizeof(si)};
+    PROCESS_INFORMATION pi{};
+    if (!::CreateProcessW(self, cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+        log::Error(L"Could not start the update: %s", Win32Message(::GetLastError()).c_str());
+        return false;
+    }
+    ::CloseHandle(pi.hThread);
+    ::CloseHandle(pi.hProcess);
+    log::Info(L"Started the update: %s", cmd.c_str());
+    return true;
 }
 
 install::InstallOptions Controller::DefaultOptions() const {
@@ -391,6 +440,9 @@ json::Value Controller::Hello(const std::wstring& iconPath, const std::wstring& 
     if (mode_ == Mode::Modify) {
         modify.set("canRepair", existing_.product.has_value() && !existing_.foreign);
         modify.set("startRepair", args_.repair);  // interactive /repair: the front end starts the repair at once
+        // The package has an update source: the front end asks (checkUpdate) whether a newer version is published.
+        modify.set("canUpdate", existing_.product.has_value() && !existing_.foreign &&
+                                    static_cast<bool>(MakeUpdateCheck(pkg_, existing_.product->version)));
     }
     h.set("modify", modify);
 
@@ -561,6 +613,10 @@ void Controller::Attach(IListener* listener, install::Progress* last, std::optio
     std::lock_guard listenerLock(listenerMutex_);
     std::lock_guard lock(mutex_);
     listener_ = listener;
+    {
+        std::lock_guard updateLock(update_->m);
+        update_->listener = listener;
+    }
     if (last) *last = last_;
     if (outcome) *outcome = outcome_;
     if (started) *started = started_;

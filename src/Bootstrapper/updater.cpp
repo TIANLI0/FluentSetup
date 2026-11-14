@@ -894,6 +894,25 @@ bool RunSetup(const std::wstring& file, bool quiet, const std::wstring& language
     return true;
 }
 
+std::function<UpdateCheckResult()> MakeUpdateCheck(const install::Package& pkg, const std::wstring& installed) {
+    std::wstring why;
+    const std::optional<Source> source = ReadSource(pkg, why);
+    if (!source) return {};
+    return [s = *source, appId = pkg.appId, installed] {
+        UpdateCheckResult r;
+        Release release;
+        const Lookup found = FindUpdate(s, appId, installed, release, r.error);
+        r.ok = found != Lookup::Failed;
+        r.available = found == Lookup::Found;
+        if (r.available) {
+            r.version = release.version;
+            r.notesUrl = release.notesUrl;
+        }
+        if (!r.ok) log::Warn(L"Update check failed: %s", r.error.c_str());
+        return r;
+    };
+}
+
 int RunUpdate(const install::Package& pkg, const Args& args, const Strings& strings) {
     std::wstring why;
     const std::optional<Source> source = ReadSource(pkg, why);

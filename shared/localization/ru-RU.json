@@ -204,6 +204,8 @@
   "modify.repairing": "Восстановление {0}…",
   "modify.repairNoSource": "Некоторые файлы {0} отсутствуют или повреждены. Чтобы восстановить приложение, снова запустите его программу установки.",
   "modify.noProblems": "Проблем не обнаружено: все файлы {0} в порядке.",
+  "modify.updateAvailable": "Доступна более новая версия ({0}).",
+  "modify.updateButton": "Обновить",
   "progress.title.modify": "Изменение {0}",
   "result.success.title.modify": "Приложение {0} изменено",
   "result.success.body.modify": "Ваши изменения в {0} применены.",

@@ -204,6 +204,8 @@
   "modify.repairing": "{0} を修復しています…",
   "modify.repairNoSource": "{0} の一部のファイルが見つからないか、破損しています。修復するには、セットアップ プログラムをもう一度実行してください。",
   "modify.noProblems": "問題は見つかりませんでした。{0} のすべてのファイルは正常です。",
+  "modify.updateAvailable": "新しいバージョン ({0}) を利用できます。",
+  "modify.updateButton": "更新",
   "progress.title.modify": "{0} を変更しています",
   "result.success.title.modify": "{0} を変更しました",
   "result.success.body.modify": "{0} への変更が適用されました。",

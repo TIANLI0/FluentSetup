@@ -33,6 +33,7 @@ using json::Value;
 
 constexpr UINT WM_APP_PROGRESS = WM_APP + 1;
 constexpr UINT WM_APP_DONE = WM_APP + 2;
+constexpr UINT WM_APP_UPDATE = WM_APP + 3;  // modify mode: answer to CheckForUpdate (Value*)
 constexpr int kClientWidth = 720;   // DIP (same window size as the WinUI front end)
 constexpr int kClientHeight = 508;  // DIP
 constexpr int kMargin = 32;
@@ -46,7 +47,7 @@ constexpr GUID kWicPixelFormat32bppPBGRA = {0x6fddc324, 0x4e03, 0x4bfe, {0xb1, 0
 
 enum Id : int {
     kStatus = 100, kTitle, kSignature, kDescription, kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
-    kLblSize, kSize, kInfo, kDirError, kRepairNote,
+    kLblSize, kSize, kInfo, kDirError, kRepairNote, kUpdateInfo, kUpdateButton,
     kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog,
     kOScopeLabel = 300, kOScopeUser, kOScopeMachine, kODesktop, kOStartMenu, kOVariantLabel, kOVariantDesc, kRemoveData, kUserDataPaths,
     kLHeading = 400, kLSub, kLText, kLAccept,
@@ -72,6 +73,9 @@ public:
     }
     void OnDone(const install::Outcome& o) override {
         if (hwnd_) ::PostMessageW(hwnd_, WM_APP_DONE, 0, reinterpret_cast<LPARAM>(new Value(c_.DoneMessage(o))));
+    }
+    void OnUpdateCheck(const Value& m) override {
+        if (hwnd_) ::PostMessageW(hwnd_, WM_APP_UPDATE, 0, reinterpret_cast<LPARAM>(new Value(m)));
     }
 
 private:
@@ -165,6 +169,7 @@ private:
     RECT infoRect_{};
     bool signatureVerified_ = false;
     bool applyingHello_ = false;  // values set by the program are not the user's edits
+    bool updateAvailable_ = false;  // modify mode: a newer version is published (update notice + button)
     bool repairing_ = false;  // the progress/result pages are about a repair (modify mode)
     // Settings page: a scrollable panel holding one label/control/description/error group per input.
     HWND panel_ = nullptr;
@@ -280,6 +285,7 @@ void Window::Run() {
         StartInstall();  // passive mode (/passive, Inno /SILENT): no questions
     } else {
         ShowPage(Page::Welcome);
+        if (hello_["modify"]["canUpdate"].asBool()) c_.CheckForUpdate();  // answer: WM_APP_UPDATE
     }
 
     // Hide focus rectangles and mnemonic underlines until the keyboard is used (standard dialog behaviour).
@@ -294,7 +300,7 @@ void Window::Run() {
         }
     }
     c_.Attach(nullptr, nullptr, nullptr, nullptr);
-    while (::PeekMessageW(&msg, nullptr, WM_APP_PROGRESS, WM_APP_DONE, PM_REMOVE)) {
+    while (::PeekMessageW(&msg, nullptr, WM_APP_PROGRESS, WM_APP_UPDATE, PM_REMOVE)) {
         if (msg.message == WM_APP_PROGRESS) delete reinterpret_cast<install::Progress*>(msg.lParam);
         else delete reinterpret_cast<Value*>(msg.lParam);
     }
@@ -313,7 +319,9 @@ void Window::Create() {
     for (int id : {kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation}) Make(WC_STATICW, id, text);
     Make(WC_STATICW, kLocation, text | SS_PATHELLIPSIS);
     Make(WC_BUTTONW, kChange, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
-    for (int id : {kLblSize, kSize, kInfo, kDirError, kRepairNote, kResultBody, kResultCode}) Make(WC_STATICW, id, text);
+    for (int id : {kLblSize, kSize, kInfo, kDirError, kRepairNote, kUpdateInfo}) Make(WC_STATICW, id, text);
+    Make(WC_BUTTONW, kUpdateButton, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
+    for (int id : {kResultBody, kResultCode}) Make(WC_STATICW, id, text);
     Make(WC_EDITW, kResultDetail, WS_TABSTOP | WS_GROUP | ES_MULTILINE | ES_READONLY | WS_VSCROLL, WS_EX_CLIENTEDGE);
     Make(WC_BUTTONW, kOpenFolder, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
     Make(WC_BUTTONW, kViewLog, BS_PUSHBUTTON | WS_TABSTOP);
@@ -372,6 +380,7 @@ void Window::Create() {
     SetText(kIHeading, S("inputs.title"));
     SetText(kISub, F(IsModify() ? "inputs.subtitle.modify" : "inputs.subtitle", {AppName()}));
     SetText(kRepairNote, S("modify.repairBody"));
+    SetText(kUpdateButton, S("modify.updateButton"));
     SetText(kLaunch, S("launchWhenReady"));
     SetText(kLblPublisher, S("label.publisher"));
     SetText(kLblVersion, S("label.version"));
@@ -402,7 +411,7 @@ void Window::ApplyFonts() {
     set(kUserDataPaths, theme_.caption);
     for (size_t i = 0; i < VariantCount(); ++i) set(kVariantBase + static_cast<int>(i), theme_.body);
     for (int id : std::initializer_list<int>{kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
-                                             kLblSize, kSize, kDescription, kInfo, kDirError,
+                                             kLblSize, kSize, kDescription, kInfo, kDirError, kUpdateInfo, kUpdateButton,
                                              kResultBody, kResultDetail, kOpenFolder, kViewLog, kOScopeLabel, kOScopeUser,
                                              kOScopeMachine, kODesktop, kOStartMenu, kLSub, kLText, kLAccept, kLaunch, kPStage,
                                              kPPercent, kSecondary, static_cast<int>(IDOK), static_cast<int>(IDCANCEL)}) {
@@ -445,7 +454,8 @@ void Window::ApplyHello() {
     SetText(kDescription, description);
     const Value& signature = hello_["signature"];
     signatureVerified_ = signature["state"].asString() == "valid" && !signature["publisher"].asWide().empty();
-    SetText(kSignature, signatureVerified_ ? F("welcome.verifiedPublisher", {signature["publisher"].asWide()}) : S("welcome.unknownPublisher"));
+    // Only a verified signature is shown; unsigned setups are common (Windows already says so in SmartScreen/UAC).
+    SetText(kSignature, signatureVerified_ ? F("welcome.verifiedPublisher", {signature["publisher"].asWide()}) : L"");
 
     const std::string relation = existing["relation"].asString();
     std::wstring info;
@@ -591,7 +601,7 @@ void Window::ShowPage(Page p) {
     }
     UpdateInfoLines();
     Show(kTitle, summary);
-    Show(kSignature, welcome);
+    Show(kSignature, welcome && signatureVerified_);
     Show(kStatus, result);
     for (const auto [label, value] : {std::pair{kLblPublisher, kPublisher}, std::pair{kLblVersion, kVersion},
                                       std::pair{kLblLocation, kLocation}, std::pair{kLblSize, kSize}}) {
@@ -605,6 +615,8 @@ void Window::ShowPage(Page p) {
     Show(kInfo, welcome && ::GetWindowTextLengthW(Ctl(kInfo)) > 0);
     Show(kDirError, welcome && !pathOk_);
     Show(kRepairNote, welcome && CanRepair());
+    Show(kUpdateInfo, welcome && updateAvailable_);
+    Show(kUpdateButton, welcome && updateAvailable_);
     if (!result) {
         for (int id : {kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog}) Show(id, false);
     }
@@ -812,6 +824,14 @@ void Window::Layout() {
             }
             stack(kDirError, Px(12), right - left);
             stack(kRepairNote, Px(8), right - left);
+            stack(kUpdateInfo, Px(6), right - left);
+            if (Visible(kUpdateButton)) {
+                SIZE ideal{};
+                Button_GetIdealSize(Ctl(kUpdateButton), &ideal);
+                const int bw = std::max(Px(80), static_cast<int>(ideal.cx) + Px(16)), bh = Px(28);
+                place(kUpdateButton, left, y, bw, bh);
+                y += bh + Px(8);
+            }
             stack(kResultBody, Px(8), right - left);
             stack(kResultCode, Px(8), right - left);
             stack(kResultDetail, Px(8), right - left, Px(56));
@@ -1557,7 +1577,7 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             if (id == kInfo) brush = theme_.infoBrush(), bg = c.infoFill;
             if (id == kLText || id == kResultDetail || inputPart == kInputControl || m == WM_CTLCOLORLISTBOX) brush = theme_.editBrush(), bg = c.editFill;
             if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kOScopeLabel || id == kOVariantLabel || id == kOVariantDesc || id == kUserDataPaths || id == kDescription || id == kPDetail || id == kPPercent || id == kResultCode || id == kRepairNote || inputPart == kInputDescription) fg = c.textSecondary;
-            if (id == kSignature) fg = signatureVerified_ ? c.textSecondary : c.caution;
+            if (id == kSignature) fg = c.textSecondary;
             if (id == kDirError || inputPart == kInputError) fg = c.critical;
             ::SetTextColor(dc, fg);
             ::SetBkColor(dc, bg);
@@ -1580,6 +1600,13 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             else if (id == IDCANCEL) RequestClose();
             else if (id == kSecondary) OnSecondary();
             else if (id == kChange) Browse();
+            else if (id == kUpdateButton && page_ == Page::Welcome && !c_.Running()) {
+                // The updater opens its own window (download, verification, the new Setup.exe); this session ends.
+                if (c_.StartUpdate()) {
+                    c_.MarkClosedByUser();
+                    ::DestroyWindow(hwnd_);
+                }
+            }
             else if ((id == kOScopeUser || id == kOScopeMachine) && code == BN_CLICKED) OnScopeChanged();
             else if (id >= kVariantBase && id < kVariantBase + static_cast<int>(VariantCount()) && code == BN_CLICKED) OnVariantChanged(static_cast<size_t>(id - kVariantBase));
             else if (id == kLAccept && code == BN_CLICKED) UpdateFooter();
@@ -1604,6 +1631,15 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
         case WM_APP_DONE: {
             std::unique_ptr<Value> v(reinterpret_cast<Value*>(l));
             OnDoneMsg(*v);
+            return 0;
+        }
+        case WM_APP_UPDATE: {
+            std::unique_ptr<Value> v(reinterpret_cast<Value*>(l));
+            if (IsModify() && (*v)["available"].asBool()) {  // up to date or offline: nothing to show
+                updateAvailable_ = true;
+                SetText(kUpdateInfo, F("modify.updateAvailable", {(*v)["version"].asWide()}));
+                if (page_ == Page::Welcome) ShowPage(Page::Welcome);
+            }
             return 0;
         }
         case WM_CLOSE:

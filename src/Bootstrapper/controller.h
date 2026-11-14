@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -29,6 +30,9 @@ public:
     virtual ~IListener() = default;
     virtual void OnProgress(const install::Progress& p) = 0;
     virtual void OnDone(const install::Outcome& o) = 0;
+    // Modify mode: the answer to CheckForUpdate, as the UI message {t: "updateCheck", ok, available, version, notesUrl}.
+    // Called on a background thread.
+    virtual void OnUpdateCheck(const json::Value& /*message*/) {}
 };
 
 class Controller {
@@ -67,6 +71,12 @@ public:
     // Modify mode: verifies the installed files and, if any is missing or damaged, runs the same version's Setup.exe
     // (recorded original or update source) with /passive (/quiet in quiet mode). Asynchronous like Start.
     void Repair(HWND owner);
+    // Modify mode with an update source: looks on a background thread for a newer published version (nothing is
+    // downloaded) and reports it to the listener (OnUpdateCheck). Once per session; later calls repeat the answer.
+    void CheckForUpdate();
+    // Modify mode: starts this installation's uninstall.exe /install-update /passive (download, verification and the
+    // new Setup.exe are the updater's), after which the session should end. False if it could not be started.
+    bool StartUpdate() const;
     // The per-app single-instance lock: a repair releases it for the Setup.exe it runs and takes it back afterwards.
     void SetInstanceLock(std::function<void()> release, std::function<bool()> reacquire) {
         releaseLock_ = std::move(release);
@@ -130,6 +140,14 @@ private:
     ipc::Channel* workerChannel_ = nullptr;
     std::thread thread_;
     UniqueHandle doneEvent_;
+    // Shared with the update-check thread, which is detached (a slow network must not hold up closing the window).
+    struct UpdateShared {
+        std::mutex m;
+        IListener* listener = nullptr;
+        bool started = false;
+        std::optional<json::Value> answer;
+    };
+    std::shared_ptr<UpdateShared> update_ = std::make_shared<UpdateShared>();
 };
 
 // Classification used by both front ends and the exit code.

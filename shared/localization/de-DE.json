@@ -204,6 +204,8 @@
   "modify.repairing": "{0} wird repariert…",
   "modify.repairNoSource": "Einige Dateien von {0} fehlen oder sind beschädigt. Führen Sie das Setup der App erneut aus, um sie zu reparieren.",
   "modify.noProblems": "Keine Probleme gefunden: Alle Dateien von {0} sind intakt.",
+  "modify.updateAvailable": "Eine neuere Version ({0}) ist verfügbar.",
+  "modify.updateButton": "Aktualisieren",
   "progress.title.modify": "{0} wird geändert",
   "result.success.title.modify": "{0} wurde geändert",
   "result.success.body.modify": "Ihre Änderungen an {0} wurden übernommen.",

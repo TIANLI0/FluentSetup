@@ -3,7 +3,7 @@
   UI tests: drives a real per-user install through each installer front end with UI Automation.
 
   For every front end (WinUI 3 when the Windows App Runtime is present, Win32 fallback always):
-  launch Setup.exe -> first page shows the version in the title, "Unknown publisher" (the test package is unsigned),
+  launch Setup.exe -> first page shows the version in the title, no publisher line (the test package is unsigned),
   the path with an inline "Change" button and the install options inline -> turn on the desktop shortcut, turn off
   "Launch when ready" -> Next -> Settings page (package inputs: a required text field with a pattern, a choice and a
   password; Next stays disabled until the values are valid) -> Next -> accept the license -> Install -> result page ->
@@ -195,6 +195,11 @@ $graphics.Dispose(); $brush.Dispose()
 $bannerImage.Save((Join-Path $work 'banner.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 $bannerImage.Dispose()
 $project.ui | Add-Member -NotePropertyName banner -NotePropertyValue 'banner.png' -Force
+# An update source (the e2e feed fixture announces 99.0.0): the "Change" page offers the update.
+$updateFeed = 'https://raw.githubusercontent.com/TIANLI0/FluentSetup/main/tests/fixtures/update-feed.json'
+$project | Add-Member -NotePropertyName update -NotePropertyValue ([ordered]@{ feed = $updateFeed }) -Force
+$feedReachable = $true
+try { Invoke-WebRequest -UseBasicParsing -Method Head $updateFeed -TimeoutSec 15 | Out-Null } catch { $feedReachable = $false }
 $projectPath = Join-Path $work 'project.json'
 [IO.File]::WriteAllText($projectPath, ($project | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
 & $cli build $projectPath | Out-Null
@@ -231,7 +236,7 @@ foreach ($ui in $FrontEnds) {
     try {
         $w = Wait-Window $setup $ui
         Check "${ui}: title shows name and version" { Find-Any $w @("Install $appName ${version}?") }
-        Check "${ui}: unsigned package shows 'Unknown publisher'" { Find-Any $w @($en.'welcome.unknownPublisher') }
+        Check "${ui}: unsigned package shows no publisher warning" { -not (Test-UiaElement -Root $w -Name $en.'welcome.unknownPublisher') }
         Check "${ui}: Change button next to the location" { Find-Any $w @('Change', '&Change', $browseName) }
         Check "${ui}: install scope inline" { (Find-Any $w @('Only me')) -and (Find-Any $w @('All users')) }
         $desktop = Find-Any $w @('Create a desktop shortcut', 'Create a &desktop shortcut')
@@ -279,6 +284,12 @@ foreach ($ui in $FrontEnds) {
         $w = Wait-Window $modify $ui
         Check "${ui}: modify: 'Change' page" { Find-Any $w @(($en.'modify.title' -replace '\{0\}', $appName)) }
         Check "${ui}: modify: Repair offered" { Find-Any $w @($en.'modify.repair') }
+        if ($feedReachable) {
+            $updateText = $en.'modify.updateAvailable' -replace '\{0\}', '99.0.0'
+            Check "${ui}: modify: newer version offered with an Update button" { (Find-Any $w @($updateText)) -and (Find-Any $w @($en.'modify.updateButton')) }
+        } else {
+            Write-Host "  [SKIP] ${ui}: modify update offer (the update feed is not reachable)" -ForegroundColor Yellow
+        }
         $desktop = Find-Any $w @('Create a desktop shortcut', 'Create a &desktop shortcut')
         Check "${ui}: modify: desktop shortcut shown as on" { $desktop }
         Set-UiaToggle -Root $w -Name $desktop -On $false

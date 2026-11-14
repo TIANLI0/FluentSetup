@@ -3,6 +3,19 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
+## [Unreleased]
+
+### Added
+
+- Apps & features **Modify** ("Change <App>" page) checks the package's update source and, when a newer version is
+  published, shows "A newer version (x) is available" with an **Update** button (runs
+  `uninstall.exe /install-update /passive`). Both front ends, all 11 languages.
+
+### Changed
+
+- An unsigned (or untrusted) setup no longer shows "Unknown publisher" on the first page; a verified signature still
+  shows "Verified publisher: <name>". Windows already warns about unsigned files in SmartScreen and UAC.
+
 ## [1.2.1] - 2026-11-14
 
 ### Fixed

@@ -19,6 +19,16 @@ namespace fsetup::boot {
 // could not be checked, downloaded or verified. Also 3 (no update source), 11 (not installed), 16 (already running).
 int RunUpdate(const install::Package& pkg, const Args& args, const Strings& strings);
 
+// The "Change <App>" page's update check: is a newer version than `installed` published? Nothing is downloaded.
+struct UpdateCheckResult {
+    bool ok = false;         // the source answered (false: offline, refused, malformed)
+    bool available = false;  // a newer version is published
+    std::wstring version, notesUrl, error;
+};
+// Empty when the package has no update source. The returned function does the network work; it holds only copies, so
+// it may run on a thread of its own and outlive the package.
+std::function<UpdateCheckResult()> MakeUpdateCheck(const install::Package& pkg, const std::wstring& installed);
+
 // A verified Setup.exe of exactly the installed version, for a repair. The file is kept open (read-only, no other
 // writers) until the object goes away; a downloaded copy is deleted then.
 struct RepairPackage {

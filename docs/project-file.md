@@ -606,7 +606,10 @@ removed. Preserved files and files the installer did not create are kept.
 
 Built-in updates. With an update source, the installed `uninstall.exe` can look for a newer Setup.exe of the app and
 install it, so an app needs no updater of its own: a "Check for updates" menu item starts
-`uninstall.exe /install-update /relaunch`, a background check runs `uninstall.exe /check-update`.
+`uninstall.exe /install-update /relaunch`, a background check runs `uninstall.exe /check-update`. Users also find it
+in Apps & features: **Modify** opens the "Change <App>" page, which checks the source and, when a newer version is
+published, shows "A newer version (1.1.0) is available" with an **Update** button
+(`uninstall.exe /install-update /passive`).
 
 ```json
 "update": { "github": "contoso/notes", "checksums": "SHA256SUMS.txt" }

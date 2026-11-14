@@ -204,6 +204,8 @@
   "modify.repairing": "Repairing {0}…",
   "modify.repairNoSource": "Some files of {0} are missing or damaged. Run its setup program again to repair it.",
   "modify.noProblems": "No problems found: every file of {0} is intact.",
+  "modify.updateAvailable": "A newer version ({0}) is available.",
+  "modify.updateButton": "Update",
   "progress.title.modify": "Changing {0}",
   "result.success.title.modify": "{0} was changed",
   "result.success.body.modify": "Your changes to {0} have been applied.",

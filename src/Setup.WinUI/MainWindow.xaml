@@ -85,7 +85,7 @@
                             <TextBlock x:Name="QuestionText" Grid.Column="1" Style="{StaticResource QuestionStyle}"
                                        AutomationProperties.HeadingLevel="Level1" />
                         </Grid>
-                        <!-- Who signed this setup: "Verified publisher: X" or "Unknown publisher". -->
+                        <!-- Who signed this setup: "Verified publisher: X"; hidden for an unsigned or untrusted setup. -->
                         <StackPanel x:Name="SignaturePanel" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" Visibility="Collapsed">
                             <FontIcon x:Name="SignatureIcon" FontSize="14" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw" />
                             <TextBlock x:Name="SignatureText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" VerticalAlignment="Center" />
@@ -156,6 +156,12 @@
                         </StackPanel>
                         <!-- "Change <App>": what Repair does (the button is in the bottom bar). -->
                         <TextBlock x:Name="RepairNote" Style="{StaticResource SecondaryTextStyle}" Margin="0,12,0,0" Visibility="Collapsed" />
+                        <!-- "Change <App>" with an update source: a newer published version, with a button that runs the updater. -->
+                        <InfoBar x:Name="UpdateInfo" Severity="Informational" IsClosable="False" IsOpen="False" Margin="0,12,0,0">
+                            <InfoBar.ActionButton>
+                                <Button x:Name="UpdateButton" Click="OnUpdateClick" />
+                            </InfoBar.ActionButton>
+                        </InfoBar>
                         <InfoBar x:Name="WelcomeInfo" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
                         <InfoBar x:Name="RunningInfo" Severity="Warning" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
                         <InfoBar x:Name="WelcomeDirError" Severity="Error" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
