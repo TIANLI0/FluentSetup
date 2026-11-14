@@ -143,7 +143,7 @@ void DeleteTreeRaw(HKEY root, const std::wstring& key) {
     UniqueHkey p;
     if (::RegOpenKeyExW(root, parent.c_str(), 0, KEY_ALL_ACCESS | kView, p.put()) != ERROR_SUCCESS) return;
     const std::wstring leaf = key.substr(parent.size() + 1);
-    if (::RegDeleteTreeW(p.get(), leaf.c_str()) == ERROR_SUCCESS) ::RegDeleteKeyExW(p.get(), leaf.c_str(), kView, 0);
+    ::RegDeleteTreeW(p.get(), leaf.c_str());  // with a subkey name it deletes that key too
 }
 
 std::vector<uint8_t> EncodeValue(DWORD type, const std::wstring& data) {

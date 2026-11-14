@@ -380,8 +380,35 @@ std::vector<std::wstring> LockingApps(const std::vector<std::wstring>& files) {
 
 LocalizedText ParseLocalizedText(const json::Value& v) { return ParseText(v); }
 
+std::string ClosestLanguage(const std::string& language, const std::vector<std::string>& available) {
+    const auto lower = [](std::string s) {
+        for (auto& c : s) c = static_cast<char>(c >= 'A' && c <= 'Z' ? c + 32 : c);
+        return s;
+    };
+    const std::string want = lower(language);
+    for (const auto& a : available) {
+        if (lower(a) == want) return a;
+    }
+    const auto primary = [](const std::string& s) { return s.substr(0, s.find('-')); };
+    const auto traditional = [](const std::string& s) {
+        return s == "zh-tw" || s == "zh-hk" || s == "zh-mo" || s.rfind("zh-hant", 0) == 0;
+    };
+    std::string sameLanguage;
+    for (const auto& a : available) {
+        const std::string tag = lower(a);
+        if (primary(tag) != primary(want)) continue;
+        if (primary(want) == "zh" && traditional(tag) == traditional(want)) return a;  // same script first
+        if (sameLanguage.empty()) sameLanguage = a;
+    }
+    return sameLanguage;
+}
+
 std::wstring LocalizedText::Get(const std::wstring& language, const std::wstring& fallback) const {
-    if (auto it = byLanguage.find(WideToUtf8(language)); it != byLanguage.end() && !it->second.empty()) return it->second;
+    std::vector<std::string> tags;
+    for (const auto& [tag, text] : byLanguage) {
+        if (tag != "*" && !text.empty()) tags.push_back(tag);
+    }
+    if (const std::string tag = ClosestLanguage(WideToUtf8(language), tags); !tag.empty()) return byLanguage.at(tag);
     if (auto it = byLanguage.find("*"); it != byLanguage.end()) return it->second;
     if (auto it = byLanguage.find("en-US"); it != byLanguage.end()) return it->second;
     return fallback;
@@ -1683,8 +1710,7 @@ bool DeleteRegistryKey(const std::wstring& key) {
     HKEY parent = nullptr;
     if (::RegOpenKeyExW(hive, sub.substr(0, slash).c_str(), 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, &parent) != ERROR_SUCCESS) return false;
     const std::wstring leaf = sub.substr(slash + 1);
-    LSTATUS rc = ::RegDeleteTreeW(parent, leaf.c_str());
-    if (rc == ERROR_SUCCESS) rc = ::RegDeleteKeyExW(parent, leaf.c_str(), KEY_WOW64_64KEY, 0);
+    const LSTATUS rc = ::RegDeleteTreeW(parent, leaf.c_str());  // with a subkey name it deletes that key too
     ::RegCloseKey(parent);
     if (rc == ERROR_SUCCESS) log::Info(L"Removed registry key %s", key.c_str());
     return rc == ERROR_SUCCESS;

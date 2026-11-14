@@ -95,7 +95,7 @@ stamp the version, or the version of a bundled driver, without rewriting the pro
 | `website` | string | `""` | Absolute `http://` or `https://` URL, or empty. |
 | `icon` | string | `""` | `.ico` or `.png` file (up to 256×256) for Setup.exe and the installer window. Empty means the default FluentSetup icon is used. |
 | `mainExecutable` | string | `""` | Relative path of the app's `.exe` inside the installed files. It must be one of those files. Shortcuts, "launch after install" and the Settings icon use it. When it is empty, no shortcuts are created and the app is not launched after install (you get a warning). |
-| `appUserModelId` | string | `""` | AppUserModelID set on the app's Start menu and desktop shortcuts, e.g. `Contoso.Notes` (letters, digits, `.`, `-`, `_`; max 128, no spaces). Unpackaged apps need it for toast notifications. |
+| `appUserModelId` | string | `""` | AppUserModelID set on the app's Start menu and desktop shortcuts, e.g. `Contoso.Notes` (letters, digits, `.`, `-`, `_`; max 128, no spaces). Unpackaged apps need it for toast notifications. The key such an app registers for its display name and icon (`HKCU\Software\Classes\AppUserModelId\<id>`, also for the IDs of `shortcuts`) is removed on uninstall. |
 | `toastActivatorClsid` | string | `""` | CLSID of the app's toast activator COM server, `{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}`, set on the same shortcuts (with `appUserModelId`). |
 
 ## files
@@ -329,7 +329,8 @@ With neither `installer` nor `download`, a missing prerequisite stops setup befo
 installer that setup downloads is accepted by its signature (a valid, trusted Authenticode signature issued to
 "Microsoft Corporation"), not by a SHA-256. For `bundle` the builder downloads the file, checks the same signature (on
 Windows) and keeps it for a day under `%LocalAppData%\FluentSetup\cache\installers` (`fluentsetup build
---refresh-installers` downloads it again; an offline build uses the last copy). The build report lists every bundled
+--refresh-installers` downloads it again; an offline build uses the last copy; the environment variable
+`FLUENTSETUP_CACHE` moves the cache to `<folder>\installers`). The build report lists every bundled
 installer with its SHA-256.
 
 | Prerequisite | Installer | Silent arguments |
@@ -350,7 +351,7 @@ These are checkboxes on the installer's options page. Actions can depend on them
 | Property | Type | Default | Meaning |
 |---|---|---|---|
 | `id` | string | `""` | **Required.** Unique id: letters, digits, `-` and `_` (max 32). |
-| `label` | object | `{}` | **Required.** Text per language, e.g. `{ "en-US": "Start when I sign in", "zh-CN": "登录时启动" }`. At least one entry is needed and none may be blank. A plain string is not accepted. |
+| `label` | object | `{}` | **Required.** Text per language, e.g. `{ "en-US": "Start when I sign in", "zh-CN": "登录时启动" }`. At least one entry is needed and none may be blank. A plain string is not accepted. The installer shows the entry for its language, else the same language in another region (`de-AT` uses `de-DE`; Traditional Chinese uses `zh-TW`/`zh-HK`, then `zh-CN`), else `en-US`. The same applies to every per-language text and to `ui.licenses`. |
 | `default` | bool | `false` | Initial state on a first install. Quiet and passive installs use it unless `quietDefault` or `/option id=yes\|no` says otherwise. |
 | `quietDefault` | bool \| null | `null` | Value in quiet and passive **first** installs, e.g. `false` for an "Enable now" checkbox that is checked in the UI but must not act in scripted installs (Inno Setup `skipifsilent`). |
 | `detect` | object \| null | `null` | `{ "runValue": "App", "scheduledTask": "App" }`: on an **update** the option starts selected only if that Run value (HKCU or HKLM) or scheduled task exists. Use it when the app itself turns the feature on and off (autostart in the app's settings), so an update keeps the user's current state. An option with `startup` detects its own Run value without this. `/option` and Inno `/TASKS` still win. |
@@ -650,7 +651,7 @@ requests per hour per address without a token, enough for checks at start-up or 
 | `accentColor` | string | `""` | `#RRGGBB`. Required when `useSystemAccent` is `false` (FS1303). |
 | `license` | string | `""` | Plain-text license file (max 1 MB). If set, the user must accept it before installing. |
 | `licenseMode` | `firstInstall` \| `always` | `"firstInstall"` | `always` also shows the license before upgrades and reinstalls (e.g. a user agreement that must be accepted for every version). |
-| `licenses` | object | `{}` | Per-language license files, e.g. `{ "zh-CN": "license_zh.txt" }`. Falls back to `license`. |
+| `licenses` | object | `{}` | Per-language license files, e.g. `{ "zh-CN": "license_zh.txt" }`. Without one for the installer language (or the same language in another region, as for `label`), `license` is shown. |
 | `localization` | string | `""` | Folder with one `<language>.json` per language; see *Localization*. |
 | `defaultLanguage` | `auto` \| language tag | `"auto"` | `auto` follows the user's Windows display languages (first one the installer supports; else en-US). A tag pins the language: a built-in one, a regional tag of one (`de-CH` → `de-DE`) or a language the package brings strings for; see *Localization*. `/lang` overrides this setting. |
 | `banner` | string | `""` | Image (`.png`, `.jpg` or `.bmp`, up to 1 MB; about 4:1, e.g. 960×240) shown at the top of the first page in both interfaces. Stored with the front-end files (also when `output.includeWinUI` is false). |

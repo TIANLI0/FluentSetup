@@ -299,8 +299,14 @@ json::Value Controller::Hello(const std::wstring& iconPath, const std::wstring& 
     // The license is shown before a first install, or before every install when the package says so (e.g. an agreement
     // that changes between versions).
     if (mode_ == Mode::Install && (!existing_.product || u["licenseMode"].asString() == "always")) {
-        const json::Value& localized = u["licenses"][WideToUtf8(strings_.Language())];
-        ui.set("licenseText", localized.isString() && !localized.asString().empty() ? localized.asString() : u["license"].asString());
+        std::vector<std::string> tags;
+        if (u["licenses"].isObject()) {
+            for (const auto& [tag, text] : u["licenses"].object()) {
+                if (text.isString() && !text.asString().empty()) tags.push_back(tag);
+            }
+        }
+        const std::string tag = install::ClosestLanguage(WideToUtf8(strings_.Language()), tags);
+        ui.set("licenseText", tag.empty() ? u["license"].asString() : u["licenses"][tag].asString());
     }
     h.set("ui", ui);
 

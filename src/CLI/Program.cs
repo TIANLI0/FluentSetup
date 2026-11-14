@@ -76,7 +76,7 @@ public static class Program
         };
         try
         {
-            if (args.Length == 0 || args[0] is "-h" or "--help" or "/?" or "help")
+            if (args.Length == 0 || args.Any(a => a is "-h" or "--help" or "/?") || args[0] == "help")
             {
                 Console.WriteLine(Usage);
                 return args.Length == 0 ? 2 : 0;

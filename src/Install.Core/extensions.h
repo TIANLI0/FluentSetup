@@ -27,8 +27,13 @@ namespace fsetup::install {
 
 struct LocalizedText {
     std::map<std::string, std::wstring> byLanguage;  // "en-US" -> text
+    // The text for `language` (see ClosestLanguage), else "*", else en-US, else `fallback`.
     [[nodiscard]] std::wstring Get(const std::wstring& language, const std::wstring& fallback) const;
 };
+
+// The tag among `available` that best fits a UI language: the same tag, else the same language in another region
+// (de-AT -> de-DE; Traditional Chinese zh-TW/zh-HK/zh-MO prefers each other, then zh-CN). Empty when none fits.
+std::string ClosestLanguage(const std::string& language, const std::vector<std::string>& available);
 
 struct RegistryVersionCondition {
     HKEY hive = nullptr;

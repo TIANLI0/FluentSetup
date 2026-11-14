@@ -1596,6 +1596,17 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
         for (const auto& s : pkg_.ext.cleanup.removeShortcuts) DeleteShortcutsNamed(s);
         for (const auto& link : record.shortcuts) RemoveEmptyShortcutFolder(link, scope);  // install.startMenuFolder
         for (const auto& k : pkg_.ext.cleanup.removeRegistryKeys) DeleteRegistryKey(k);
+        // An unpackaged app registers the display name and icon of its AppUserModelID itself
+        // (HKCU\Software\Classes\AppUserModelId\<id>); the IDs the package declares are the app's own.
+        std::vector<std::wstring> aumids;
+        if (!pkg_.ext.appUserModelId.empty()) aumids.push_back(pkg_.ext.appUserModelId);
+        for (const auto& s : pkg_.ext.shortcuts) {
+            if (!s.appUserModelId.empty()) aumids.push_back(s.appUserModelId);
+        }
+        for (const auto& id : aumids) {
+            if (::RegDeleteTreeW(HKEY_CURRENT_USER, (L"Software\\Classes\\AppUserModelId\\" + id).c_str()) == ERROR_SUCCESS)
+                log::Info(L"Removed the AppUserModelID registration %s", id.c_str());
+        }
         for (const auto& rel : pkg_.ext.addToPath) RemoveFromPath(rel.empty() ? dir : path::Join(dir, rel), scope == Scope::Machine);
         RemoveEnvironment(record.environment, scope == Scope::Machine);
         if (machineAdmin) {

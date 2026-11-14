@@ -22,6 +22,9 @@ public static class InstallerCache
     {
         get
         {
+            // FLUENTSETUP_CACHE moves the cache, e.g. for isolated or reproducible builds.
+            var custom = Environment.GetEnvironmentVariable("FLUENTSETUP_CACHE");
+            if (!string.IsNullOrWhiteSpace(custom)) return Path.Combine(Path.GetFullPath(custom), "installers");
             var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             if (string.IsNullOrEmpty(local)) local = Path.Combine(Path.GetTempPath(), "FluentSetup");
             return Path.Combine(local, "FluentSetup", "cache", "installers");

@@ -3,6 +3,7 @@
 #include "test.h"
 
 #include "Bootstrapper/localization.h"
+#include "Install.Core/extensions.h"
 #include "Common/json.h"
 #include "Common/text.h"
 
@@ -88,4 +89,20 @@ TEST(built_in_tables_load) {
     boot::Strings tw;
     tw.Load(L"zh-TW", L"auto", Overrides(R"json({"zh-TW": {"button.install": "立即安裝"}})json"));
     CHECK(tw.Get("button.install") == L"立即安裝" && tw.Get("button.cancel") == L"取消");
+}
+
+TEST(package_texts_fall_back_to_the_same_language) {
+    using install::ClosestLanguage;
+    CHECK(ClosestLanguage("zh-TW", {"en-US", "zh-CN"}) == "zh-CN");             // 1.1 showed zh-CN here too
+    CHECK(ClosestLanguage("zh-TW", {"zh-CN", "zh-HK", "en-US"}) == "zh-HK");    // same script before zh-CN
+    CHECK(ClosestLanguage("zh-CN", {"zh-TW", "zh-SG"}) == "zh-SG");
+    CHECK(ClosestLanguage("de-AT", {"en-US", "de-DE"}) == "de-DE");
+    CHECK(ClosestLanguage("ja-jp", {"JA-JP"}) == "JA-JP");
+    CHECK(ClosestLanguage("fr-FR", {"en-US", "de-DE"}).empty());
+    install::LocalizedText t;
+    t.byLanguage = {{"en-US", L"Enable"}, {"zh-CN", L"启用"}, {"zh-TW", L""}};
+    CHECK(t.Get(L"zh-TW", L"x") == L"启用");  // an empty zh-TW text does not count
+    CHECK(t.Get(L"fr-FR", L"x") == L"Enable");
+    t.byLanguage = {{"*", L"PawnIO"}, {"de-DE", L"Treiber"}};
+    CHECK(t.Get(L"de-CH", L"x") == L"Treiber" && t.Get(L"ko-KR", L"x") == L"PawnIO");
 }
