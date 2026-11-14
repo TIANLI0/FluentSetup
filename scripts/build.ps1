@@ -4,11 +4,14 @@
 .PARAMETER Configuration  Release (default) or Debug
 .PARAMETER Platforms      x64 (default); add ARM64 to also build the ARM64 installer runtime.
 .PARAMETER Skip           Components to skip: Native, WinUI, Managed, Builder, Tests
+.PARAMETER MaxCompilers   At most this many C++ compiler processes at once (0 = one per CPU). The WinUI front end's
+                          precompiled header is large; machines with little memory per core need a lower number.
 #>
 param(
     [ValidateSet('Release', 'Debug')] [string] $Configuration = 'Release',
     [string[]] $Platforms = @('x64'),
-    [string[]] $Skip = @()
+    [string[]] $Skip = @(),
+    [int] $MaxCompilers = 0
 )
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
@@ -44,15 +47,16 @@ if ($Skip -notcontains 'WinUI' -or $Skip -notcontains 'Native') {
     Invoke-Step 'Restore native NuGet packages' { & $nuget restore src\Setup.WinUI\packages.config -PackagesDirectory packages -NonInteractive -Verbosity quiet }
 }
 
+$parallel = if ($MaxCompilers -gt 0) { @('/m:1', "/p:CL_MPCount=$MaxCompilers") } else { @('/m') }
 foreach ($platform in $Platforms) {
     if ($Skip -notcontains 'Native') {
-        Invoke-Step "Native stub ($platform)" { & $msbuild src\Bootstrapper\FluentSetup.Stub.vcxproj /m /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
+        Invoke-Step "Native stub ($platform)" { & $msbuild src\Bootstrapper\FluentSetup.Stub.vcxproj @parallel /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
     }
     if ($Skip -notcontains 'WinUI') {
-        Invoke-Step "WinUI front end ($platform)" { & $msbuild src\Setup.WinUI\FluentSetup.UI.vcxproj /m /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
+        Invoke-Step "WinUI front end ($platform)" { & $msbuild src\Setup.WinUI\FluentSetup.UI.vcxproj @parallel /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
     }
     if ($Skip -notcontains 'Tests') {
-        Invoke-Step "Native tests ($platform)" { & $msbuild tests\Native\FluentSetup.Tests.Native.vcxproj /m /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
+        Invoke-Step "Native tests ($platform)" { & $msbuild tests\Native\FluentSetup.Tests.Native.vcxproj @parallel /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
     }
 }
 
