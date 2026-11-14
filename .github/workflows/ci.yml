@@ -122,9 +122,9 @@ jobs:
 
       - name: Build (ARM64 runtime, CLI, tests)
         shell: pwsh
-        # One compiler at a time: with more the runner runs out of memory for the WinUI precompiled header
-        # (C3859/C1076).
-        run: ./scripts/build.ps1 -Configuration Release -Platforms ARM64 -Skip Builder -MaxCompilers 1
+        # Without the WinUI precompiled header: this runner sometimes cannot reserve the memory for it (C3859/C1076),
+        # even with one compiler at a time.
+        run: ./scripts/build.ps1 -Configuration Release -Platforms ARM64 -Skip Builder -NoPch -MaxCompilers 2
 
       - name: Native unit tests (ARM64)
         shell: pwsh

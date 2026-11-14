@@ -6,12 +6,15 @@
 .PARAMETER Skip           Components to skip: Native, WinUI, Managed, Builder, Tests
 .PARAMETER MaxCompilers   At most this many C++ compiler processes at once (0 = one per CPU). The WinUI front end's
                           precompiled header is large; machines with little memory per core need a lower number.
+.PARAMETER NoPch          Build the WinUI front end without its precompiled header, for machines that cannot reserve
+                          the memory for it (error C3859 / C1076). Slower, same output.
 #>
 param(
     [ValidateSet('Release', 'Debug')] [string] $Configuration = 'Release',
     [string[]] $Platforms = @('x64'),
     [string[]] $Skip = @(),
-    [int] $MaxCompilers = 0
+    [int] $MaxCompilers = 0,
+    [switch] $NoPch
 )
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
@@ -48,6 +51,7 @@ if ($Skip -notcontains 'WinUI' -or $Skip -notcontains 'Native') {
 }
 
 [string[]] $parallel = if ($MaxCompilers -gt 0) { '/m:1', "/p:CL_MPCount=$MaxCompilers" } else { '/m' }
+if ($NoPch) { $parallel += '/p:FluentSetupNoPch=true' }
 foreach ($platform in $Platforms) {
     if ($Skip -notcontains 'Native') {
         Invoke-Step "Native stub ($platform)" { & $msbuild src\Bootstrapper\FluentSetup.Stub.vcxproj $parallel /nologo /v:m "/p:Configuration=$Configuration" "/p:Platform=$platform" }
