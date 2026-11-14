@@ -6,8 +6,9 @@ name: Release
 #   fluentsetup-X.Y.Z-linux-x64.tar.gz  the same for Linux (Action on ubuntu runners)
 #   fluentsetup-X.Y.Z-osx-arm64.tar.gz  the same for macOS on Apple silicon (Action on macos runners)
 #   FluentSetup-X.Y.Z-Setup.exe         Builder app + CLI
-#   FluentSetup.*.X.Y.Z.nupkg           NuGet packages (Builder.Core, Cli, MSBuild), also pushed to nuget.org when the
-#                                       NUGET_API_KEY secret is set
+#   FluentSetup.*.X.Y.Z.nupkg           NuGet packages (Builder.Core, Cli, MSBuild), also pushed to nuget.org: with
+#                                       Trusted Publishing when the NUGET_USER repository variable names the nuget.org
+#                                       account (policy for this repo and release.yml), else with a NUGET_API_KEY secret
 #   SHA256SUMS.txt
 on:
   push:
@@ -17,9 +18,14 @@ on:
       tag:
         description: Existing tag to (re)publish, e.g. v1.0.0
         required: true
+      nuget-only:
+        description: Only push the .nupkg files already attached to that release to nuget.org (no rebuild)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  id-token: write   # nuget.org Trusted Publishing (a short-lived key instead of a stored secret)
 
 concurrency:
   group: release-${{ github.ref }}
@@ -27,6 +33,7 @@ concurrency:
 
 jobs:
   release:
+    if: ${{ !inputs.nuget-only }}
     runs-on: windows-2025
     timeout-minutes: 75
     env:
@@ -99,16 +106,59 @@ jobs:
           git push -f origin "refs/tags/${major}"
 
       # The same .nupkg files as on the release page (symbols go along with Builder.Core). Re-runs skip what is there.
+      - name: Log in to nuget.org (Trusted Publishing)
+        id: nuget-login
+        if: vars.NUGET_USER != ''
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Push the NuGet packages
         shell: pwsh
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY || secrets.NUGET_API_KEY }}
         run: |
           if (-not $env:NUGET_API_KEY) {
-            Write-Host '::notice::NUGET_API_KEY is not set: the NuGet packages are only attached to the release.'
+            Write-Host '::notice::Neither the NUGET_USER variable (Trusted Publishing) nor a NUGET_API_KEY secret is set: the NuGet packages are only attached to the release.'
             exit 0
           }
           foreach ($package in Get-ChildItem out/release -Filter *.nupkg) {
             dotnet nuget push $package.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+
+  # A release published before nuget.org was set up: push the packages it already carries, checked against its
+  # SHA256SUMS.txt, without building anything again.
+  nuget:
+    if: ${{ inputs.nuget-only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Download the release's packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D pkgs -p '*.nupkg' -p '*.snupkg' -p SHA256SUMS.txt
+          cd pkgs
+          sed 's/\r$//' SHA256SUMS.txt | grep -E '\.s?nupkg$' | sha256sum -c -
+
+      - name: Log in to nuget.org (Trusted Publishing)
+        id: nuget-login
+        if: vars.NUGET_USER != ''
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Push the NuGet packages
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY || secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then echo '::error::Set the NUGET_USER variable (Trusted Publishing) or a NUGET_API_KEY secret.'; exit 1; fi
+          for package in pkgs/*.nupkg; do
+            dotnet nuget push "$package" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done

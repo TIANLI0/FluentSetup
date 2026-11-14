@@ -147,4 +147,6 @@ builds with it, and builds a Setup.exe from a console app that references `Fluen
 nothing on the PC and never runs the installers it builds.
 
 The release workflow attaches the `.nupkg` files to the GitHub release (they are listed in `SHA256SUMS.txt`) and pushes
-them to nuget.org when the repository has a `NUGET_API_KEY` secret.
+them to nuget.org. It uses [Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) when the
+repository variable `NUGET_USER` names the nuget.org account (with a policy for this repository and `release.yml`), so no
+key is stored anywhere; otherwise a `NUGET_API_KEY` secret, if there is one.
