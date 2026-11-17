@@ -861,7 +861,9 @@ install::Outcome Controller::RunElevated(const install::InstallOptions& options,
     else if (mode_ == Mode::Modify) params += L" /modify";
     if (!args_.originDir.empty()) params += L" --origin-dir " + QuoteArg(args_.originDir);
     if (args_.phase2 && args_.originProcess) {
-        params += L" --wait-pid " + std::to_wstring(::GetProcessId(reinterpret_cast<HANDLE>(static_cast<uintptr_t>(args_.originProcess))));
+        const DWORD originPid = ::GetProcessId(reinterpret_cast<HANDLE>(static_cast<uintptr_t>(args_.originProcess)));
+        if (originPid) params += L" --wait-pid " + std::to_wstring(originPid);
+        else log::Warn(L"Cannot read the original uninstaller's process id (%lu); the worker will not wait for it", ::GetLastError());
     }
     if (!logPath_.empty()) params += L" /log " + QuoteArg(logPath_);
     params += L" /lang " + strings_.Language();
@@ -884,6 +886,12 @@ install::Outcome Controller::RunElevated(const install::InstallOptions& options,
         out.rolledBack = true;
         return out;
     }
+    // Permission granted and the worker is ours: leave "Waiting for administrator permission" now. The administrator
+    // cleanup reports no progress of its own, so without this the page kept that text until the very end.
+    install::Progress granted;
+    granted.state = op ? install::State::Finalizing : install::State::Validating;
+    granted.cancellable = !op;
+    Publish(granted);
     json::Value run;
     run.set("t", "run");
     run.set("op", op ? op : mode_ == Mode::Uninstall ? "uninstall" : mode_ == Mode::Modify ? "modify" : "install");

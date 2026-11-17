@@ -11,6 +11,14 @@ release workflow publishes the section of the pushed tag as the release notes.
   addresses, a page for the release notes, a question mark for help) that wrap into rows, instead of one line of
   underlined text. A website on a known site is named after it ("GitHub" rather than "Website").
 
+### Fixed
+
+- Uninstalling a per-machine app from Settings > Apps failed after the UAC prompt with "The elevated worker did not
+  connect" (14): the relocated uninstaller passed `--wait-pid 0` to the elevated worker, which rejected it with an
+  invisible message box (only its sound was heard) while the page kept showing "Waiting for administrator
+  permission" for a minute. The elevated worker never shows a message box now, and the page leaves that text as soon
+  as the worker has connected (the per-user administrator cleanup used to keep it until the end).
+
 ## [1.4.0] - 2026-11-17
 
 ### Added

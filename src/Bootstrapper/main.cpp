@@ -148,7 +148,8 @@ int RunUninstallPhase1(const std::wstring& self) {
     UniqueHandle reader(readEnd), writer(writeEnd);
     ::SetHandleInformation(readEnd, HANDLE_FLAG_INHERIT, 0);
     HANDLE selfHandle = nullptr;
-    ::DuplicateHandle(::GetCurrentProcess(), ::GetCurrentProcess(), ::GetCurrentProcess(), &selfHandle, SYNCHRONIZE, TRUE, 0);
+    ::DuplicateHandle(::GetCurrentProcess(), ::GetCurrentProcess(), ::GetCurrentProcess(), &selfHandle, SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
+                      TRUE, 0);  // query: phase 2 passes our PID (GetProcessId) to the elevated worker as --wait-pid
     UniqueHandle selfDup(selfHandle);
 
     // Forward the public switches the user gave us, then add the phase-2 handshake.
@@ -200,7 +201,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     boot::Args args;
     std::wstring argError;
     const bool argsOk = boot::ParseArgs(::GetCommandLineW(), args, argError);
-    const bool quiet = argsOk ? args.quiet : (wcsstr(::GetCommandLineW(), L"/quiet") || wcsstr(::GetCommandLineW(), L"/silent"));
+    // The elevated worker runs hidden and nobody can answer a message box there: it must never show one.
+    const bool quiet = argsOk ? args.quiet || args.worker
+                              : (wcsstr(::GetCommandLineW(), L"/quiet") || wcsstr(::GetCommandLineW(), L"/silent") ||
+                                 wcsstr(::GetCommandLineW(), L"--worker"));
     const std::wstring self = path::ModulePath();
 
     // ---- open and validate our own package --------------------------------------------------------------------
