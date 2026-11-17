@@ -3,10 +3,13 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
-## [Unreleased]
+## [1.4.0] - 2026-11-17
 
 ### Added
 
+- Release binaries are Authenticode-signed (Certum certificate, RFC 3161 timestamp): the WinUI front end
+  `FluentSetup.UI.exe` that every setup extracts, the CLI `fluentsetup.exe` of the Windows zip, the Builder app,
+  `FluentSetup-1.4.0-Setup.exe` and the `uninstall.exe` it installs.
 - Links in the installer: `app.supportUrl`, `app.releaseNotesUrl` and up to 4 `app.links` (e.g. the GitHub
   repository; without a label the site's name is shown) appear with `app.website` in one line on the first page and
   after a successful install ("Website · GitHub · Release notes · Help and support"), in both front ends and all
@@ -29,7 +32,6 @@ release workflow publishes the section of the pushed tag as the release notes.
 - Programs that use the app's files are found by their process (executable inside the installation) plus a bounded
   selection of files, instead of handing every file to Windows Restart Manager. With thousands of files that other
   programs had loaded, the check before an update or uninstall (and the first page of an update) could take minutes.
-
 - Faster installs, updates and uninstalls of apps with many files. The time went to the file system's per-file cost
   (creating, renaming, deleting; most of it real-time virus scanning), not to decompression, so setup now does that
   work in bulk from several threads and journals each step before it happens, as before: folders are created once
