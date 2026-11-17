@@ -188,6 +188,11 @@ TEST(app_links_are_web_addresses_only) {
     CHECK(install::LinkLabelFromUrl(L"https://gist.github.com/x") == L"GitHub");
     CHECK(install::LinkLabelFromUrl(L"https://www.contoso.com:8080/help") == L"contoso.com");
     CHECK(install::LinkLabelFromUrl(L"https://notgithub.com/") == L"notgithub.com");
+    CHECK(install::KnownSiteName(L"https://github.com/owner/repo") == L"GitHub");
+    CHECK(install::KnownSiteName(L"https://WWW.GitHub.com/owner") == L"GitHub");
+    CHECK(install::KnownSiteName(L"https://www.contoso.com/") == L"");
+    CHECK(install::KnownSiteName(L"https://notgithub.com/") == L"");
+    CHECK(install::KnownSiteName(L"not a url") == L"");
 
     const auto parse = [](const std::string& app) {
         return Parse(Header("[" + File("a.txt") + "]", R"([{"offset":0,"size":16,"rawSize":3,"sha256":")" + kZeroHash + R"("}])", app));

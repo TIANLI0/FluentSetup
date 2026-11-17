@@ -3,6 +3,14 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
+## [Unreleased]
+
+### Changed
+
+- The installer's links are icon buttons in the WinUI style (a globe for the website, GitHub's logo for GitHub
+  addresses, a page for the release notes, a question mark for help) that wrap into rows, instead of one line of
+  underlined text. A website on a known site is named after it ("GitHub" rather than "Website").
+
 ## [1.4.0] - 2026-11-17
 
 ### Added

@@ -308,18 +308,22 @@ bool Controller::ReadFrontendFile(const std::wstring& relativePath, std::vector<
 
 std::vector<Controller::Link> Controller::Links() const {
     std::vector<Link> links;
-    const auto add = [&](std::wstring label, const std::wstring& url) {
+    const auto add = [&](std::wstring label, const std::wstring& url, std::string icon) {
         if (url.empty() || !install::IsWebUrl(url)) return;
         for (const auto& l : links) {
             if (EqualsIgnoreCase(l.url, url)) return;
         }
         if (label.empty()) label = install::LinkLabelFromUrl(url);
-        links.push_back({std::move(label), url});
+        links.push_back({std::move(label), url, std::move(icon)});
     };
-    add(strings_.Get("link.website"), pkg_.website);
-    for (const auto& l : pkg_.links) add(l.label.Get(strings_.Language(), L""), l.url);
-    add(strings_.Get("link.releaseNotes"), pkg_.releaseNotesUrl);
-    add(strings_.Get("link.support"), pkg_.supportUrl);
+    // A site's own logo where we have one (GitHub), else a generic icon; release notes and support keep theirs even
+    // on GitHub. A website that is a code host's page is named after it ("GitHub" rather than "Website").
+    const auto siteIcon = [](const std::wstring& site, const char* other) { return std::string(site == L"GitHub" ? "github" : other); };
+    const std::wstring websiteSite = install::KnownSiteName(pkg_.website);
+    add(websiteSite.empty() ? strings_.Get("link.website") : websiteSite, pkg_.website, siteIcon(websiteSite, websiteSite.empty() ? "website" : "link"));
+    for (const auto& l : pkg_.links) add(l.label.Get(strings_.Language(), L""), l.url, siteIcon(install::KnownSiteName(l.url), "link"));
+    add(strings_.Get("link.releaseNotes"), pkg_.releaseNotesUrl, "releaseNotes");
+    add(strings_.Get("link.support"), pkg_.supportUrl, "support");
     return links;
 }
 
@@ -356,6 +360,7 @@ json::Value Controller::Hello(const std::wstring& iconPath, const std::wstring& 
         json::Value v;
         v.set("label", l.label);
         v.set("url", l.url);  // shown as a tooltip; opening goes through "openLink" with the index
+        v.set("icon", l.icon);
         links.push(v);
     }
     h.set("links", links);

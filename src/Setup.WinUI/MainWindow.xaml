@@ -92,10 +92,11 @@
                         </StackPanel>
                         <TextBlock x:Name="DescriptionText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" MaxLines="3"
                                    TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,8,0,0" />
-                        <!-- app.website, app.links, release notes, support: "Website · GitHub · Release notes", wrapping as needed.
-                             Shown on the first page and after a successful install; opened by the bootstrapper ("openLink"). -->
-                        <TextBlock x:Name="LinksText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" Margin="0,8,0,0"
-                                   Visibility="Collapsed" />
+                        <!-- app.website, app.links, release notes, support: a row of icon + label link buttons (GitHub with its
+                             logo), wrapped into more rows when they do not fit (MainWindow::LayoutLinks). The negative left
+                             margin lines the first icon up with the text above. Shown on the first page and after a
+                             successful install; opened by the bootstrapper ("openLink"). -->
+                        <StackPanel x:Name="LinksPanel" Margin="-8,6,0,0" Visibility="Collapsed" SizeChanged="OnLinksSizeChanged" />
                         <StackPanel x:Name="UserDataPanel" Margin="0,16,0,0" Visibility="Collapsed">
                             <CheckBox x:Name="RemoveDataCheck" />
                             <TextBlock x:Name="UserDataPaths" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" Margin="28,0,0,0"

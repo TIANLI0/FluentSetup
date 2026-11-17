@@ -273,7 +273,10 @@ foreach ($ui in $FrontEnds) {
         Check "${ui}: unsigned package shows no publisher warning" { -not (Test-UiaElement -Root $w -Name $en.'welcome.unknownPublisher') }
         Check "${ui}: Change button next to the location" { Find-Any $w @('Change', '&Change', $browseName) }
         Check "${ui}: install scope inline" { (Find-Any $w @('Only me')) -and (Find-Any $w @('All users')) }
-        Check "${ui}: app links on the first page (website, GitHub, release notes)" { Find-Containing $w @($en.'link.website', 'GitHub', $en.'link.releaseNotes') }
+        # WinUI: one link button each; Win32: one SysLink with all of them.
+        Check "${ui}: app links on the first page (website, GitHub, release notes)" {
+            (Find-Containing $w @($en.'link.website')) -and (Find-Containing $w @('GitHub')) -and (Find-Containing $w @($en.'link.releaseNotes'))
+        }
         # Win32: the SysLink's window text is markup; screen readers get the annotated MSAA name (the managed UIA
         # client used here reads the window text of Win32 controls instead).
         Check "${ui}: no link markup in accessible names" {

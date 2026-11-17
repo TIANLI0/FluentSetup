@@ -62,6 +62,8 @@ public:
     // each address once), with the label in the UI language. Front ends refer to them by index ("openLink").
     struct Link {
         std::wstring label, url;
+        // What the front ends draw next to the label: "website", "github", "releaseNotes", "support" or "link".
+        std::string icon;
     };
     [[nodiscard]] std::vector<Link> Links() const;
     // Opens link `index` of Links() in the user's browser, never with this process's (possibly elevated) token.

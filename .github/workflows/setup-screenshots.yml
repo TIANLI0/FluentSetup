@@ -1,0 +1,47 @@
+name: Setup screenshots
+
+# Screenshots of the installer (first page and result page; WinUI and Win32; light and dark; Chinese and English),
+# uploaded as an artifact. Runs on demand and for pull requests that change a front end.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['src/Setup.WinUI/**', 'src/Setup.Win32/**', 'tests/UI/setup-screenshots.ps1']
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Windows App Runtime (for the WinUI front end)
+        shell: pwsh
+        run: |
+          $req = (Get-Content packaging/fluentsetup.json -Raw | ConvertFrom-Json).requirements.windowsAppRuntime
+          $file = Join-Path $env:RUNNER_TEMP 'WindowsAppRuntimeInstall-x64.exe'
+          Invoke-WebRequest -UseBasicParsing $req.download.url -OutFile $file
+          if ((Get-FileHash $file -Algorithm SHA256).Hash -ne $req.download.sha256.ToUpperInvariant()) { throw 'SHA-256 mismatch' }
+          & $file --quiet
+          if ($LASTEXITCODE -ne 0) { throw "Windows App Runtime installer exit code $LASTEXITCODE" }
+
+      - name: Build
+        shell: pwsh
+        run: ./scripts/build.ps1 -Configuration Release -Platforms x64
+
+      - name: Screenshots
+        shell: powershell
+        run: .\tests\UI\setup-screenshots.ps1 -Out out\setup-shots
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: setup-screenshots
+          path: out/setup-shots/*.png
+          if-no-files-found: warn
