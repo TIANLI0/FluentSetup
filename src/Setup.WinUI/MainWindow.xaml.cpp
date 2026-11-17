@@ -12,6 +12,7 @@
 #include "UiChannel.h"
 
 #include <algorithm>
+#include <limits>
 
 using namespace winrt;
 using namespace winrt::Microsoft::UI;
@@ -389,28 +390,125 @@ void MainWindow::ApplyHello() {
     UpdateSpaceText();
 }
 
+namespace {
+// GitHub's mark (Octicons "mark-github", 16 x 16, MIT): GitHub addresses get the logo users recognise.
+constexpr wchar_t kGitHubMark[] =
+    L"M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 "
+    L"1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 "
+    L"0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95"
+    L"-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 "
+    L"1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z";
+
+constexpr double kLinkIconSize = 16;
+constexpr double kLinkSpacing = 4;     // between two link buttons
+constexpr double kLinkPaddingX = 8;    // inside a link button, left and right
+constexpr double kLinkIconGap = 8;     // between icon and label
+
+IconElement LinkIcon(const std::string& kind) {
+    if (kind == "github") {
+        PathIcon icon;
+        icon.Data(Markup::XamlBindingHelper::ConvertValue(xaml_typename<Geometry>(), box_value(kGitHubMark)).as<Geometry>());
+        icon.Width(kLinkIconSize);
+        icon.Height(kLinkIconSize);
+        return icon;
+    }
+    // Segoe Fluent Icons: Globe, Document, Help, Link.
+    const wchar_t* glyph = kind == "website" ? L"ç74" : kind == "releaseNotes" ? L"èA5" : kind == "support" ? L"è97" : L"ç1B";
+    FontIcon icon;
+    icon.Glyph(glyph);
+    icon.FontSize(kLinkIconSize);
+    return icon;
+}
+}  // namespace
+
+namespace {
+// GitHub's mark (Octicons "mark-github", MIT), 16 x 16.
+constexpr wchar_t kGitHubMark[] =
+    L"M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 "
+    L"1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 "
+    L"0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2"
+    L"-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 "
+    L"0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z";
+constexpr double kLinkSpacing = 4;
+constexpr double kLinkChrome = 16 + 8 + 2 * 8;  // icon, icon-to-text gap, button padding
+
+IconElement LinkIcon(const std::string& kind) {
+    if (kind == "github") {
+        PathIcon icon;
+        icon.Data(Markup::XamlBindingHelper::ConvertValue(xaml_typename<Geometry>(), box_value(kGitHubMark)).as<Geometry>());
+        icon.Width(16);
+        icon.Height(16);
+        return icon;
+    }
+    FontIcon icon;
+    icon.FontSize(16);
+    icon.Glyph(kind == "website" ? L"\xE774"          // Globe
+               : kind == "releaseNotes" ? L"\xE8A5"   // Document
+               : kind == "support" ? L"\xE897"        // Help
+                                    : L"\xE71B");     // Link
+    return icon;
+}
+}  // namespace
+
 void MainWindow::BuildLinks() {
-    // "Website · GitHub · Release notes": one wrapping line of hyperlinks. The address is the tooltip (so users see
-    // where a link goes); the bootstrapper opens it by index, never with an elevated token.
-    namespace Docs = winrt::Microsoft::UI::Xaml::Documents;
-    auto inlines = LinksText().Inlines();
-    inlines.Clear();
+    // Icon + label link buttons (the address is the tooltip, so users see where a link goes); the bootstrapper opens
+    // a link by index, never with an elevated token. LayoutLinks wraps them into rows.
+    linkButtons_.clear();
+    linkWidths_.clear();
     const auto& links = Hello()["links"].array();
     for (size_t i = 0; i < links.size(); ++i) {
-        if (i > 0) {
-            Docs::Run separator;
-            separator.Text(L"  ·  ");
-            inlines.Append(separator);
-        }
-        Docs::Hyperlink link;
-        Docs::Run label;
-        label.Text(links[i]["label"].asWide());
-        link.Inlines().Append(label);
-        ToolTipService::SetToolTip(link, box_value(links[i]["url"].asWide()));
-        Automation::AutomationProperties::SetHelpText(link, links[i]["url"].asWide());
-        link.Click([this, i](auto&&, auto&&) { OpenLink(i); });
-        inlines.Append(link);
+        const std::wstring label = links[i]["label"].asWide();
+        const std::wstring url = links[i]["url"].asWide();
+        TextBlock text;
+        text.Text(label);
+        text.VerticalAlignment(VerticalAlignment::Center);
+        StackPanel content;
+        content.Orientation(Orientation::Horizontal);
+        content.Spacing(8);
+        auto icon = LinkIcon(links[i]["icon"].asString());
+        icon.VerticalAlignment(VerticalAlignment::Center);
+        content.Children().Append(icon);
+        content.Children().Append(text);
+        HyperlinkButton button;
+        button.Content(content);
+        button.Padding(ThicknessHelper::FromLengths(8, 5, 8, 6));
+        ToolTipService::SetToolTip(button, box_value(url));
+        Automation::AutomationProperties::SetName(button, label);
+        Automation::AutomationProperties::SetHelpText(button, url);
+        button.Click([this, i](auto&&, auto&&) { OpenLink(i); });
+        text.Measure(Windows::Foundation::Size{1e6f, 1e6f});
+        linkButtons_.push_back(button);
+        linkWidths_.push_back(text.DesiredSize().Width + kLinkChrome);
     }
+    linksWidth_ = -1;
+    LayoutLinks(LinksPanel().ActualWidth() > 0 ? LinksPanel().ActualWidth() : 10000);
+}
+
+void MainWindow::LayoutLinks(double width) {
+    if (width == linksWidth_) return;
+    linksWidth_ = width;
+    auto rows = LinksPanel().Children();
+    for (auto const& row : rows) row.as<StackPanel>().Children().Clear();
+    rows.Clear();
+    StackPanel row{nullptr};
+    double used = 0;
+    for (size_t i = 0; i < linkButtons_.size(); ++i) {
+        if (!row || used + kLinkSpacing + linkWidths_[i] > width) {
+            row = StackPanel();
+            row.Orientation(Orientation::Horizontal);
+            row.Spacing(kLinkSpacing);
+            rows.Append(row);
+            used = 0;
+        } else {
+            used += kLinkSpacing;
+        }
+        row.Children().Append(linkButtons_[i]);
+        used += linkWidths_[i];
+    }
+}
+
+void MainWindow::OnLinksSizeChanged(IInspectable const&, SizeChangedEventArgs const& e) {
+    if (e.NewSize().Width != e.PreviousSize().Width) LayoutLinks(e.NewSize().Width);
 }
 
 void MainWindow::OpenLink(size_t index) {
@@ -557,7 +655,7 @@ void MainWindow::ShowPage(Page page) {
     // the "Change" page, where the options and an update notice need the room above the fold.
     const bool links = !IsUninstall() && !Hello()["links"].array().empty() &&
                        ((page == Page::Welcome && IsInstall()) || (page == Page::Result && result_ == ResultKind::Success));
-    SetVisible(LinksText(), links);
+    SetVisible(LinksPanel(), links);
     SetVisible(LicenseInlineText(), page == Page::Welcome && LicenseInline());
     if (page == Page::License) {
         // Inline style: the page is only for reading; installing from here accepts it like the first page says.

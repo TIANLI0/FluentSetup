@@ -172,15 +172,23 @@ bool IsWebUrl(const std::wstring& url) {
     return !host.empty() && host.front() != L':' && host.front() != L'.';
 }
 
-std::wstring LinkLabelFromUrl(const std::wstring& url) {
+namespace {
+// The host of an http(s) address, lower case, without user info, port and a leading "www.".
+std::wstring LinkHost(const std::wstring& url) {
     const size_t start = url.find(L"://");
-    if (start == std::wstring::npos) return url;
+    if (start == std::wstring::npos) return {};
     std::wstring host = url.substr(start + 3);
     host = host.substr(0, host.find_first_of(L"/?#"));
     if (const size_t at = host.rfind(L'@'); at != std::wstring::npos) host = host.substr(at + 1);
     if (const size_t colon = host.find(L':'); colon != std::wstring::npos) host = host.substr(0, colon);
     host = ToLower(host);
     if (host.rfind(L"www.", 0) == 0) host = host.substr(4);
+    return host;
+}
+}  // namespace
+
+std::wstring KnownSiteName(const std::wstring& url) {
+    const std::wstring host = LinkHost(url);
     static const struct {
         const wchar_t* host;
         const wchar_t* name;
@@ -195,7 +203,13 @@ std::wstring LinkLabelFromUrl(const std::wstring& url) {
     for (const auto& k : kKnown) {
         if (host == k.host || (host.size() > wcslen(k.host) && host.ends_with(std::wstring(L".") + k.host))) return k.name;
     }
-    return host;
+    return {};
+}
+
+std::wstring LinkLabelFromUrl(const std::wstring& url) {
+    if (url.find(L"://") == std::wstring::npos) return url;
+    std::wstring name = KnownSiteName(url);
+    return name.empty() ? LinkHost(url) : name;
 }
 
 Package ParsePackage(const std::string& headerJson, const std::function<bool(uint64_t, uint64_t)>& rangeCheck) {

@@ -18,6 +18,8 @@ struct MainWindow : MainWindowT<MainWindow> {
     void OnSecondaryClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnCancelClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnBrowseClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+    void OnLinksSizeChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::SizeChangedEventArgs const& e);
+    void OnLinksSizeChanged(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::SizeChangedEventArgs const&);
     void OnOpenFolderClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnViewLogClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
     void OnUpdateClick(winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -68,6 +70,8 @@ private:
     // A license page the flow goes through ("page" style) before the install starts.
     [[nodiscard]] bool LicensePageInFlow() const { return ShowsLicense() && !LicenseInline(); }
     void BuildLinks();
+    // Puts the link buttons into rows that fit `width` (WinUI has no wrap panel).
+    void LayoutLinks(double width);
     void OpenLink(size_t index);
     [[nodiscard]] bool LaunchOffered() const;
     [[nodiscard]] std::wstring PrimaryVerb() const;
@@ -108,6 +112,9 @@ private:
     bool dialogOpen_ = false;
     bool repairing_ = false;  // the progress/result pages are about a repair (modify mode)
     std::vector<InputField> inputs_;
+    std::vector<winrt::Microsoft::UI::Xaml::Controls::HyperlinkButton> linkButtons_;
+    std::vector<double> linkWidths_;
+    double linksWidth_ = -1;
     std::wstring scope_;
     std::string variant_;
     std::wstring logPath_;

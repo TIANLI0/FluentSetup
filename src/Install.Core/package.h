@@ -73,6 +73,8 @@ bool IsWebUrl(const std::wstring& url);
 // A short name for a link without a label: well-known code hosts by name ("GitHub", "Gitee", "GitLab", ...), otherwise
 // the host without "www.".
 std::wstring LinkLabelFromUrl(const std::wstring& url);
+// The name of a well-known site an address belongs to ("GitHub", "Gitee", "Discord", ...), or "" for any other site.
+std::wstring KnownSiteName(const std::wstring& url);
 
 struct Package {
     std::wstring kind;  // "setup" or "uninstaller"
