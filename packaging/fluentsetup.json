@@ -1,6 +1,7 @@
 {
   "$schema": "../shared/schemas/fluentsetup.project.schema.json",
   "schemaVersion": 1,
+  "variables": { "CodesignThumbprint": "" },
   "app": {
     "id": "FluentSetup",
     "name": "FluentSetup",
@@ -64,5 +65,10 @@
     "includeWinUI": true
   },
   "update": { "github": "TIANLI0/FluentSetup", "checksums": "SHA256SUMS.txt" },
-  "signing": { "enabled": false }
+  "signing": {
+    "enabled": false,
+    "provider": "signtool",
+    "certificateThumbprint": "$(CodesignThumbprint)",
+    "timestampUrl": "http://time.certum.pl"
+  }
 }
