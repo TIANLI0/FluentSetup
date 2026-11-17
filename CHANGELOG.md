@@ -3,7 +3,7 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
-## [Unreleased]
+## [1.4.1] - 2026-11-18
 
 ### Changed
 
