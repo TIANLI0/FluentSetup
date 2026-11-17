@@ -111,13 +111,19 @@ All untrusted path text (package header, install record, journal, command line, 
   (`src/Install.Core/engine.cpp:314`); after it has been created, it is opened and its `GetFinalPathNameByHandle` must
   equal the requested path, which also catches other redirections such as `subst` drives (`engine.cpp:648-654`). The
   `.fsetup` work directory must not be a link (`engine.cpp:656-657, 887-888`).
-* **Extraction:** each parent directory is checked with `HasLinkInPath` (results cached per directory)
-  (`engine.cpp:378-385, 398`); an existing target that is a directory or link fails the install (`engine.cpp:406-408`);
-  new files are created with `CREATE_NEW | FILE_FLAG_OPEN_REPARSE_POINT` (`engine.cpp:419-420`).
+* **Extraction:** the parent directories are created parents first, below the already checked install directory
+  (`CreateDirectoryTree` in `engine.cpp`); one that already exists must be a real directory and not a link, so no
+  directory a file is written into is reached through a link. An existing target that is a directory or link fails the
+  install; new files are created with `CREATE_NEW | FILE_FLAG_OPEN_REPARSE_POINT` (`AheadOpener`). On an update, a
+  folder is moved to the backup as a whole only if everything in it is a file of the installed or the new version that
+  is not preserved, every folder in it belongs to one of them, and nothing in it is a link (`MoveOwnedSubtrees`).
 * **Uninstall:** the install directory may not go through a link (`engine.cpp:880`) and the record path is checked too
-  (`src/Install.Core/installed.cpp:186`); recorded files that are directories, links, or whose parent path contains a link
-  are skipped, not deleted (`engine.cpp:917-920`). Files are moved, not opened, so a link would be moved as a link.
-* **Recursive deletion** (`fs::DeleteTree`, `fs.cpp:163-189`) unlinks a reparse-point directory with
+  (`src/Install.Core/installed.cpp:186`); recorded files that are directories, links, or whose parent directory is not
+  reached from the install directory without a link (`SafeDirectories`) are skipped, not deleted. Files are moved, not
+  opened, so a link would be moved as a link. A folder goes to the trash as a whole only if it holds nothing but
+  recorded, non-preserved files and recorded folders and no link (`MoveOwnedSubtrees`); user files next to the app's
+  keep their folder in place.
+* **Recursive deletion** (`fs::DeleteTree` in `fs.cpp`) unlinks a reparse-point directory with
   `RemoveDirectoryW` and never recurses into it. `removeData` targets that are links are skipped (`engine.cpp:954`).
 * **Rollback:** only moves between `.fsetup` and the install directory/shortcut folders (`journal.cpp:141-157`).
 * **Action executables** must not have a link in their parent path (`engine.cpp:549`).
@@ -320,8 +326,9 @@ package explicitly adopts it (`engine.cpp:598-600`).
   `uninstall.exe` in the user's private temp directory). UAC consent prompts are not a security boundary against it.
 * **Machine-wide integrity of the uninstaller.** `uninstall.exe` is unsigned and only self-hashed; its protection is the
   ACL of the install directory.
-* **Power loss.** The journal flushes file entries every 64 operations; a power failure can lose the last entries and
-  leave files that rollback does not know about.
+* **Power loss.** The journal flushes file entries every 64 operations and before each bulk step of the payload (moving
+  the replaced files, creating the new ones); a power failure can lose the last entries and leave files that rollback
+  does not know about.
 
 ## 4. Recommendations
 

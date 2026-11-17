@@ -154,6 +154,50 @@ FileSet ParseFileSet(const json::Value& v, const wchar_t* what, const std::funct
 
 }  // namespace
 
+bool IsWebUrl(const std::wstring& url) {
+    size_t start = 0;
+    if (StartsWithIgnoreCase(url, L"https://")) start = 8;
+    else if (StartsWithIgnoreCase(url, L"http://")) start = 7;
+    else return false;
+    if (url.size() > 2048) return false;
+    for (const wchar_t c : url) {
+        if (c <= 0x20 || c == 0x7F || c == L'"' || c == L'<' || c == L'>' || c == L'\\' || c == L'^' || c == L'`' || c == L'{' || c == L'}' || c == L'|') {
+            return false;
+        }
+    }
+    const size_t end = url.find_first_of(L"/?#", start);
+    const std::wstring_view authority = std::wstring_view(url).substr(start, end == std::wstring::npos ? std::wstring::npos : end - start);
+    const size_t at = authority.rfind(L'@');
+    const std::wstring_view host = at == std::wstring_view::npos ? authority : authority.substr(at + 1);
+    return !host.empty() && host.front() != L':' && host.front() != L'.';
+}
+
+std::wstring LinkLabelFromUrl(const std::wstring& url) {
+    const size_t start = url.find(L"://");
+    if (start == std::wstring::npos) return url;
+    std::wstring host = url.substr(start + 3);
+    host = host.substr(0, host.find_first_of(L"/?#"));
+    if (const size_t at = host.rfind(L'@'); at != std::wstring::npos) host = host.substr(at + 1);
+    if (const size_t colon = host.find(L':'); colon != std::wstring::npos) host = host.substr(0, colon);
+    host = ToLower(host);
+    if (host.rfind(L"www.", 0) == 0) host = host.substr(4);
+    static const struct {
+        const wchar_t* host;
+        const wchar_t* name;
+    } kKnown[] = {
+        {L"github.com", L"GitHub"},     {L"gitee.com", L"Gitee"},         {L"gitlab.com", L"GitLab"},
+        {L"codeberg.org", L"Codeberg"}, {L"bitbucket.org", L"Bitbucket"}, {L"sourceforge.net", L"SourceForge"},
+        {L"discord.gg", L"Discord"},    {L"discord.com", L"Discord"},     {L"x.com", L"X"},
+        {L"twitter.com", L"X"},         {L"youtube.com", L"YouTube"},     {L"bilibili.com", L"Bilibili"},
+        {L"t.me", L"Telegram"},         {L"reddit.com", L"Reddit"},       {L"patreon.com", L"Patreon"},
+        {L"ko-fi.com", L"Ko-fi"},       {L"afdian.com", L"爱发电"},       {L"afdian.net", L"爱发电"},
+    };
+    for (const auto& k : kKnown) {
+        if (host == k.host || (host.size() > wcslen(k.host) && host.ends_with(std::wstring(L".") + k.host))) return k.name;
+    }
+    return host;
+}
+
 Package ParsePackage(const std::string& headerJson, const std::function<bool(uint64_t, uint64_t)>& rangeCheck) {
     Package p;
     std::string error;
@@ -175,8 +219,23 @@ Package ParsePackage(const std::string& headerJson, const std::function<bool(uin
     if (!Version::Parse(p.version, v)) Bad(L"invalid version");
     p.description = RequireString(app, "description", 1024, false);
     p.website = RequireString(app, "website", 512, false);
-    if (!p.website.empty() && !StartsWithIgnoreCase(p.website, L"https://") && !StartsWithIgnoreCase(p.website, L"http://")) {
-        Bad(L"website must be an http(s) URL");
+    if (!p.website.empty() && !IsWebUrl(p.website)) Bad(L"website must be an http(s) URL");
+    p.supportUrl = RequireString(app, "supportUrl", 512, false);
+    if (!p.supportUrl.empty() && !IsWebUrl(p.supportUrl)) Bad(L"supportUrl must be an http(s) URL");
+    p.releaseNotesUrl = RequireString(app, "releaseNotesUrl", 512, false);
+    if (!p.releaseNotesUrl.empty() && !IsWebUrl(p.releaseNotesUrl)) Bad(L"releaseNotesUrl must be an http(s) URL");
+    if (app.has("links")) {
+        if (!app["links"].isArray() || app["links"].array().size() > kMaxAppLinks) Bad(L"links must be a list of at most 8 entries");
+        for (const auto& entry : app["links"].array()) {
+            AppLink link;
+            link.url = RequireString(entry, "url", 512);
+            if (!IsWebUrl(link.url)) Bad(L"links: url must be an http(s) URL");
+            link.label = ParseLocalizedText(entry["label"]);
+            for (const auto& [lang, text] : link.label.byLanguage) {
+                if (text.size() > 64) Bad(L"links: label longer than 64 characters");
+            }
+            p.links.push_back(std::move(link));
+        }
     }
     p.architecture = RequireString(app, "architecture", 16, false);
     p.minWindowsBuild = static_cast<uint32_t>(app["minWindowsBuild"].asUint(0));

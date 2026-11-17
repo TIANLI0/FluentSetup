@@ -285,6 +285,8 @@ WinUiResult RunWinUi(Controller& controller, const std::wstring& simulate) {
                 continue;
             }
             controller.Start(options, UiWindow(pi.dwProcessId));
+        } else if (t == "openLink") {
+            controller.OpenLink(static_cast<size_t>(m["index"].asUint(SIZE_MAX)));
         } else if (t == "cancel") {
             controller.Cancel();
         } else if (t == "finish") {

@@ -19,6 +19,7 @@ struct Palette {
     COLORREF infoFill;
     COLORREF infoStroke;
     COLORREF editFill;
+    COLORREF link;       // hyperlinks (Fluent AccentTextFillColorPrimary)
 };
 
 class Theme {

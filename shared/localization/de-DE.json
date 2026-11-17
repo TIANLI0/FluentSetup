@@ -220,5 +220,12 @@
   "result.noProblems.title": "Keine Probleme gefunden",
   "prereq.officialDownload": "{0} wird benötigt, von Microsoft heruntergeladen und installiert.",
 
+  "link.website": "Website",
+  "link.releaseNotes": "Versionshinweise",
+  "link.support": "Hilfe und Support",
+  "license.inline": "Mit der Installation akzeptieren Sie die {0}.",
+  "license.inlineLink": "Lizenzbedingungen",
+  "license.inlineSubtitle": "Mit der Installation akzeptieren Sie diese Lizenzbedingungen.",
+
   "usage": "Verwendung: Setup.exe [Optionen]\n\n/quiet  Ohne Benutzeroberfläche installieren\n/passive  Nur den Fortschritt anzeigen, keine Fragen stellen\n/uninstall  Die installierte App entfernen\n/modify  Optionen der installierten App ändern (mit /quiet: ohne Fragen)\n/repair  Installierte Dateien überprüfen und beschädigte wiederherstellen\n/dir <Pfad>  Installationsort\n/scope user|machine  Für den aktuellen Benutzer oder für alle Benutzer installieren\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Eine im Paket definierte Option ein- oder ausschalten\n/input <id>=<Wert>  Wert einer im Paket definierten Einstellung (mehrfach möglich)\n/variant <id>  Paketvariante (z. B. gemeinsame oder eigenständige Runtimes)\n/remove-user-data  Deinstallation: auch Einstellungen und Daten löschen\n/relaunch  Die App nach einer Installation mit /quiet starten (In-App-Updates)\n/check-update  Exitcode 18, wenn eine neuere Version veröffentlicht ist, sonst 0\n/install-update  Die neueste Version herunterladen, überprüfen und installieren (mit /passive oder /quiet: ohne Fragen)\nSchalter von Inno Setup und NSIS (/VERYSILENT, /SUPPRESSMSGBOXES, /DIR=, /TASKS=, /D=...) werden akzeptiert.\n/log <Datei>  Das Protokoll in diese Datei schreiben\n/lang <Sprache>  Sprache der Benutzeroberfläche (en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT)\n/ui auto|winui|win32  Oberflächentechnologie (Diagnose)\n\nExitcode 0 bedeutet Erfolg; die anderen Codes sind in der Dokumentation beschrieben. 3010 bedeutet Erfolg, aber der PC muss neu gestartet werden, um den Vorgang abzuschließen."
 }

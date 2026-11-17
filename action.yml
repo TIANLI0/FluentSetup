@@ -1,5 +1,5 @@
 name: Setup FluentSetup
-description: Installs the fluentsetup CLI (self-contained, with the installer runtime) and puts it on PATH. Windows, Linux x64 and macOS arm64 runners.
+description: Installs the fluentsetup CLI (self-contained, with the installer runtime) and puts it on PATH; optionally builds a project. Windows, Linux x64 and macOS arm64 runners.
 author: TIANLI0
 branding:
   icon: package
@@ -12,6 +12,21 @@ inputs:
       else (@latest, @v1, a branch) the latest release.
     required: false
     default: ''
+  project:
+    description: >-
+      Optional project file (fluentsetup.json) to build right away, e.g. installer/fluentsetup.json. Without it the
+      action only installs the CLI.
+    required: false
+    default: ''
+  defines:
+    description: >-
+      Values for $(Name) in the project, one Name=Value per line (fluentsetup build -D), e.g. Version=1.4.0 (or the release tag from the workflow).
+    required: false
+    default: ''
+  args:
+    description: Further fluentsetup build arguments, e.g. "--arch arm64 --sign".
+    required: false
+    default: ''
 
 outputs:
   path:
@@ -20,6 +35,15 @@ outputs:
   version:
     description: The installed version.
     value: ${{ steps.install.outputs.version }}
+  setup-path:
+    description: Full path of the built Setup.exe (when project is set).
+    value: ${{ steps.build.outputs.setup-path }}
+  setup-sha256:
+    description: SHA-256 of the built Setup.exe (when project is set), e.g. for release notes or an update feed.
+    value: ${{ steps.build.outputs.setup-sha256 }}
+  app-version:
+    description: The app version the Setup.exe installs (when project is set).
+    value: ${{ steps.build.outputs.app-version }}
 
 runs:
   using: composite
@@ -80,3 +104,26 @@ runs:
         Add-Content $env:GITHUB_PATH $dir
         "path=$exe" >> $env:GITHUB_OUTPUT
         "version=$version" >> $env:GITHUB_OUTPUT
+
+    - id: build
+      if: ${{ inputs.project != '' }}
+      shell: pwsh
+      env:
+        FS_EXE: ${{ steps.install.outputs.path }}
+        FS_PROJECT: ${{ inputs.project }}
+        FS_DEFINES: ${{ inputs.defines }}
+        FS_ARGS: ${{ inputs.args }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $report = Join-Path $env:RUNNER_TEMP 'fluentsetup-report.json'
+        [string[]] $arguments = @('build', $env:FS_PROJECT, '--report', $report)
+        foreach ($line in ($env:FS_DEFINES -split "`r?`n")) { if ($line.Trim()) { $arguments += @('-D', $line.Trim()) } }
+        # Further arguments split like a command line (quotes keep spaces).
+        if ($env:FS_ARGS.Trim()) { $arguments += [regex]::Matches($env:FS_ARGS, '"([^"]*)"|(\S+)') | ForEach-Object { if ($_.Groups[1].Success) { $_.Groups[1].Value } else { $_.Groups[2].Value } } }
+        & $env:FS_EXE @arguments
+        if ($LASTEXITCODE -ne 0) { throw "fluentsetup build failed (exit code $LASTEXITCODE)" }
+        $r = Get-Content $report -Raw | ConvertFrom-Json
+        "setup-path=$($r.outputPath)" >> $env:GITHUB_OUTPUT
+        "setup-sha256=$($r.sha256)" >> $env:GITHUB_OUTPUT
+        "app-version=$($r.version)" >> $env:GITHUB_OUTPUT
+        Write-Host "Setup.exe: $($r.outputPath) (SHA-256 $($r.sha256))"

@@ -92,7 +92,15 @@ stamp the version, or the version of a bundled driver, without rewriting the pro
 | `publisher` | string | `""` | Max 128. Shown in Windows Settings. Leaving it empty gives a warning. |
 | `version` | string | `"1.0.0"` | 1–4 dot-separated numbers, optionally followed by `-tag`, e.g. `2.0.0-beta.1`. Max 64 characters. See [upgrades](#upgrades-and-downgrades). |
 | `description` | string | `""` | Max 1024. Shown in Windows Settings and used as the shortcut comment. |
-| `website` | string | `""` | Absolute `http://` or `https://` URL, or empty. |
+| `website` | string | `""` | Absolute `http://` or `https://` URL, or empty. Settings > Apps "About" link (`URLInfoAbout`) and the first link in the installer ("Website"). |
+| `supportUrl` | string | `""` | Help or support page (http/https). Shown in the installer ("Help and support"), written as `HelpLink` (Settings > Apps) and as `PublisherSupportUrl` by `fluentsetup winget`. |
+| `releaseNotesUrl` | string | `""` | What's new, e.g. `https://github.com/owner/repo/releases`. Shown in the installer ("Release notes", also on the page after a successful install), written as `URLUpdateInfo` and as the winget `ReleaseNotesUrl`. |
+| `links` | array | `[]` | Up to 4 further links shown in the installer after the website, e.g. `[{ "url": "https://github.com/owner/repo" }, { "url": "https://example.com/forum", "label": { "en-US": "Forum", "zh-CN": "论坛" } }]`. `label` is per language (1–64 characters); without it the installer shows the site's name: GitHub, Gitee, GitLab, Codeberg, Discord, … or the host name. |
+
+The installer shows these links in one line under the description ("Website · GitHub · Release notes · Help and support",
+each address once) on the first page, and again after a successful install or change. The address is the tooltip;
+links open in the user's browser, never with administrator rights (also when setup runs elevated). Only `http://` and
+`https://` addresses without spaces, quotes or angle brackets are accepted (FS1009, FS1016, FS1017, FS1019).
 | `icon` | string | `""` | `.ico` or `.png` file (up to 256×256) for Setup.exe and the installer window. Empty means the default FluentSetup icon is used. |
 | `mainExecutable` | string | `""` | Relative path of the app's `.exe` inside the installed files. It must be one of those files. Shortcuts, "launch after install" and the Settings icon use it. When it is empty, no shortcuts are created and the app is not launched after install (you get a warning). |
 | `appUserModelId` | string | `""` | AppUserModelID set on the app's Start menu and desktop shortcuts, e.g. `Contoso.Notes` (letters, digits, `.`, `-`, `_`; max 128, no spaces). Unpackaged apps need it for toast notifications. The key such an app registers for its display name and icon (`HKCU\Software\Classes\AppUserModelId\<id>`, also for the IDs of `shortcuts`) is removed on uninstall. |
@@ -654,6 +662,7 @@ requests per hour per address without a token, enough for checks at start-up or 
 | `accentColor` | string | `""` | `#RRGGBB`. Required when `useSystemAccent` is `false` (FS1303). |
 | `license` | string | `""` | Plain-text license file (max 1 MB). If set, the user must accept it before installing. |
 | `licenseMode` | `firstInstall` \| `always` | `"firstInstall"` | `always` also shows the license before upgrades and reinstalls (e.g. a user agreement that must be accepted for every version). |
+| `licenseStyle` | `page` \| `inline` | `"page"` | How the license is accepted. `page`: a license page with an "I accept" box before installing. `inline`: one step less; the first page says "By installing, you accept the license terms" with a link that shows the license, and **Install** starts right away. Choose what your license requires (some agreements need the explicit box). |
 | `licenses` | object | `{}` | Per-language license files, e.g. `{ "zh-CN": "license_zh.txt" }`. Without one for the installer language (or the same language in another region, as for `label`), `license` is shown. |
 | `localization` | string | `""` | Folder with one `<language>.json` per language; see *Localization*. |
 | `defaultLanguage` | `auto` \| language tag | `"auto"` | `auto` follows the user's Windows display languages (first one the installer supports; else en-US). A tag pins the language: a built-in one, a regional tag of one (`de-CH` → `de-DE`) or a language the package brings strings for; see *Localization*. `/lang` overrides this setting. |
@@ -851,7 +860,8 @@ fluentsetup build <project.json> [options]
     --msbuild               Diagnostics in MSBuild's format (used by the FluentSetup.MSBuild targets)
 fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
 fluentsetup inspect <Setup.exe> [--verify] [--json]
-fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
+fluentsetup init [folder] --source <files folder> [--name <name>] [--id <app.id>] [--publisher <name>]
+                 [--version <version>] [--main-exe <file.exe>]
 fluentsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [-o <dir>] [--identifier <Publisher.App>]
                    [--license <name>] [--license-url <url>] [--short-description <text>] [--publisher-url <url>]
                    [--tags <a,b>] [--release-notes-url <url>] [--json]
@@ -863,10 +873,10 @@ fluentsetup import <setup.iss|script.nsi> [-o <folder>] [--force] [--json]
 fluentsetup --version | --help
 ```
 
-- `validate` runs all project checks and collects the files, the same steps `build` performs before compressing, and prints diagnostics as `severity CODE [field]: message`. With `--json` it prints `{ valid, files, bytes, diagnostics }`.
+- `validate` runs all project checks and collects the files, the same steps `build` performs before compressing, and prints diagnostics as `severity CODE [field]: message`, then the app, version, architecture, compression, signing and the Setup.exe path `build` would write (with `-D` values applied). With `--json` it prints `{ valid, files, bytes, output, version, architecture, diagnostics }`.
 - `inspect` prints the header summary, sizes and signature state of a built Setup.exe. `--verify` also checks every stream's SHA-256.
 - `versions` lists versions for a prerequisite's version field, newest first, as the Builder's version pickers offer them: `webview2` = the current Microsoft Edge Stable and Beta versions for Windows (`edgeupdates.microsoft.com`), `windowsappruntime` = stable Windows App SDK releases from NuGet in the project's format (`1.6` for a 1.x channel, `2.5.1` from 2.x on), `dotnet` = one `M.m.0` minimum per .NET channel with its latest runtime, LTS/STS and support phase (`builds.dotnet.microsoft.com` release metadata), `vcredist` = common minimums (there is no feed; Microsoft's official installer is always the latest). Lists are cached for a day under `%LocalAppData%\FluentSetup\cache\versions`; offline, the saved (or a built-in) list is printed with a warning. `--json` prints `{ product, versions[], source, retrievedAt, feedUrl, error }`.
-- `init` creates `<folder>\fluentsetup.json` (default folder: the current one) and refuses to overwrite an existing file. `mainExecutable` is set to the first `*.exe` found directly in the source folder.
+- `init` creates `<folder>\fluentsetup.json` (default folder: the current one) and refuses to overwrite an existing file. Like the Builder's *New project*, it picks the main program in the source folder (the `.exe` named like the folder, else the largest; uninstallers, setups, updaters and crash helpers are skipped) and takes name, publisher and version from its version resource; the id is `<Publisher>.<Name>`. Options override each guess. `output.directory` is `dist` next to the project (outside the source folder). It prints what it chose and the `validate` / `build` commands to run next.
 - `winget` writes winget manifests for a built Setup.exe into `<dir>\manifests\<letter>\<Publisher>\<App>\<version>\` (default `<dir>`: the current folder), the layout of the winget-pkgs repository. Everything else comes from the package. See [winget.md](winget.md); [msbuild.md](msbuild.md) covers the NuGet packages (MSBuild targets, .NET tool, library).
 - `locale add` creates `<ui.localization>/<language>.json` with every text to translate (installer strings, option, action, variant and input ids), for a language the installer does not ship.
 - `guide` prints the complete authoring guide ([ai-guide.md](ai-guide.md)), `schema` the JSON Schema of the project file.

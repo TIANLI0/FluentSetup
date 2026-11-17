@@ -58,6 +58,15 @@ public:
     // Reply to a "checkInput" request: {t:"inputCheck", id, value, ok, message} (message localized, empty when ok).
     [[nodiscard]] json::Value CheckInput(const std::string& id, const std::wstring& value) const;
     [[nodiscard]] install::InstallOptions DefaultOptions() const;
+    // The web links the front ends show (app.website, app.links, app.releaseNotesUrl, app.supportUrl, in that order,
+    // each address once), with the label in the UI language. Front ends refer to them by index ("openLink").
+    struct Link {
+        std::wstring label, url;
+    };
+    [[nodiscard]] std::vector<Link> Links() const;
+    // Opens link `index` of Links() in the user's browser, never with this process's (possibly elevated) token.
+    // Returns at once; false for an unknown index.
+    bool OpenLink(size_t index) const;
     // Validates options coming from a front end against the package's offers. Returns false if they are not allowed.
     bool SanitizeOptions(const json::Value& v, install::InstallOptions& out) const;
     // English description of the first input problem (an id the package does not define, a missing required value, a

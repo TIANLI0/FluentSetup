@@ -699,3 +699,23 @@ public sealed partial class VariableRow : EditorRow
     [ObservableProperty] public partial string Name { get; set; } = "";
     [ObservableProperty] public partial string Value { get; set; } = "";
 }
+
+/// <summary>app.links[]: a link shown in the installer next to the website (a GitHub repository, a forum, …).</summary>
+public sealed partial class LinkRow : EditorRow
+{
+    private AppLink _original = new();
+
+    [ObservableProperty] public partial string Url { get; set; } = "";
+    /// <summary>Per-language label ("en-US = text" lines); empty = the installer names the site from its address.</summary>
+    [ObservableProperty] public partial string LabelText { get; set; } = "";
+
+    public static LinkRow From(AppLink l) => new() { _original = l, Url = l.Url ?? "", LabelText = TextForms.Localized(l.Label) };
+
+    public AppLink ToModel()
+    {
+        var link = TextForms.Copy(_original);  // keeps properties the editor does not know
+        link.Url = TextForms.Keep(Url, _original.Url);
+        link.Label = TextForms.FromLocalized(LabelText, _original.Label);
+        return link;
+    }
+}

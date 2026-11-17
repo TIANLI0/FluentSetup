@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:FluentSetup.Builder.Views"
+    xmlns:vm="using:FluentSetup.Builder.ViewModels"
     Background="Transparent">
     <ScrollViewer>
         <StackPanel MaxWidth="{StaticResource PageMaxWidth}" Padding="{StaticResource PagePadding}">
@@ -18,6 +19,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -39,14 +41,66 @@
                         <TextBox x:Uid="AppVersionBox" Text="{x:Bind VM.Version, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
                         <TextBlock Text="{x:Bind VM.Errors.AppVersion, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppVersion), Mode=OneWay}" />
                     </StackPanel>
-                    <TextBox x:Uid="AppDescriptionBox" Grid.Row="2" Grid.ColumnSpan="2" Text="{x:Bind VM.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" />
+                    <StackPanel Grid.Row="2" Grid.ColumnSpan="2">
+                        <TextBox x:Uid="AppDescriptionBox" Text="{x:Bind VM.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" />
+                        <TextBlock Text="{x:Bind VM.Errors.AppDescription, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppDescription), Mode=OneWay}" />
+                    </StackPanel>
                     <StackPanel Grid.Row="3" Grid.ColumnSpan="2">
                         <TextBox x:Uid="AppWebsiteBox" Text="{x:Bind VM.Website, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
                         <TextBlock Text="{x:Bind VM.Errors.AppWebsite, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppWebsite), Mode=OneWay}" />
                     </StackPanel>
+                    <StackPanel Grid.Row="4">
+                        <TextBox x:Uid="AppSupportUrlBox" Text="{x:Bind VM.SupportUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.AppSupportUrl, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppSupportUrl), Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="4" Grid.Column="1">
+                        <TextBox x:Uid="AppReleaseNotesUrlBox" Text="{x:Bind VM.ReleaseNotesUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                        <TextBlock Text="{x:Bind VM.Errors.AppReleaseNotesUrl, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppReleaseNotesUrl), Mode=OneWay}" />
+                    </StackPanel>
                 </Grid>
             </Border>
+
+            <!-- app.links: extra links shown in the installer next to the website (at most ProjectValidator.MaxLinks) -->
+            <Grid Margin="0,28,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">
+                    <TextBlock x:Uid="AppLinksSection" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock x:Uid="AppLinksDescription" Style="{StaticResource RowDescriptionStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{x:Bind VM.AddLinkCommand}" IsEnabled="{x:Bind VM.CanAddLink, Mode=OneWay}" VerticalAlignment="Bottom">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock x:Uid="AppLinksAdd" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.HasNoLinks, Mode=OneWay}">
+                <TextBlock x:Uid="AppLinksEmpty" Style="{StaticResource RowDescriptionStyle}" VerticalAlignment="Center" />
+            </Border>
+            <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,16" Visibility="{x:Bind local:Converters.VisibleIfNot(VM.HasNoLinks), Mode=OneWay}">
+                <ItemsControl ItemsSource="{x:Bind VM.LinkRows}" IsTabStop="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Spacing="12" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LinkRow">
+                            <StackPanel>
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <TextBox x:Uid="AppLinkUrlBox" Text="{x:Bind Url, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" VerticalAlignment="Top" />
+                                    <TextBox x:Uid="AppLinkLabelBox" Grid.Column="1" Text="{x:Bind LabelText, Mode=TwoWay}" Style="{StaticResource LinesBoxStyle}" />
+                                    <Button x:Uid="RowRemove" Grid.Column="2" Command="{x:Bind RemoveCommand}" VerticalAlignment="Bottom">
+                                        <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                                    </Button>
+                                </Grid>
+                                <TextBlock Text="{x:Bind Error, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(Error), Mode=OneWay}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+            <TextBlock Text="{x:Bind VM.Errors.AppLinks, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.AppLinks), Mode=OneWay}" />
 
             <TextBlock x:Uid="AppProgram" Style="{StaticResource SectionHeaderStyle}" />
             <StackPanel Spacing="4">

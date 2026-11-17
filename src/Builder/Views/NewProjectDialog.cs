@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using FluentSetup.Builder.Core.Model;
 using FluentSetup.Builder.Core.Packaging;
 using FluentSetup.Builder.Core.Validation;
 using FluentSetup.Builder.Services;
@@ -34,31 +34,14 @@ public sealed class NewProjectDialog : ContentDialog
         CloseButtonText = Loc.Get("Common_Cancel");
         DefaultButton = ContentDialogButton.Primary;
 
-        var exes = Directory.Exists(folder)
-            ? Directory.EnumerateFiles(folder, "*.exe", SearchOption.TopDirectoryOnly).Select(Path.GetFileName).OfType<string>()
-                       .Where(n => !n.Contains("unins", StringComparison.OrdinalIgnoreCase) && !n.Contains("setup", StringComparison.OrdinalIgnoreCase)).ToList()
-            : [];
-        foreach (var e in exes) _exe.Items.Add(e);
-        // Best guess for the main program: the one named like the folder, else the largest.
-        var folderName = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
-        var guess = exes.FirstOrDefault(e => Path.GetFileNameWithoutExtension(e).Equals(folderName, StringComparison.OrdinalIgnoreCase))
-                    ?? exes.OrderByDescending(e => new FileInfo(Path.Combine(folder, e)).Length).FirstOrDefault();
-        if (guess is not null) _exe.SelectedItem = guess;
-
-        string name = folderName, publisher = "", version = "1.0.0";
-        if (guess is not null)
-        {
-            var info = FileVersionInfo.GetVersionInfo(Path.Combine(folder, guess));
-            if (!string.IsNullOrWhiteSpace(info.ProductName)) name = info.ProductName.Trim();
-            if (!string.IsNullOrWhiteSpace(info.CompanyName)) publisher = info.CompanyName.Trim();
-            var v = (info.ProductVersion ?? "").Split('+')[0].Trim();
-            if (ProjectValidator.IsValidVersion(v)) version = v;
-            else if (info.FileMajorPart > 0 || info.FileMinorPart > 0) version = $"{info.FileMajorPart}.{info.FileMinorPart}.{info.FileBuildPart}";
-        }
-        _name.Text = name;
-        _publisher.Text = publisher;
-        _version.Text = version;
-        _id.Text = MakeId(publisher, name);
+        // Same guesses as "fluentsetup init": the main program and its version resource.
+        var guess = ProjectGuess.FromFolder(folder);
+        foreach (var e in guess.Executables) _exe.Items.Add(e);
+        if (guess.MainExecutable.Length > 0) _exe.SelectedItem = guess.MainExecutable;
+        _name.Text = guess.Name;
+        _publisher.Text = guess.Publisher;
+        _version.Text = guess.Version;
+        _id.Text = guess.Id;
 
         _name.Header = Loc.Get("NewProject_Name");
         _id.Header = Loc.Get("NewProject_Id");
@@ -93,13 +76,7 @@ public sealed class NewProjectDialog : ContentDialog
         Validate();
     }
 
-    private static string MakeId(string publisher, string name)
-    {
-        static string Clean(string s) => string.Concat(s.Where(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_'));
-        var parts = new[] { Clean(publisher), Clean(name) }.Where(p => p.Length > 0);
-        var id = string.Join('.', parts);
-        return id.Length > 64 ? id[..64] : id;
-    }
+    private static string MakeId(string publisher, string name) => ProjectGuess.MakeId(publisher, name);
 
     private void Validate()
     {

@@ -12,6 +12,7 @@
     <ClInclude Include="hash.h" />
     <ClInclude Include="json.h" />
     <ClInclude Include="log.h" />
+    <ClInclude Include="parallel.h" />
     <ClInclude Include="path.h" />
     <ClInclude Include="security.h" />
     <ClInclude Include="text.h" />

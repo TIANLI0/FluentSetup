@@ -7,6 +7,19 @@ namespace FluentSetup.Builder.Core.Validation;
 /// <summary>Static checks of a project. File-system checks that need the payload are done by <see cref="FileCollector"/>.</summary>
 public static partial class ProjectValidator
 {
+    /// <summary>Links in app.links (the installer accepts up to 8 in a header; projects keep the line short).</summary>
+    public const int MaxLinks = 4;
+
+    /// <summary>
+    /// An absolute http:// or https:// address with a host and none of the characters the installer refuses (spaces,
+    /// quotes, angle brackets, backslashes, control characters); the same rule as IsWebUrl in src/Install.Core/package.cpp.
+    /// </summary>
+    public static bool IsWebUrl(string url)
+    {
+        if (url.Length > 512 || url.Any(c => c <= ' ' || c == 0x7F || "\"<>\\^`{}|".Contains(c))) return false;
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp) && uri.Host.Length > 0;
+    }
+
     private static readonly string[] Offers = ["off", "on", "optionalOff", "optionalOn"];
     private static readonly string[] DirTokens = ["{LocalAppData}", "{UserProgramFiles}", "{AppData}", "{ProgramFiles}", "{ProgramData}", "{AppName}", "{Publisher}", "{AppId}"];
 
@@ -33,10 +46,19 @@ public static partial class ProjectValidator
         if (string.IsNullOrWhiteSpace(app.Publisher)) d.Warning("FS1006", "app.publisher", "No publisher: Windows Settings will show the app without a publisher.");
         if (!IsValidVersion(app.Version)) d.Error("FS1007", "app.version", $"'{app.Version}' is not a valid version. Use 1-4 numbers separated by dots, optionally followed by -tag (for example 1.2.0 or 2.0.0-beta.1).");
         if (app.Description.Length > 1024) d.Error("FS1008", "app.description", "Description is longer than 1024 characters.");
-        if (!string.IsNullOrEmpty(app.Website) &&
-            (!Uri.TryCreate(app.Website, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)))
+        if (!string.IsNullOrEmpty(app.Website) && !IsWebUrl(app.Website)) d.Error("FS1009", "app.website", "Website must be an absolute http:// or https:// URL.");
+        if (!string.IsNullOrEmpty(app.SupportUrl) && !IsWebUrl(app.SupportUrl)) d.Error("FS1016", "app.supportUrl", "Support URL must be an absolute http:// or https:// URL.");
+        if (!string.IsNullOrEmpty(app.ReleaseNotesUrl) && !IsWebUrl(app.ReleaseNotesUrl)) d.Error("FS1017", "app.releaseNotesUrl", "Release notes URL must be an absolute http:// or https:// URL.");
+        if (app.Links.Count > MaxLinks) d.Error("FS1018", "app.links", $"At most {MaxLinks} links: the installer shows them in one line with the website, release notes and support links.");
+        for (var i = 0; i < app.Links.Count; i++)
         {
-            d.Error("FS1009", "app.website", "Website must be an absolute http:// or https:// URL.");
+            var link = app.Links[i];
+            if (!IsWebUrl(link.Url)) d.Error("FS1019", $"app.links[{i}].url", "Link must be an absolute http:// or https:// URL.");
+            foreach (var (lang, text) in link.Label)
+            {
+                if (string.IsNullOrWhiteSpace(text) || text.Length > 64)
+                    d.Error("FS1020", $"app.links[{i}].label", $"Label for {lang} must be 1-64 characters (leave the label out to show the site's name).");
+            }
         }
         if (!string.IsNullOrEmpty(app.Icon))
         {
@@ -123,6 +145,7 @@ public static partial class ProjectValidator
         if (!ui.UseSystemAccent && !ColorRegex().IsMatch(ui.AccentColor)) d.Error("FS1303", "ui.accentColor", "Accent colour must look like #0067C0 when the system accent is not used.");
         if (ui.DefaultLanguage != "auto" && !Localization.IsLanguageTag(ui.DefaultLanguage)) d.Error("FS1304", "ui.defaultLanguage", "Default language must be auto or a language tag such as zh-CN.");
         if (ui.LicenseMode is not ("firstInstall" or "always")) d.Error("FS1311", "ui.licenseMode", "Use firstInstall or always.");
+        if (ui.LicenseStyle is not ("page" or "inline")) d.Error("FS1315", "ui.licenseStyle", "Use page or inline.");
         if (!string.IsNullOrEmpty(ui.License))
         {
             var lic = Resolve(projectDirectory, ui.License);

@@ -27,9 +27,6 @@
                                     <FontIcon Glyph="&#xE7B8;" FontSize="16" />
                                     <TextBlock x:Uid="BuildButtonText" />
                                 </StackPanel>
-                                <Button.KeyboardAccelerators>
-                                    <KeyboardAccelerator Key="F5" />
-                                </Button.KeyboardAccelerators>
                             </Button>
                         </StackPanel>
                     </Grid>
@@ -62,7 +59,11 @@
                             <TextBlock Grid.Row="4" x:Uid="SizeTotalLabel" Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind VM.SizeTotal, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         </Grid>
-                        <HyperlinkButton x:Uid="BuildCopyPath" Command="{x:Bind VM.CopyOutputPathCommand}" Margin="-12,0,0,0" />
+                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="-12,0,0,0">
+                            <HyperlinkButton x:Uid="BuildRunSetup" Command="{x:Bind VM.RunSetupCommand}" />
+                            <HyperlinkButton x:Uid="BuildInspect" Command="{x:Bind VM.InspectLastBuildCommand}" />
+                            <HyperlinkButton x:Uid="BuildCopyPath" Command="{x:Bind VM.CopyOutputPathCommand}" />
+                        </StackPanel>
                     </StackPanel>
                 </InfoBar.Content>
             </InfoBar>
@@ -77,7 +78,7 @@
                         <FontIcon Glyph="&#xE8B7;" Style="{StaticResource RowIconStyle}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock x:Uid="BuildOutputFolderTitle" Style="{StaticResource RowTitleStyle}" />
-                            <TextBox Text="{x:Bind VM.OutputDirectory, Mode=TwoWay}" Margin="0,8,0,0" IsSpellCheckEnabled="False" x:Uid="BuildOutputFolderBox" />
+                            <TextBox Text="{x:Bind VM.OutputDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,8,0,0" IsSpellCheckEnabled="False" x:Uid="BuildOutputFolderBox" />
                             <TextBlock Text="{x:Bind VM.Errors.OutputDirectory, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.OutputDirectory), Mode=OneWay}" />
                         </StackPanel>
                         <Button Grid.Column="2" x:Uid="BuildBrowse" Command="{x:Bind VM.BrowseOutputCommand}" VerticalAlignment="Center" />
@@ -136,29 +137,29 @@
                             <ComboBoxItem x:Uid="SignProviderCommand" />
                         </ComboBox>
                         <StackPanel Spacing="16" Visibility="{x:Bind VM.IsSignToolProvider, Mode=OneWay}">
-                            <TextBox x:Uid="SignThumbprintBox" Text="{x:Bind VM.CertificateThumbprint, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="SignThumbprintBox" Text="{x:Bind VM.CertificateThumbprint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <TextBox x:Uid="SignPfxBox" Text="{x:Bind VM.CertificateFile, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                                <TextBox x:Uid="SignPfxBox" Text="{x:Bind VM.CertificateFile, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
                                 <Button Grid.Column="1" x:Uid="BuildBrowse" Command="{x:Bind VM.BrowseCertificateCommand}" VerticalAlignment="Bottom" />
                             </Grid>
-                            <TextBox x:Uid="SignPasswordEnvBox" Text="{x:Bind VM.PasswordEnvironmentVariable, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="SignPasswordEnvBox" Text="{x:Bind VM.PasswordEnvironmentVariable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
                         </StackPanel>
                         <StackPanel Spacing="16" Visibility="{x:Bind VM.IsTrustedSigningProvider, Mode=OneWay}">
-                            <TextBox x:Uid="SignTrustedEndpointBox" Text="{x:Bind VM.TrustedSigningEndpoint, Mode=TwoWay}" IsSpellCheckEnabled="False" />
-                            <TextBox x:Uid="SignTrustedAccountBox" Text="{x:Bind VM.TrustedSigningAccount, Mode=TwoWay}" IsSpellCheckEnabled="False" />
-                            <TextBox x:Uid="SignTrustedProfileBox" Text="{x:Bind VM.TrustedSigningProfile, Mode=TwoWay}" IsSpellCheckEnabled="False" />
-                            <TextBox x:Uid="SignTrustedDlibBox" Text="{x:Bind VM.TrustedSigningDlib, Mode=TwoWay}" IsSpellCheckEnabled="False" />
-                            <TextBox x:Uid="SignTrustedCorrelationBox" Text="{x:Bind VM.TrustedSigningCorrelationId, Mode=TwoWay}" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="SignTrustedEndpointBox" Text="{x:Bind VM.TrustedSigningEndpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="SignTrustedAccountBox" Text="{x:Bind VM.TrustedSigningAccount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="SignTrustedProfileBox" Text="{x:Bind VM.TrustedSigningProfile, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="SignTrustedDlibBox" Text="{x:Bind VM.TrustedSigningDlib, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="SignTrustedCorrelationBox" Text="{x:Bind VM.TrustedSigningCorrelationId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
                         </StackPanel>
                         <StackPanel Spacing="16" Visibility="{x:Bind VM.IsCommandProvider, Mode=OneWay}">
-                            <TextBox x:Uid="SignCommandRunBox" Text="{x:Bind VM.SigningCommandRun, Mode=TwoWay}" IsSpellCheckEnabled="False" />
-                            <TextBox x:Uid="SignCommandArgumentsBox" Text="{x:Bind VM.SigningCommandArguments, Mode=TwoWay}" IsSpellCheckEnabled="False" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" FontFamily="Consolas" />
-                            <TextBox x:Uid="SignCommandEnvironmentBox" Text="{x:Bind VM.SigningCommandEnvironment, Mode=TwoWay}" IsSpellCheckEnabled="False" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" FontFamily="Consolas" />
+                            <TextBox x:Uid="SignCommandRunBox" Text="{x:Bind VM.SigningCommandRun, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                            <TextBox x:Uid="SignCommandArgumentsBox" Text="{x:Bind VM.SigningCommandArguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" FontFamily="Consolas" />
+                            <TextBox x:Uid="SignCommandEnvironmentBox" Text="{x:Bind VM.SigningCommandEnvironment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" FontFamily="Consolas" />
                             <NumberBox x:Uid="SignCommandTimeoutBox" Value="{x:Bind VM.SigningCommandTimeout, Mode=TwoWay}" Minimum="10" Maximum="3600" SpinButtonPlacementMode="Compact" HorizontalAlignment="Left" MinWidth="160" />
                         </StackPanel>
-                        <TextBox x:Uid="SignTimestampBox" Text="{x:Bind VM.TimestampUrl, Mode=TwoWay}" IsSpellCheckEnabled="False" />
-                        <TextBox x:Uid="SignToolBox" Text="{x:Bind VM.SignToolPath, Mode=TwoWay}" IsSpellCheckEnabled="False" Visibility="{x:Bind VM.UsesSignTool, Mode=OneWay}" />
+                        <TextBox x:Uid="SignTimestampBox" Text="{x:Bind VM.TimestampUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                        <TextBox x:Uid="SignToolBox" Text="{x:Bind VM.SignToolPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" Visibility="{x:Bind VM.UsesSignTool, Mode=OneWay}" />
                         <ToggleSwitch x:Uid="SignUninstallerToggle" IsOn="{x:Bind VM.SignUninstaller, Mode=TwoWay}" />
                         <TextBlock Text="{x:Bind VM.Errors.SignUninstaller, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.SignUninstaller), Mode=OneWay}" />
                         <TextBlock Text="{x:Bind VM.Errors.Signing, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.Signing), Mode=OneWay}" />

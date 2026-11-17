@@ -245,23 +245,6 @@ public sealed class PackageBuilder
         }
         if (current.Count > 0) blocks.Add(current);
 
-        var results = new CompressedStream[blocks.Count];
-        long done = 0;
-        var total = Math.Max(1, collected.TotalSize);
-        progress?.Report(new(BuildStage.Compressing, 0, $"Compressing {collected.Files.Count:N0} files"));
-        Parallel.For(0, blocks.Count, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
-        {
-            var workers = blocks[i].Count == 1 && blocks[i][0].Size >= OwnStreamBytes ? Math.Min(4, Environment.ProcessorCount) : 0;
-            results[i] = CompressFiles(blocks[i], Path.Combine(tempDir, $"block-{i}.zst"), level, workers, project.Output.Compression == "max", n =>
-            {
-                var now = Interlocked.Add(ref done, n);
-                progress?.Report(new(BuildStage.Compressing, (double)now / total, $"Compressing ({Format(now)} of {Format(total)})"));
-            }, ct);
-        });
-        report.StreamCount = results.Length;
-        log($"Compressed to {Format(results.Sum(r => r.CompressedSize))} in {sw.Elapsed.TotalSeconds:F1}s (level {level}, {blocks.Count} streams)");
-
-        CompressedStream? ui = null;
         byte[] icon = !string.IsNullOrEmpty(project.App.Icon)
             ? IconConverter.LoadAsIco(ProjectValidator.Resolve(projectDir, project.App.Icon))
             : File.Exists(assets.DefaultIcon) ? File.ReadAllBytes(assets.DefaultIcon) : [];
@@ -269,9 +252,10 @@ public sealed class PackageBuilder
         // (the Win32 interface reads the banner from it).
         string? bannerName = null;
         if (!string.IsNullOrEmpty(project.Ui.Banner)) bannerName = "banner" + Path.GetExtension(project.Ui.Banner).ToLowerInvariant();
+        List<CollectedFile>? uiFiles = null;
         if (includeUi || bannerName is not null)
         {
-            var uiFiles = includeUi ? assets.UiFiles(arch).Select(f => new CollectedFile(f, Path.GetFileName(f), new FileInfo(f).Length, false, 0)).ToList() : [];
+            uiFiles = includeUi ? assets.UiFiles(arch).Select(f => new CollectedFile(f, Path.GetFileName(f), new FileInfo(f).Length, false, 0)).ToList() : [];
             if (icon.Length > 0)
             {
                 var iconTemp = Path.Combine(tempDir, "app.ico");
@@ -283,10 +267,40 @@ public sealed class PackageBuilder
                 var banner = ProjectValidator.Resolve(projectDir, project.Ui.Banner);
                 uiFiles.Add(new CollectedFile(banner, bannerName, new FileInfo(banner).Length, false, 0));
             }
-            ui = CompressFiles(uiFiles, Path.Combine(tempDir, "ui.zst"), 19, 0, true, _ => { }, ct);
         }
+        // The front end (level 19, single-threaded) and the bundled installers are compressed while the payload blocks
+        // are: on their own afterwards they would leave all but one core idle.
+        var uiTask = uiFiles is null
+            ? Task.FromResult<CompressedStream?>(null)
+            : Task.Run<CompressedStream?>(() => CompressFiles(uiFiles, Path.Combine(tempDir, "ui.zst"), 19, 0, true, _ => { }, ct), ct);
         // Bundled installers are already compressed: a fast level, one stream each so setup decodes only the one it needs.
-        var redist = redistFiles.Select((f, i) => CompressFiles([f], Path.Combine(tempDir, $"redist-{i}.zst"), 3, 0, false, _ => { }, ct)).ToArray();
+        var redistTask = Task.Run(() => redistFiles.Select((f, i) => CompressFiles([f], Path.Combine(tempDir, $"redist-{i}.zst"), 3, 0, false, _ => { }, ct)).ToArray(), ct);
+
+        var results = new CompressedStream[blocks.Count];
+        long done = 0;
+        var total = Math.Max(1, collected.TotalSize);
+        progress?.Report(new(BuildStage.Compressing, 0, $"Compressing {collected.Files.Count:N0} files"));
+        try
+        {
+            Parallel.For(0, blocks.Count, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
+            {
+                var workers = blocks[i].Count == 1 && blocks[i][0].Size >= OwnStreamBytes ? Math.Min(4, Environment.ProcessorCount) : 0;
+                results[i] = CompressFiles(blocks[i], Path.Combine(tempDir, $"block-{i}.zst"), level, workers, project.Output.Compression == "max", n =>
+                {
+                    var now = Interlocked.Add(ref done, n);
+                    progress?.Report(new(BuildStage.Compressing, (double)now / total, $"Compressing ({Format(now)} of {Format(total)})"));
+                }, ct);
+            });
+        }
+        finally
+        {
+            // Never leave a task writing into tempDir while BuildAsync deletes it.
+            try { Task.WaitAll(uiTask, redistTask); } catch (AggregateException) { }
+        }
+        var ui = uiTask.GetAwaiter().GetResult();
+        var redist = redistTask.GetAwaiter().GetResult();
+        report.StreamCount = results.Length;
+        log($"Compressed to {Format(results.Sum(r => r.CompressedSize))} in {sw.Elapsed.TotalSeconds:F1}s (level {level}, {blocks.Count} streams)");
 
         // ---- write ---------------------------------------------------------------------------------------------
         progress?.Report(new(BuildStage.Writing, 0, "Writing Setup.exe"));
@@ -348,7 +362,8 @@ public sealed class PackageBuilder
                                                 includeUi, bannerName, bundled, redistRecords, redist, options.TestHooks, image);
                 report.UninstallerSigned = true;
             }
-            var headerCompressed = new Compressor(19).Wrap(headerJson).ToArray();
+            // Most of a large header is incompressible file hashes: level 19 costs ~10x the time of 12 for a few percent.
+            var headerCompressed = new Compressor(project.Output.Compression == "max" ? 19 : 12).Wrap(headerJson).ToArray();
             var headerOffset = output.Position - overlayStart;
             output.Write(headerCompressed);
             report.Sizes.Header = headerCompressed.Length;
@@ -359,6 +374,7 @@ public sealed class PackageBuilder
             report.Sizes.Footer = footer.Length;
             output.Flush(flushToDisk: true);
         }
+        log($"Wrote the container in {sw.Elapsed.TotalSeconds:F1}s");
 
         // ---- sign ----------------------------------------------------------------------------------------------
         if (options.Sign ?? project.Signing.Enabled)
@@ -376,12 +392,17 @@ public sealed class PackageBuilder
             progress?.Report(new(BuildStage.Verifying, 0, "Verifying"));
             var info = PackageInspector.Inspect(partial, verifyStreams: true);
             if (info.Problems.Count > 0) throw new BuildFailedException("The written package failed verification: " + string.Join("; ", info.Problems));
+            log($"Verified in {sw.Elapsed.TotalSeconds:F1}s");
         }
 
+        // Hashed before it gets its .exe name: opening a fresh executable makes real-time scanners read it all first.
+        using (var fs = new FileStream(partial, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, FileOptions.SequentialScan))
+        {
+            report.Sizes.Total = fs.Length;
+            report.Sha256 = PackageFormat.Hex(SHA256.HashData(fs));
+        }
         File.Move(partial, outputPath, overwrite: true);
         report.OutputPath = outputPath;
-        report.Sizes.Total = new FileInfo(outputPath).Length;
-        using (var fs = File.OpenRead(outputPath)) report.Sha256 = PackageFormat.Hex(SHA256.HashData(fs));
         progress?.Report(new(BuildStage.Completed, 1, "Done"));
         log($"Wrote {outputPath} ({Format(report.Sizes.Total)}) in {sw.Elapsed.TotalSeconds:F1}s");
     }
@@ -532,6 +553,20 @@ public sealed class PackageBuilder
                 w.WriteString("version", p.App.Version);
                 w.WriteString("description", p.App.Description);
                 w.WriteString("website", p.App.Website);
+                if (p.App.SupportUrl.Length > 0) w.WriteString("supportUrl", p.App.SupportUrl);
+                if (p.App.ReleaseNotesUrl.Length > 0) w.WriteString("releaseNotesUrl", p.App.ReleaseNotesUrl);
+                if (p.App.Links.Count > 0)
+                {
+                    w.WriteStartArray("links");
+                    foreach (var link in p.App.Links)
+                    {
+                        w.WriteStartObject();
+                        w.WriteString("url", link.Url);
+                        if (link.Label.Count > 0) WriteLocalized(w, "label", link.Label);
+                        w.WriteEndObject();
+                    }
+                    w.WriteEndArray();
+                }
                 w.WriteString("mainExecutable", string.IsNullOrEmpty(p.App.MainExecutable) ? "" : p.App.MainExecutable.Replace('/', '\\'));
                 w.WriteString("architecture", arch);
                 w.WriteNumber("minWindowsBuild", p.Install.MinWindowsBuild);
@@ -607,6 +642,7 @@ public sealed class PackageBuilder
                 foreach (var (lang, text) in licenses) w.WriteString(lang, text);
                 w.WriteEndObject();
                 w.WriteString("licenseMode", p.Ui.LicenseMode);
+                w.WriteString("licenseStyle", p.Ui.LicenseStyle);
                 w.WriteString("defaultLanguage", p.Ui.DefaultLanguage);
                 if (bannerName is not null) w.WriteString("banner", bannerName);
                 w.WriteStartObject("strings");

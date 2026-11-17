@@ -345,17 +345,67 @@ bool IsCreatableRegistryKey(const std::wstring& key) {
     return name.find(L'\\') == std::wstring::npos && IsAssociableExtension(ToLower(name));
 }
 
-std::vector<std::wstring> LockingApps(const std::vector<std::wstring>& files) {
+bool RegisterWithRestartManager(DWORD session, const std::wstring& dir, const std::vector<std::wstring>& files, const std::wstring& skipImage) {
+    // 1. Running programs whose executable lives in the installation, by their image path: exact, and one cheap query
+    //    per process however many files the app has.
+    std::vector<RM_UNIQUE_PROCESS> processes;
+    UniqueHandle snapshot(::CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0));
+    PROCESSENTRY32W pe{sizeof(pe)};
+    if (snapshot && ::Process32FirstW(snapshot.get(), &pe)) {
+        do {
+            if (pe.th32ProcessID == 0 || pe.th32ProcessID == ::GetCurrentProcessId()) continue;
+            UniqueHandle h(::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe.th32ProcessID));
+            if (!h) continue;
+            wchar_t image[MAX_PATH * 4];
+            DWORD size = ARRAYSIZE(image);
+            FILETIME created{}, exited{}, kernel{}, user{};
+            if (!::QueryFullProcessImageNameW(h.get(), 0, image, &size) || !path::IsStrictlyUnder(image, dir)) continue;
+            if (!skipImage.empty() && EqualsIgnoreCase(image, skipImage)) continue;
+            if (!::GetProcessTimes(h.get(), &created, &exited, &kernel, &user)) continue;
+            processes.push_back({pe.th32ProcessID, created});
+        } while (::Process32NextW(snapshot.get(), &pe));
+    }
+    // 2. Files, for other programs that use them (an Explorer extension, an editor). RmGetList checks every file
+    //    against every running process; for thousands of files that other programs have loaded that takes minutes.
+    //    So: at most kMaxFiles, programs and libraries first (what other processes load), shallowest first.
+    constexpr size_t kMaxFiles = 64;
+    const auto isModule = [](const std::wstring& f) {
+        const size_t dot = f.find_last_of(L'.');
+        if (dot == std::wstring::npos) return false;
+        const std::wstring ext = ToLower(f.substr(dot));
+        return ext == L".exe" || ext == L".dll" || ext == L".ocx" || ext == L".ax" || ext == L".cpl" || ext == L".node";
+    };
+    std::vector<const std::wstring*> order;
+    for (const auto& f : files) order.push_back(&f);
+    std::stable_sort(order.begin(), order.end(), [&](const std::wstring* a, const std::wstring* b) {
+        const bool ma = isModule(*a), mb = isModule(*b);
+        if (ma != mb) return ma;
+        return std::count(a->begin(), a->end(), L'\\') < std::count(b->begin(), b->end(), L'\\');
+    });
+    std::vector<LPCWSTR> list;
+    for (const std::wstring* f : order) {
+        if (list.size() >= kMaxFiles) break;
+        if (!skipImage.empty() && EqualsIgnoreCase(*f, skipImage)) continue;
+        if (fs::Exists(*f)) list.push_back(f->c_str());
+    }
+    if (list.empty() && processes.empty()) return false;
+    if (files.size() > list.size()) {
+        log::Info(L"Restart Manager: %zu running program(s) of the app and %zu of %zu files", processes.size(), list.size(), files.size());
+    }
+    return ::RmRegisterResources(session, static_cast<UINT>(list.size()), list.empty() ? nullptr : list.data(),
+                                 static_cast<UINT>(processes.size()), processes.empty() ? nullptr : processes.data(), 0, nullptr) == ERROR_SUCCESS;
+}
+
+std::vector<std::wstring> LockingApps(const std::wstring& dir, const std::vector<std::wstring>& files) {
     std::vector<std::wstring> names;
     if (files.empty()) return names;
     DWORD session = 0;
     WCHAR sessionKey[CCH_RM_SESSION_KEY + 1] = {};
     if (::RmStartSession(&session, 0, sessionKey) != ERROR_SUCCESS) return names;
-    std::vector<LPCWSTR> list;
-    for (const auto& f : files) list.push_back(f.c_str());
-    for (size_t i = 0; i < list.size(); i += 1000) {
-        const UINT n = static_cast<UINT>(std::min<size_t>(1000, list.size() - i));
-        ::RmRegisterResources(session, n, list.data() + i, 0, nullptr, 0, nullptr);
+    // Not the installation's own uninstall.exe: in modify and uninstall mode it is the process waiting for this one.
+    if (!RegisterWithRestartManager(session, dir, files, path::Join(dir, kUninstallerName))) {
+        ::RmEndSession(session);
+        return names;
     }
     UINT needed = 0, count = 0;
     DWORD reasons = 0;

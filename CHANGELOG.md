@@ -3,6 +3,45 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
+## [Unreleased]
+
+### Added
+
+- Links in the installer: `app.supportUrl`, `app.releaseNotesUrl` and up to 4 `app.links` (e.g. the GitHub
+  repository; without a label the site's name is shown) appear with `app.website` in one line on the first page and
+  after a successful install ("Website · GitHub · Release notes · Help and support"), in both front ends and all
+  11 languages. Links open in the user's browser, never with administrator rights; only http(s) addresses are
+  accepted. The support and release-notes links also go to Settings > Apps (`HelpLink`, `URLUpdateInfo`) and to the
+  winget manifests (`PublisherSupportUrl`, `ReleaseNotesUrl`); the Inno Setup and NSIS import maps
+  `AppSupportURL`/`AppUpdatesURL` and `HelpLink`/`URLUpdateInfo` to them.
+- `ui.licenseStyle: "inline"`: one step less. The first page says "By installing, you accept the license terms" with
+  a link to read them, and Install starts right away; `"page"` (the default) keeps the license page with its accept box.
+- `fluentsetup init` needs only `--source`: like the Builder's New project it picks the main program (skipping
+  uninstallers, setups and crash helpers), takes name, publisher and version from its version resource, sets
+  `output.directory` and prints the next commands. `validate` prints the Setup.exe path a build would write.
+- The GitHub Action builds a project when given `project` (with `defines` and `args`) and returns `setup-path`,
+  `setup-sha256` and `app-version`.
+- Builder: Build button with F5 on every page, **Run setup** and **Inspect** after a build, the new link fields and
+  license style, live errors for the description, output folder and signing fields.
+
+### Changed
+
+- Programs that use the app's files are found by their process (executable inside the installation) plus a bounded
+  selection of files, instead of handing every file to Windows Restart Manager. With thousands of files that other
+  programs had loaded, the check before an update or uninstall (and the first page of an update) could take minutes.
+
+- Faster installs, updates and uninstalls of apps with many files. The time went to the file system's per-file cost
+  (creating, renaming, deleting; most of it real-time virus scanning), not to decompression, so setup now does that
+  work in bulk from several threads and journals each step before it happens, as before: folders are created once
+  each, files are created just ahead of the decoder, replaced files are moved to the backup together, and the backup or
+  trash folder is deleted in parallel. Updates and uninstalls move a folder that holds nothing but the app's own files
+  with a single rename instead of one per file (folders with user files, preserved files or links are still handled
+  file by file). A failure or cancel still rolls back to exactly the previous state.
+- Builds compress the WinUI front end alongside the payload instead of afterwards, hash the finished `Setup.exe` before
+  it gets its `.exe` name (real-time scanners read a new executable when it is opened) and compress the header at
+  level 12 (19 with `"compression": "max"`): most of a large header is file hashes that do not compress. `-v` logs how
+  long writing and verifying took.
+
 ## [1.3.0] - 2026-11-14
 
 ### Added

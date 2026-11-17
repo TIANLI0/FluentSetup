@@ -4,12 +4,14 @@
 #include "Archive/container.h"
 #include "Common/error.h"
 #include "Common/fs.h"
+#include "Common/parallel.h"
 #include "Common/path.h"
 #include "Common/text.h"
 #include "Install.Core/installed.h"
 #include "Install.Core/journal.h"
 #include "Install.Core/package.h"
 
+#include <atomic>
 #include <fstream>
 
 using namespace fsetup;
@@ -167,6 +169,110 @@ TEST(journal_rollback_restores_previous_state) {
     CHECK(ReadText(path::Join(path::Parent(dir), L"fsetup-outside.txt")) == "victim");
     ::DeleteFileW(path::Join(path::Parent(dir), L"fsetup-outside.txt").c_str());
     fs::DeleteTree(dir);
+}
+
+TEST(app_links_are_web_addresses_only) {
+    CHECK(install::IsWebUrl(L"https://github.com/owner/repo"));
+    CHECK(install::IsWebUrl(L"http://example.com"));
+    CHECK(install::IsWebUrl(L"https://example.com:8443/a?b=c#d"));
+    CHECK(!install::IsWebUrl(L"file:///C:/Windows/System32/calc.exe"));
+    CHECK(!install::IsWebUrl(L"C:\\Windows\\System32\\calc.exe"));
+    CHECK(!install::IsWebUrl(L"javascript:alert(1)"));
+    CHECK(!install::IsWebUrl(L"https://"));
+    CHECK(!install::IsWebUrl(L"https://exa mple.com"));
+    CHECK(!install::IsWebUrl(L"https://example.com/\"onclick"));
+    CHECK(!install::IsWebUrl(L"https://example.com/<a>"));
+    CHECK(!install::IsWebUrl(L"https://user@:80/"));
+    CHECK(install::LinkLabelFromUrl(L"https://github.com/owner/repo") == L"GitHub");
+    CHECK(install::LinkLabelFromUrl(L"https://www.Gitee.com/x") == L"Gitee");
+    CHECK(install::LinkLabelFromUrl(L"https://gist.github.com/x") == L"GitHub");
+    CHECK(install::LinkLabelFromUrl(L"https://www.contoso.com:8080/help") == L"contoso.com");
+    CHECK(install::LinkLabelFromUrl(L"https://notgithub.com/") == L"notgithub.com");
+
+    const auto parse = [](const std::string& app) {
+        return Parse(Header("[" + File("a.txt") + "]", R"([{"offset":0,"size":16,"rawSize":3,"sha256":")" + kZeroHash + R"("}])", app));
+    };
+    const auto p = parse(R"(,"supportUrl":"https://example.com/help","releaseNotesUrl":"https://github.com/o/r/releases","links":[{"url":"https://github.com/o/r"},{"url":"https://example.com/forum","label":{"en-US":"Forum","zh-CN":"论坛"}}])");
+    CHECK(p.supportUrl == L"https://example.com/help" && p.releaseNotesUrl == L"https://github.com/o/r/releases");
+    CHECK(p.links.size() == 2 && p.links[0].label.byLanguage.empty() && p.links[1].label.Get(L"zh-CN", L"") == L"论坛");
+    CHECK_THROWS_CODE(parse(R"(,"links":[{"url":"file:///C:/x.exe"}])"), ErrorCode::PackageCorrupt);
+    CHECK_THROWS_CODE(parse(R"(,"supportUrl":"ms-settings:")"), ErrorCode::PackageCorrupt);
+    CHECK_THROWS_CODE(parse(R"(,"links":{"url":"https://example.com"})"), ErrorCode::PackageCorrupt);
+}
+
+TEST(journal_rollback_restores_a_folder_moved_as_a_whole) {
+    // Updates and uninstalls move folders that hold only the app's files with one rename; the new version then
+    // re-creates the folder. Rolling back removes the new files and the re-created folder, then moves the old one back.
+    const std::wstring dir = TempDir(L"journal-dir");
+    const std::wstring work = path::Join(dir, L".fsetup");
+    fs::CreateDirectories(path::Join(dir, L"lib\\deep"));
+    fs::CreateDirectories(work);
+    WriteText(path::Join(dir, L"lib\\a.dll"), "old a");
+    WriteText(path::Join(dir, L"lib\\deep\\b.dll"), "old b");
+    {
+        install::Journal j(path::Join(work, L"journal.jsonl"));
+        j.Begin(L"install", dir, install::Scope::User, L"Test.App");
+        const std::wstring saved = path::Join(work, L"b\\lib");
+        fs::CreateDirectories(path::Parent(saved));
+        j.Backup(path::Join(dir, L"lib"), saved);
+        CHECK(fs::Move(path::Join(dir, L"lib"), saved) == 0);
+        fs::CreateDirectories(path::Join(dir, L"lib"));
+        j.Mkdir(path::Join(dir, L"lib"));
+        j.Place(path::Join(dir, L"lib\\a.dll"));
+        WriteText(path::Join(dir, L"lib\\a.dll"), "new a");
+        j.Flush();
+    }
+    auto stats = install::Rollback(install::ReadJournal(path::Join(work, L"journal.jsonl")), dir, install::Scope::User, L"Test.App");
+    CHECK(stats.failed == 0);
+    CHECK(ReadText(path::Join(dir, L"lib\\a.dll")) == "old a");
+    CHECK(ReadText(path::Join(dir, L"lib\\deep\\b.dll")) == "old b");
+
+    // An empty folder of the same name that the journal does not know about does not block the move back either.
+    {
+        install::Journal j(path::Join(work, L"journal2.jsonl"));
+        j.Begin(L"uninstall", dir, install::Scope::User, L"Test.App");
+        const std::wstring saved = path::Join(work, L"t\\lib");
+        fs::CreateDirectories(path::Parent(saved));
+        j.Backup(path::Join(dir, L"lib"), saved);
+        CHECK(fs::Move(path::Join(dir, L"lib"), saved) == 0);
+        fs::CreateDirectories(path::Join(dir, L"lib"));
+        j.Flush();
+    }
+    stats = install::Rollback(install::ReadJournal(path::Join(work, L"journal2.jsonl")), dir, install::Scope::User, L"Test.App");
+    CHECK(stats.failed == 0);
+    CHECK(ReadText(path::Join(dir, L"lib\\deep\\b.dll")) == "old b");
+    fs::DeleteTree(dir);
+}
+
+TEST(delete_tree_many_files) {
+    // Large trees are deleted from several threads; directories still go deepest first and links are not followed.
+    const std::wstring dir = TempDir(L"deltree");
+    const std::wstring outside = TempDir(L"deltree-outside");
+    WriteText(path::Join(outside, L"victim.txt"), "keep");
+    for (int d = 0; d < 6; ++d) {
+        const std::wstring sub = path::Join(dir, L"d" + std::to_wstring(d) + L"\\x\\y");
+        fs::CreateDirectories(sub);
+        for (int f = 0; f < 20; ++f) WriteText(path::Join(sub, L"f" + std::to_wstring(f) + L".bin"), "data");
+    }
+    WriteText(path::Join(dir, L"top.txt"), "x");
+    ::SetFileAttributesW(path::Join(dir, L"top.txt").c_str(), FILE_ATTRIBUTE_READONLY);
+    const std::wstring cmd = L"cmd.exe /c mklink /J \"" + path::Join(dir, L"d0\\link") + L"\" \"" + outside + L"\" >nul";
+    _wsystem(cmd.c_str());
+    CHECK(fs::DeleteTree(dir));
+    CHECK(!fs::Exists(dir));
+    CHECK(ReadText(path::Join(outside, L"victim.txt")) == "keep");
+    fs::DeleteTree(outside);
+}
+
+TEST(parallel_for_runs_every_item_and_rethrows) {
+    std::vector<std::atomic<int>> hits(1000);
+    ParallelFor(hits.size(), [&](size_t i) { ++hits[i]; }, 8);
+    bool all = true;
+    for (auto& h : hits) all = all && h.load() == 1;
+    CHECK(all);
+    CHECK_THROWS_CODE(ParallelFor(100, [](size_t i) {
+        if (i == 37) throw Failure(ErrorCode::IoError, L"item 37");
+    }, 4), ErrorCode::IoError);
 }
 
 TEST(journal_tolerates_torn_last_line) {

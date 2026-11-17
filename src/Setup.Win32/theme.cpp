@@ -71,15 +71,15 @@ void Theme::BuildPalette() {
     if (highContrast_) {
         const COLORREF window = ::GetSysColor(COLOR_WINDOW), text = ::GetSysColor(COLOR_WINDOWTEXT);
         palette_ = {window, window, text, text, ::GetSysColor(COLOR_GRAYTEXT) == window ? text : text, text, text, text,
-                    window, text, window};
+                    window, text, window, ::GetSysColor(COLOR_HOTLIGHT)};
     } else if (dark_) {
         palette_ = {RGB(32, 32, 32),    RGB(39, 39, 39),    RGB(29, 29, 29),    RGB(255, 255, 255),
                     RGB(206, 206, 206), RGB(255, 153, 164), RGB(108, 203, 95),  RGB(252, 225, 0),
-                    RGB(45, 45, 45),    RGB(58, 58, 58),    RGB(45, 45, 45)};
+                    RGB(45, 45, 45),    RGB(58, 58, 58),    RGB(45, 45, 45),    RGB(153, 235, 255)};
     } else {
         palette_ = {RGB(243, 243, 243), RGB(251, 251, 251), RGB(229, 229, 229), RGB(27, 27, 27),
                     RGB(96, 96, 96),    RGB(196, 43, 28),   RGB(15, 123, 15),   RGB(157, 93, 0),
-                    RGB(246, 246, 246), RGB(229, 229, 229), RGB(255, 255, 255)};
+                    RGB(246, 246, 246), RGB(229, 229, 229), RGB(255, 255, 255), RGB(0, 95, 184)};
     }
     baseBrush_ = ::CreateSolidBrush(palette_.base);
     layerBrush_ = ::CreateSolidBrush(palette_.layer);

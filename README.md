@@ -126,6 +126,20 @@ The GitHub Action installs the command-line tool (verified download) on a Window
 `-D Version=1.2.3` fills `$(Version)` placeholders in the project (`"version": "$(Version)"`), so the version comes
 from your release pipeline.
 
+The action can also build and hand the result to later steps:
+
+```yaml
+- id: setup
+  uses: TIANLI0/FluentSetup@latest
+  with:
+    project: installer/fluentsetup.json
+    defines: Version=1.2.3        # one Name=Value per line
+    args: --arch x64              # further fluentsetup build options
+- run: gh release upload v1.2.3 "${{ steps.setup.outputs.setup-path }}"
+```
+
+Outputs: `setup-path`, `setup-sha256` and `app-version` (besides `path` and `version` of the CLI).
+
 ### Switching from Inno Setup or NSIS
 
 Keep your app's uninstall key (`install.adoptExistingInstall` or `install.legacyUninstallKeys`), the release file

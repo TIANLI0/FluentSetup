@@ -928,4 +928,26 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="ConfigTypeString.Content" xml:space="preserve"><value>文本</value></data>
   <data name="ConfigTypeNumber.Content" xml:space="preserve"><value>数字</value></data>
   <data name="ConfigTypeBool.Content" xml:space="preserve"><value>true / false</value></data>
+  <data name="TitleBuildButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>构建安装包 (F5)</value></data>
+  <data name="TitleBuildButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>构建安装包</value></data>
+  <data name="AppSupportUrlBox.Header" xml:space="preserve"><value>支持网址</value></data>
+  <data name="AppSupportUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="AppReleaseNotesUrlBox.Header" xml:space="preserve"><value>更新说明网址</value></data>
+  <data name="AppReleaseNotesUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="AppLinksSection.Text" xml:space="preserve"><value>链接</value></data>
+  <data name="AppLinksDescription.Text" xml:space="preserve"><value>在安装程序中显示在官网旁边，例如你的 GitHub 仓库。标签留空则显示网站名称。</value></data>
+  <data name="AppLinksAdd.Text" xml:space="preserve"><value>添加链接</value></data>
+  <data name="AppLinksEmpty.Text" xml:space="preserve"><value>没有链接（最多 4 个）。</value></data>
+  <data name="AppLinkUrlBox.Header" xml:space="preserve"><value>网址</value></data>
+  <data name="AppLinkUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="AppLinkLabelBox.Header" xml:space="preserve"><value>各语言的标签（en-US = 文本；留空 = 网站名称）</value></data>
+  <data name="AppLinkLabelBox.PlaceholderText" xml:space="preserve"><value>en-US = Community</value></data>
+  <data name="AppearanceLicenseStyleTitle.Text" xml:space="preserve"><value>接受许可协议的方式</value></data>
+  <data name="AppearanceLicenseStyleDescription.Text" xml:space="preserve"><value>单独的许可协议页，或在第一页显示一行带链接的说明。</value></data>
+  <data name="AppearanceLicenseStyleCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>接受许可协议的方式</value></data>
+  <data name="LicenseStylePage.Content" xml:space="preserve"><value>许可协议页，带“我接受”复选框</value></data>
+  <data name="LicenseStyleInline.Content" xml:space="preserve"><value>一步完成：在第一页显示“安装即表示你接受许可条款”</value></data>
+  <data name="BuildRunSetup.Content" xml:space="preserve"><value>运行安装程序</value></data>
+  <data name="BuildInspect.Content" xml:space="preserve"><value>检查</value></data>
+  <data name="Build_RunSetupErrorTitle" xml:space="preserve"><value>无法启动安装程序</value></data>
 </root>

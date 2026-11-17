@@ -92,6 +92,10 @@
                         </StackPanel>
                         <TextBlock x:Name="DescriptionText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" MaxLines="3"
                                    TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,8,0,0" />
+                        <!-- app.website, app.links, release notes, support: "Website · GitHub · Release notes", wrapping as needed.
+                             Shown on the first page and after a successful install; opened by the bootstrapper ("openLink"). -->
+                        <TextBlock x:Name="LinksText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                   Visibility="Collapsed" />
                         <StackPanel x:Name="UserDataPanel" Margin="0,16,0,0" Visibility="Collapsed">
                             <CheckBox x:Name="RemoveDataCheck" />
                             <TextBlock x:Name="UserDataPaths" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" Margin="28,0,0,0"
@@ -162,6 +166,8 @@
                                 <Button x:Name="UpdateButton" Click="OnUpdateClick" />
                             </InfoBar.ActionButton>
                         </InfoBar>
+                        <!-- ui.licenseStyle "inline": installing accepts the license, which this line links to (no license page). -->
+                        <TextBlock x:Name="LicenseInlineText" Style="{StaticResource SecondaryTextStyle}" Margin="0,16,0,0" Visibility="Collapsed" />
                         <InfoBar x:Name="WelcomeInfo" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
                         <InfoBar x:Name="RunningInfo" Severity="Warning" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />
                         <InfoBar x:Name="WelcomeDirError" Severity="Error" IsClosable="False" IsOpen="False" Margin="0,12,0,0" />

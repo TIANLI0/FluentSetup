@@ -57,11 +57,30 @@ struct FileSet {
     uint64_t totalRaw = 0;
 };
 
+// A web page the installer offers as a link (app.links): label per language; empty = derived from the address.
+struct AppLink {
+    std::wstring url;  // absolute http(s) URL
+    LocalizedText label;
+};
+
+// Up to this many app.links entries in a header.
+inline constexpr size_t kMaxAppLinks = 8;
+
+// An absolute http:// or https:// address with a host and nothing a shell or markup could misread (no spaces, quotes,
+// angle brackets or control characters). The only addresses the installer opens.
+bool IsWebUrl(const std::wstring& url);
+
+// A short name for a link without a label: well-known code hosts by name ("GitHub", "Gitee", "GitLab", ...), otherwise
+// the host without "www.".
+std::wstring LinkLabelFromUrl(const std::wstring& url);
+
 struct Package {
     std::wstring kind;  // "setup" or "uninstaller"
 
     // app
     std::wstring appId, name, publisher, version, description, website, mainExecutable, architecture;
+    std::wstring supportUrl, releaseNotesUrl;  // Settings > Apps "Help link" / "Update information"; links in the installer
+    std::vector<AppLink> links;               // further links shown in the installer (e.g. the GitHub repository)
     uint32_t minWindowsBuild = 0;
 
     // install

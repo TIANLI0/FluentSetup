@@ -15,6 +15,7 @@ namespace FluentSetup.Builder.ViewModels;
 public sealed partial class MainViewModel
 {
     private static readonly string[] LicenseModes = ["firstInstall", "always"];
+    private static readonly string[] LicenseStyles = ["page", "inline"];
     /// <summary>"" (not required) and the .NET Framework versions the installer can detect.</summary>
     public static readonly string[] NetFrameworkVersions = ["", .. ExtensionValidator.KnownNetFrameworkVersions];
 
@@ -96,12 +97,18 @@ public sealed partial class MainViewModel
 
     // ---- Appearance: license and languages -----------------------------------------------------------------------
     [ObservableProperty] public partial int LicenseModeIndex { get; set; }
+    [ObservableProperty] public partial int LicenseStyleIndex { get; set; }
     [ObservableProperty] public partial string LicensesText { get; set; } = "";
     [ObservableProperty] public partial string LocalizationFolder { get; set; } = "";
     [ObservableProperty] public partial string StringsText { get; set; } = "";
 
     // ---- Variables -----------------------------------------------------------------------------------------------
     public ObservableCollection<VariableRow> VariableRows { get; } = [];
+
+    // ---- App info: links (app.links) ---------------------------------------------------------------------------
+    public ObservableCollection<LinkRow> LinkRows { get; } = [];
+    public bool HasNoLinks => LinkRows.Count == 0;
+    public bool CanAddLink => LinkRows.Count < ProjectValidator.MaxLinks;
 
     public bool HasNoDotNet => DotNetRows.Count == 0;
     public bool HasNoOptions => OptionRows.Count == 0;
@@ -126,6 +133,7 @@ public sealed partial class MainViewModel
         Watch(VariantRows, nameof(HasVariants), () => { if (!_loading) _ = RefreshFilesAsync(); });
         Watch(ServiceAccessRows, nameof(HasNoServiceAccess));
         Watch(VariableRows, nameof(HasNoVariables));
+        Watch(LinkRows, nameof(HasNoLinks), () => OnPropertyChanged(nameof(CanAddLink)));
         InitIntegration();
         SyncIfOptionChoices();
     }
@@ -206,10 +214,12 @@ public sealed partial class MainViewModel
         OutputVariantsText = TextForms.Csv(p.Output.Variants);
 
         LicenseModeIndex = TextForms.Find(LicenseModes, p.Ui.LicenseMode);
+        LicenseStyleIndex = TextForms.Find(LicenseStyles, p.Ui.LicenseStyle);
         LicensesText = TextForms.Localized(p.Ui.Licenses);
         LocalizationFolder = p.Ui.Localization ?? "";
         StringsText = TextForms.Strings(p.Ui.Strings);
 
+        Fill(LinkRows, Each(p.App.Links).Select(LinkRow.From), this);
         Fill(VariableRows, Each(p.Variables).Select(kv => new VariableRow { Name = kv.Key, Value = kv.Value ?? "" }), this);
 
         var upd = p.Update;
@@ -294,6 +304,8 @@ public sealed partial class MainViewModel
         p.Output.Variants = TextForms.FromCsv(OutputVariantsText, p.Output.Variants);
 
         p.Ui.LicenseMode = TextForms.Pick(LicenseModes, LicenseModeIndex, p.Ui.LicenseMode);
+        p.Ui.LicenseStyle = TextForms.Pick(LicenseStyles, LicenseStyleIndex, p.Ui.LicenseStyle);
+        p.App.Links = LinkRows.Select(l => l.ToModel()).ToList();
         p.Ui.Licenses = TextForms.FromLocalized(LicensesText, p.Ui.Licenses);
         p.Ui.Localization = TextForms.Keep(LocalizationFolder, p.Ui.Localization);
         p.Ui.Strings = TextForms.FromStrings(StringsText, p.Ui.Strings);
@@ -327,6 +339,7 @@ public sealed partial class MainViewModel
         Set(ActionRows, "actions", Errors);
         Set(VariantRows, "files.variants", Errors);
         Set(ServiceAccessRows, "uninstall.elevated.serviceAccess", Errors);
+        Set(LinkRows, "app.links", Errors);
         foreach (var v in VariableRows) v.Error = v.Name.Trim().Length == 0 ? "" : Errors.Under("variables." + v.Name.Trim());
         UpdateIntegrationRowErrors();
     }
@@ -387,6 +400,7 @@ public sealed partial class MainViewModel
             case VariantRow v: VariantRows.Remove(v); break;
             case ServiceAccessRow s: ServiceAccessRows.Remove(s); break;
             case VariableRow v: VariableRows.Remove(v); break;
+            case LinkRow l: LinkRows.Remove(l); break;
             default: RemoveIntegrationRow(row); break;
         }
         Validate();
@@ -400,6 +414,7 @@ public sealed partial class MainViewModel
             case OptionRow o: Move(OptionRows, o, delta); break;
             case ActionRow a: Move(ActionRows, a, delta); break;
             case VariantRow v: Move(VariantRows, v, delta); break;
+            case LinkRow l: Move(LinkRows, l, delta); break;
             default: MoveIntegrationRow(row, delta); break;
         }
         Validate();
@@ -436,6 +451,12 @@ public sealed partial class MainViewModel
     [RelayCommand] private void AddAction() => AddRow(ActionRows, ActionRow.From(new ActionSettings()));
     [RelayCommand] private void AddServiceAccess() => AddRow(ServiceAccessRows, ServiceAccessRow.From(new ServiceAccessSettings()));
     [RelayCommand] private void AddVariable() => AddRow(VariableRows, new VariableRow());
+
+    [RelayCommand]
+    private void AddLink()
+    {
+        if (CanAddLink) AddRow(LinkRows, LinkRow.From(new AppLink()));
+    }
 
     [RelayCommand]
     private async Task AddVariantAsync()

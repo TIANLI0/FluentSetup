@@ -168,6 +168,8 @@ public static partial class ProjectImporter
                     Note("app.description was shortened.");
                     break;
                 case "FS1009": p.App.Website = ""; Note("app.website was cleared."); break;
+                case "FS1016": p.App.SupportUrl = ""; Note("app.supportUrl was cleared."); break;
+                case "FS1017": p.App.ReleaseNotesUrl = ""; Note("app.releaseNotesUrl was cleared."); break;
                 case "FS1011": p.App.Icon = ""; Note("app.icon was cleared (use an .ico or .png file)."); break;
                 case "FS1013" or "FS1014": p.App.MainExecutable = ""; Note("app.mainExecutable was cleared; set it to the app's .exe."); break;
                 case "FS1106":

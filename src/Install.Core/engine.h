@@ -147,7 +147,7 @@ private:
     void WriteUninstallerFile(const std::wstring& dest, const std::string* fixedHeader) const;
     void WriteSignedUninstaller(const std::wstring& dest) const;
     void InstallPayload(const std::wstring& dir, const std::wstring& backup, class Journal& journal, class Reporter& rep,
-                        const std::atomic<bool>& cancel, std::vector<RecordFile>& recordFiles);
+                        const std::atomic<bool>& cancel, std::vector<RecordFile>& recordFiles, const InstallRecord* oldRecord);
     void WriteUninstaller(const std::wstring& dest) const;
     void RunCloseCommand(const std::wstring& dir) const;
     // Runs the package's actions for `when` (payload executables only). Fail-policy errors throw; others become warnings.

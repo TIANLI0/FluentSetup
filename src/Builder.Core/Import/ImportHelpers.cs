@@ -240,14 +240,18 @@ internal static partial class ImportHelpers
     }
 
     /// <summary>Sets app.website if the text is an http(s) URL.</summary>
-    public static void SetWebsite(ImportContext ctx, string raw, SourceRef at, string what)
+    public static void SetWebsite(ImportContext ctx, string raw, SourceRef at, string what) =>
+        SetUrl(ctx, raw, at, what, "app.website", v => ctx.Project.App.Website = v);
+
+    /// <summary>Sets an app URL field (app.website, app.supportUrl, app.releaseNotesUrl) if the text is an http(s) URL.</summary>
+    public static void SetUrl(ImportContext ctx, string raw, SourceRef at, string what, string field, Action<string> set)
     {
         var url = ctx.Resolve(raw).Trim();
         if (Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp))
         {
-            ctx.Project.App.Website = raw.Trim();
-            ctx.Info(at, $"{what} → app.website", "app.website");
+            set(raw.Trim());
+            ctx.Info(at, $"{what} → {field}", field);
         }
-        else ctx.Warn(at, $"{what} \"{url}\" is not an http(s) URL; not imported.", "app.website");
+        else ctx.Warn(at, $"{what} \"{url}\" is not an http(s) URL; not imported.", field);
     }
 }

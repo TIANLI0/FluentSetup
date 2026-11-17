@@ -48,7 +48,8 @@ paths work but make the project machine-specific.
 | Settings/data to ask about on uninstall | `uninstall.userData: { "paths": ["{LocalAppData}\\App"], "default": false }`: a checkbox on the uninstall page; silent uninstalls keep the data unless `/remove-user-data`. |
 | Things the app did with administrator rights (ETW sessions, service permissions, scheduled tasks, ProgramData files) | `uninstall.elevated` (§8): undone with one UAC prompt during an interactive per-user uninstall, directly in a per-machine one. |
 | The app updates itself by running the new Setup.exe silently | It can keep its Inno Setup / NSIS command line (§11). `install.relaunchArguments` = arguments when it passes `/relaunch` (Inno `/RELAUNCH=1`). |
-| License / agreement | `ui.license` or per-language files; `ui.licenseMode: "always"` to show it on every update. |
+| License / agreement | `ui.license` or per-language files; `ui.licenseMode: "always"` to show it on every update; `ui.licenseStyle: "inline"` for "By installing, you accept the license terms" on the first page instead of a license page. |
+| Links in the installer (GitHub, help, release notes) | `app.website`, `app.supportUrl`, `app.releaseNotesUrl`, `app.links: [{ "url": "https://github.com/owner/repo" }]` (up to 4; the label defaults to the site's name). |
 | File types the app opens, links it handles | `associations[]` (`extensions`, `progId`, `description`, `icon`) and `protocols[]` (`scheme`), §8a. |
 | More shortcuts (a second program, arguments, Startup folder) | `shortcuts[]` with `target`, `arguments`, `location: startMenu\|desktop\|startup`, `ifOption`. |
 | Toast notifications from an unpackaged app | `app.appUserModelId` (and `app.toastActivatorClsid` for activation) on the app's shortcuts. |
@@ -67,7 +68,8 @@ paths work but make the project machine-specific.
   "$schema": "https://raw.githubusercontent.com/TIANLI0/FluentSetup/main/shared/schemas/fluentsetup.project.schema.json",
   "schemaVersion": 1,
   "app": { "id": "Company.App", "name": "App", "publisher": "Company", "version": "1.2.0",
-           "description": "", "website": "https://…", "icon": "app.ico", "mainExecutable": "App.exe" },
+           "description": "", "website": "https://…", "supportUrl": "", "releaseNotesUrl": "", "links": [],
+           "icon": "app.ico", "mainExecutable": "App.exe" },
   "files": { "source": "bin/publish", "include": ["**/*"], "exclude": ["**/*.pdb"], "preserve": [],
              "extra": [{ "source": "../redist/thing.exe", "target": "redist" }], "emptyDirectories": [], "variants": [] },
   "install": { "scope": "user", "defaultScope": "user", "userDir": "{LocalAppData}\\Programs\\{AppName}",
@@ -82,7 +84,7 @@ paths work but make the project machine-specific.
   "shortcuts": [], "associations": [], "protocols": [], "registry": [], "environment": [],
   "services": [], "firewall": [], "inputs": [], "configFiles": [],
   "uninstall": { "removeData": [], "removeScheduledTasks": [], "removeRunValues": [], "removeShortcuts": [] },
-  "ui": { "license": "", "licenseMode": "firstInstall", "localization": "", "defaultLanguage": "auto", "strings": {},
+  "ui": { "license": "", "licenseMode": "firstInstall", "licenseStyle": "page", "localization": "", "defaultLanguage": "auto", "strings": {},
           "theme": "system", "backdrop": "mica", "useSystemAccent": true },
   "output": { "directory": "dist", "fileName": "{AppName}-{Version}-Setup.exe", "architecture": "x64",
               "compression": "normal", "variants": [], "includeWinUI": true },
@@ -272,7 +274,7 @@ committed. Apps & features "Modify" runs `uninstall.exe /modify` (Change page + 
 | FS10xx | `app` |
 | FS11xx | `files` (FS1101 source, FS1106 bad glob, FS1107–FS1109 bad/duplicate target paths, FS1110 main executable missing, FS1111–FS1116 variants) |
 | FS12xx | `install` (scope, directory templates, offers, Windows build) |
-| FS13xx | `ui` (FS1304 language, FS1306 license size, FS1311 licenseMode, FS1320–FS1328 localization) |
+| FS13xx | `ui` (FS1304 language, FS1306 license size, FS1311 licenseMode, FS1315 licenseStyle, FS1320–FS1328 localization) |
 | FS14xx | `output` |
 | FS15xx | `signing` (FS1501 no certificate, FS1504 provider, FS1505–FS1509 `trustedSigning`, FS1510–FS1516 `command`, FS1518 thumbprint, FS1519 provider needs Windows) |
 | FS16xx | requirements, options, actions, cleanup, variants filters (FS1640–FS1642: a referenced file is not in the package; FS1670–FS1683 VC++, custom prerequisites, `auto`, download signer) |

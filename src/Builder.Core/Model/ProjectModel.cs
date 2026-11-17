@@ -63,6 +63,12 @@ public sealed class AppInfo
     public string Version { get; set; } = "1.0.0";
     public string Description { get; set; } = "";
     public string Website { get; set; } = "";
+    /// <summary>Help page: a link in the installer and "Help link" in Windows Settings > Apps (HelpLink).</summary>
+    public string SupportUrl { get; set; } = "";
+    /// <summary>What's new: a link in the installer (also after installing) and in Settings > Apps (URLUpdateInfo).</summary>
+    public string ReleaseNotesUrl { get; set; } = "";
+    /// <summary>Further links shown in the installer, e.g. the GitHub repository (at most 4).</summary>
+    public List<AppLink> Links { get; set; } = [];
     /// <summary>.ico or .png (up to 256×256), relative to the project file.</summary>
     public string Icon { get; set; } = "";
     /// <summary>Relative path of the program inside the installed files; used for shortcuts and "launch".</summary>
@@ -71,6 +77,16 @@ public sealed class AppInfo
     public string AppUserModelId { get; set; } = "";
     /// <summary>CLSID of the app's toast activator ("{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}"), set on those shortcuts together with the AppUserModelID.</summary>
     public string ToastActivatorClsid { get; set; } = "";
+    [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
+}
+
+/// <summary>A web page the installer links to (app.links).</summary>
+public sealed class AppLink
+{
+    /// <summary>Absolute http:// or https:// URL.</summary>
+    public string Url { get; set; } = "";
+    /// <summary>Text per language, e.g. { "en-US": "Community" }. Empty = derived from the address ("GitHub", "Gitee", the host name).</summary>
+    public Dictionary<string, string> Label { get; set; } = [];
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
 }
 
@@ -169,6 +185,9 @@ public sealed class UiSettings
     public Dictionary<string, string> Licenses { get; set; } = [];
     /// <summary>firstInstall (default) | always: also before upgrades and reinstalls.</summary>
     public string LicenseMode { get; set; } = "firstInstall";
+    /// <summary>page (default): a license page with "I accept" | inline: the first page says that installing accepts
+    /// the license and links to it; no extra page or checkbox.</summary>
+    public string LicenseStyle { get; set; } = "page";
     /// <summary>Folder with one &lt;language&gt;.json per language (option labels, action names, license, strings).</summary>
     public string Localization { get; set; } = "";
     /// <summary>auto | a built-in language (en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT) |

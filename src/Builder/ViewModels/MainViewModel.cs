@@ -58,6 +58,10 @@ public sealed partial class FieldErrors : ObservableObject
     public string AppVersion => Get("app.version");
     public string AppPublisher => Get("app.publisher");
     public string AppWebsite => Get("app.website");
+    public string AppSupportUrl => Get("app.supportUrl");
+    public string AppReleaseNotesUrl => Get("app.releaseNotesUrl");
+    public string AppDescription => Get("app.description");
+    public string AppLinks => Get("app.links");
     public string AppIcon => Get("app.icon");
     public string AppMainExecutable => Get("app.mainExecutable");
     public string FilesSource => Get("files.source");
@@ -94,6 +98,7 @@ public sealed partial class FieldErrors : ObservableObject
     public string FilesVariants => Get("files.variants");
     public string OutputVariants => Get("output.variants");
     public string UiLicenses => Under("ui.licenseMode", "ui.licenses");
+    public string UiLicenseStyle => Get("ui.licenseStyle");
     public string UiLocalization => Under("ui.localization");
     public string UiStrings => Under("ui.strings");
 }
@@ -148,6 +153,8 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial string Version { get; set; } = "1.0.0";
     [ObservableProperty] public partial string Description { get; set; } = "";
     [ObservableProperty] public partial string Website { get; set; } = "";
+    [ObservableProperty] public partial string SupportUrl { get; set; } = "";
+    [ObservableProperty] public partial string ReleaseNotesUrl { get; set; } = "";
     [ObservableProperty] public partial string Icon { get; set; } = "";
     [ObservableProperty] public partial string MainExecutable { get; set; } = "";
 
@@ -394,7 +401,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             _model = p;
             AppId = p.App.Id; AppName = p.App.Name; Publisher = p.App.Publisher; Version = p.App.Version;
-            Description = p.App.Description; Website = p.App.Website; Icon = p.App.Icon; MainExecutable = p.App.MainExecutable;
+            Description = p.App.Description; Website = p.App.Website; SupportUrl = p.App.SupportUrl; ReleaseNotesUrl = p.App.ReleaseNotesUrl; Icon = p.App.Icon; MainExecutable = p.App.MainExecutable;
             Source = p.Files.Source; IncludeText = Lines(p.Files.Include); ExcludeText = Lines(p.Files.Exclude);
             PreserveText = Lines(p.Files.Preserve); EmptyDirectoriesText = Lines(p.Files.EmptyDirectories);
             ExtraSources.Clear();
@@ -435,7 +442,8 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var p = ProjectSerializer.Clone(_model);
         p.App.Id = AppId.Trim(); p.App.Name = AppName.Trim(); p.App.Publisher = Publisher.Trim(); p.App.Version = Version.Trim();
-        p.App.Description = Description; p.App.Website = Website.Trim(); p.App.Icon = Icon.Trim(); p.App.MainExecutable = MainExecutable.Trim();
+        p.App.Description = Description; p.App.Website = Website.Trim();
+        p.App.SupportUrl = SupportUrl.Trim(); p.App.ReleaseNotesUrl = ReleaseNotesUrl.Trim(); p.App.Icon = Icon.Trim(); p.App.MainExecutable = MainExecutable.Trim();
         p.Files.Source = Source.Trim(); p.Files.Include = TextForms.FromLines(IncludeText, p.Files.Include); p.Files.Exclude = TextForms.FromLines(ExcludeText, p.Files.Exclude);
         p.Files.Preserve = TextForms.FromLines(PreserveText, p.Files.Preserve); p.Files.EmptyDirectories = TextForms.FromLines(EmptyDirectoriesText, p.Files.EmptyDirectories);
         p.Files.Extra = ExtraSources.Where(e => !string.IsNullOrWhiteSpace(e.Source)).Select(e => new ExtraSource { Source = e.Source.Trim(), Target = e.Target.Trim() }).ToList();
@@ -832,6 +840,28 @@ public sealed partial class MainViewModel : ObservableObject
         if (LastReport?.OutputPath is { } p) Ui.CopyText(p);
     }
 
+    /// <summary>Starts the Setup.exe just built, as a user would (the real installer, for the developer to try).</summary>
+    [RelayCommand]
+    private async Task RunSetupAsync()
+    {
+        if (LastReport is not { Success: true, OutputPath: { } p } || !File.Exists(p)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(p) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(p) ?? "" })?.Dispose();
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            // ERROR_CANCELLED: the user declined the elevation prompt.
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
+        {
+            await Ui.MessageAsync(Loc.Get("Build_RunSetupErrorTitle"), ex.Message);
+        }
+    }
+
+    [RelayCommand]
+    private Task InspectLastBuildAsync() => LastReport is { Success: true, OutputPath: { } p } ? InspectFileAsync(p) : Task.CompletedTask;
+
     // ---- preview ---------------------------------------------------------------------------------------------
 
     [RelayCommand]
@@ -866,9 +896,12 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private static async Task InspectAsync(HistoryRow? row)
+    private static Task InspectAsync(HistoryRow? row) => row?.Report.OutputPath is { } p ? InspectFileAsync(p) : Task.CompletedTask;
+
+    /// <summary>Reads a built Setup.exe back and shows what it contains.</summary>
+    private static async Task InspectFileAsync(string p)
     {
-        if (row?.Report.OutputPath is not { } p || !File.Exists(p)) return;
+        if (!File.Exists(p)) return;
         PackageInfo info;
         try
         {

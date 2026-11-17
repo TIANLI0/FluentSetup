@@ -391,7 +391,14 @@ void WriteArp(const std::wstring& appId, Scope scope, const ArpEntry& e) {
     SetString(key.get(), L"InstallLocation", e.installLocation);
     SetString(key.get(), L"UninstallString", e.uninstallString);
     SetString(key.get(), L"QuietUninstallString", e.quietUninstallString);
-    if (!e.urlInfoAbout.empty()) SetString(key.get(), L"URLInfoAbout", e.urlInfoAbout);
+    // Links of Settings > Apps; an update that drops one also drops it there.
+    const auto link = [&](const wchar_t* name, const std::wstring& url) {
+        if (!url.empty()) SetString(key.get(), name, url);
+        else ::RegDeleteValueW(key.get(), name);
+    };
+    link(L"URLInfoAbout", e.urlInfoAbout);
+    link(L"HelpLink", e.helpLink);
+    link(L"URLUpdateInfo", e.urlUpdateInfo);
     if (!e.comments.empty()) SetString(key.get(), L"Comments", e.comments);
     SYSTEMTIME t{};
     ::GetLocalTime(&t);

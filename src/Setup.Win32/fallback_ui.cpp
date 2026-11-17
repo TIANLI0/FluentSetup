@@ -12,6 +12,7 @@
 #include "Setup.Win32/theme.h"
 
 #include <commctrl.h>
+#include <oleacc.h>
 #include <shellapi.h>
 #include <shobjidl.h>
 #include <uxtheme.h>
@@ -49,6 +50,7 @@ enum Id : int {
     kStatus = 100, kTitle, kSignature, kDescription, kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation, kLocation, kChange,
     kLblSize, kSize, kInfo, kDirError, kRepairNote, kUpdateInfo, kUpdateButton,
     kResultBody, kResultCode, kResultDetail, kOpenFolder, kViewLog,
+    kLinks, kLicenseInline,  // SysLink controls: the app's web links; "By installing, you accept the <license terms>."
     kOScopeLabel = 300, kOScopeUser, kOScopeMachine, kODesktop, kOStartMenu, kOVariantLabel, kOVariantDesc, kRemoveData, kUserDataPaths,
     kLHeading = 400, kLSub, kLText, kLAccept,
     kLaunch = 500, kPStage, kPPercent, kPBar, kPDetail,
@@ -61,6 +63,39 @@ enum Id : int {
 enum InputPart : int { kInputLabel, kInputControl, kInputDescription, kInputError };
 
 enum class Page { Welcome, Inputs, License, Progress, Result };
+
+// SysLink markup without the <a ...> and </a> tags: what the control shows.
+std::wstring PlainLinkText(const std::wstring& markup) {
+    std::wstring out;
+    for (size_t i = 0; i < markup.size(); ++i) {
+        if (markup[i] == L'<' && (markup.compare(i, 3, L"<a ") == 0 || markup.compare(i, 4, L"</a>") == 0)) {
+            const size_t end = markup.find(L'>', i);
+            if (end == std::wstring::npos) break;
+            i = end;
+            continue;
+        }
+        out.push_back(markup[i]);
+    }
+    return out;
+}
+
+// The name assistive technology reads for a control (Dynamic Annotation), when its window text is not that name.
+// CLSID_AccPropServices and PROPID_ACC_NAME (oleacc.h), spelled out like the WIC identifiers above.
+constexpr CLSID kClsidAccPropServices = {0xb5f8350b, 0x0548, 0x48b1, {0xa6, 0xee, 0x88, 0xbd, 0x00, 0xb4, 0xa5, 0xe7}};
+constexpr GUID kPropIdAccName = {0x608d3df8, 0x8128, 0x4aa7, {0xa4, 0x28, 0xf5, 0x5e, 0x49, 0x26, 0x72, 0x91}};
+constexpr GUID kUiaNameProperty = {0xc3a6921b, 0x4a99, 0x44f1, {0xbc, 0xa6, 0x61, 0x18, 0x70, 0x52, 0xc4, 0x31}};  // Name_Property_GUID
+
+void SetAccessibleName(HWND control, const std::wstring& name) {
+    IAccPropServices* services = nullptr;
+    if (const HRESULT hr = ::CoCreateInstance(kClsidAccPropServices, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&services)); FAILED(hr)) {
+        log::Warn(L"Accessibility annotation unavailable (0x%08X)", static_cast<unsigned>(hr));
+        return;
+    }
+    // MSAA name and UI Automation's Name property (UIA reads native providers, e.g. SysLink's, through the latter).
+    services->SetHwndPropStr(control, static_cast<DWORD>(OBJID_CLIENT), CHILDID_SELF, kPropIdAccName, name.c_str());
+    services->SetHwndPropStr(control, static_cast<DWORD>(OBJID_CLIENT), CHILDID_SELF, kUiaNameProperty, name.c_str());
+    services->Release();
+}
 enum class ResultKind { None, Success, Failed, Cancelled };
 
 class Window : public boot::IListener {
@@ -128,6 +163,11 @@ private:
 
     bool HasOptions() const;
     bool ShowsLicense() const { return IsInstall() && !hello_["ui"]["licenseText"].asString().empty(); }
+    // ui.licenseStyle "inline": the first page links to the license; there is no license page in the flow.
+    bool LicenseInline() const { return ShowsLicense() && hello_["ui"]["licenseStyle"].asString() == "inline"; }
+    bool LicensePageInFlow() const { return ShowsLicense() && !LicenseInline(); }
+    bool HasLinks() const { return !hello_["links"].array().empty(); }
+    int LinkHeight(int id, int width) const;
     bool LaunchOffered() const { return IsInstall() && hello_["options"]["launchAfter"]["visible"].asBool(); }
     bool NeedsElevation() const { return scope_ == L"machine" && !hello_["elevated"].asBool(); }
     bool IsUninstall() const { return hello_["mode"].asString() == "uninstall"; }
@@ -158,6 +198,7 @@ private:
     HICON iconLarge_ = nullptr;
     HICON iconSmall_ = nullptr;
     Page page_ = Page::Welcome;
+    Page licenseReturn_ = Page::Welcome;  // inline license: where "Back" goes
     ResultKind result_ = ResultKind::None;
     std::wstring scope_, installDir_, logPath_, baseInfo_;
     std::string variant_;
@@ -221,7 +262,7 @@ int Window::TextWidth(int id) const {
 }
 
 void Window::Run() {
-    INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_STANDARD_CLASSES | ICC_PROGRESS_CLASS};
+    INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_STANDARD_CLASSES | ICC_PROGRESS_CLASS | ICC_LINK_CLASS};
     ::InitCommonControlsEx(&icc);
     const std::string& themeSetting = hello_["ui"]["theme"].asString();  // hello_ outlives theme_
     theme_.Init(themeSetting.empty() ? "system" : themeSetting.c_str());
@@ -316,11 +357,14 @@ void Window::Create() {
     Make(WC_STATICW, kTitle, text);
     Make(WC_STATICW, kSignature, text);
     Make(WC_STATICW, kDescription, text);
+    // LWS_USECUSTOMTEXT: the links are drawn in the theme's link colour (NM_CUSTOMTEXT), readable in dark mode too.
+    Make(WC_LINK, kLinks, WS_TABSTOP | WS_GROUP | LWS_USECUSTOMTEXT);
     for (int id : {kLblPublisher, kPublisher, kLblVersion, kVersion, kLblLocation}) Make(WC_STATICW, id, text);
     Make(WC_STATICW, kLocation, text | SS_PATHELLIPSIS);
     Make(WC_BUTTONW, kChange, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
     for (int id : {kLblSize, kSize, kInfo, kDirError, kRepairNote, kUpdateInfo}) Make(WC_STATICW, id, text);
     Make(WC_BUTTONW, kUpdateButton, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
+    Make(WC_LINK, kLicenseInline, WS_TABSTOP | WS_GROUP | LWS_USECUSTOMTEXT);
     for (int id : {kResultBody, kResultCode}) Make(WC_STATICW, id, text);
     Make(WC_EDITW, kResultDetail, WS_TABSTOP | WS_GROUP | ES_MULTILINE | ES_READONLY | WS_VSCROLL, WS_EX_CLIENTEDGE);
     Make(WC_BUTTONW, kOpenFolder, BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP);
@@ -400,6 +444,8 @@ void Window::ApplyFonts() {
     set(kISub, theme_.body);
     set(kSignature, theme_.body);
     set(kRepairNote, theme_.caption);
+    set(kLinks, theme_.body);
+    set(kLicenseInline, theme_.caption);
     for (size_t i = 0; i < Inputs().size(); ++i) {
         for (const InputPart part : {kInputLabel, kInputControl}) ::SendMessageW(InputCtl(i, part), WM_SETFONT, reinterpret_cast<WPARAM>(theme_.body), FALSE);
         for (const InputPart part : {kInputDescription, kInputError}) ::SendMessageW(InputCtl(i, part), WM_SETFONT, reinterpret_cast<WPARAM>(theme_.caption), FALSE);
@@ -452,6 +498,32 @@ void Window::ApplyHello() {
     if (IsUninstall()) description = F("uninstall.body", {name});
     if (IsModify()) description = F("modify.subtitle", {name, hello_["app"]["version"].asWide()});
     SetText(kDescription, description);
+    {
+        // <a id="0">Website</a>  ·  <a id="1">GitHub</a>: the id is the index the controller opens.
+        std::wstring markup;
+        const auto& links = hello_["links"].array();
+        for (size_t i = 0; i < links.size(); ++i) {
+            std::wstring label = links[i]["label"].asWide();
+            for (auto& ch : label) {
+                if (ch == L'<') ch = L'\x2039';
+                else if (ch == L'>') ch = L'\x203A';
+                else if (ch == L'"') ch = L'\x201D';
+            }
+            if (i > 0) markup += L"  \x00B7  ";
+            markup += L"<a id=\"" + std::to_wstring(i) + L"\">" + label + L"</a>";
+        }
+        SetText(kLinks, markup);
+        // Screen readers read the window text, which is markup: give them the plain sentence.
+        SetAccessibleName(Ctl(kLinks), PlainLinkText(markup));
+        if (LicenseInline()) {
+            std::wstring sentence = S("license.inline");
+            const size_t at = sentence.find(L"{0}");
+            const std::wstring link = L"<a id=\"license\">" + S("license.inlineLink") + L"</a>";
+            const std::wstring text = at == std::wstring::npos ? sentence + L" " + link : sentence.replace(at, 3, link);
+            SetText(kLicenseInline, text);
+            SetAccessibleName(Ctl(kLicenseInline), PlainLinkText(text));
+        }
+    }
     const Value& signature = hello_["signature"];
     signatureVerified_ = signature["state"].asString() == "valid" && !signature["publisher"].asWide().empty();
     // Only a verified signature is shown; unsigned setups are common (Windows already says so in SmartScreen/UAC).
@@ -585,6 +657,12 @@ std::wstring Window::PrimaryVerb() const {
     return S("button.install");
 }
 
+int Window::LinkHeight(int id, int width) const {
+    SIZE ideal{};
+    const int h = static_cast<int>(::SendMessageW(Ctl(id), LM_GETIDEALSIZE, static_cast<WPARAM>(width), reinterpret_cast<LPARAM>(&ideal)));
+    return std::max(h, static_cast<int>(ideal.cy));
+}
+
 void Window::ShowPage(Page p) {
     page_ = p;
     const Value& o = hello_["options"];
@@ -612,6 +690,10 @@ void Window::ShowPage(Page p) {
     const bool editable = welcome && !IsUninstall() && !hello_["existing"]["blocked"].asBool();
     Show(kChange, editable && o["canChangeDir"].asBool());
     Show(kDescription, welcome && ::GetWindowTextLengthW(Ctl(kDescription)) > 0);
+    // Links: on the first page of an install, and after a successful install or change (release notes, support). Not on
+    // the "Change" page, where the options and an update notice need the room.
+    Show(kLinks, !IsUninstall() && HasLinks() && ((welcome && IsInstall()) || (result && result_ == ResultKind::Success)));
+    Show(kLicenseInline, welcome && LicenseInline());
     Show(kInfo, welcome && ::GetWindowTextLengthW(Ctl(kInfo)) > 0);
     Show(kDirError, welcome && !pathOk_);
     Show(kRepairNote, welcome && CanRepair());
@@ -632,7 +714,9 @@ void Window::ShowPage(Page p) {
     Show(kODesktop, editable && o["desktopShortcut"]["visible"].asBool());
     Show(kOStartMenu, editable && o["startMenuShortcut"]["visible"].asBool());
     for (size_t i = 0; i < o["choices"].array().size(); ++i) Show(kChoiceBase + static_cast<int>(i), editable);
-    for (int id : {kLHeading, kLSub, kLText, kLAccept}) Show(id, license);
+    for (int id : {kLHeading, kLSub, kLText}) Show(id, license);
+    Show(kLAccept, license && !LicenseInline());
+    if (license) SetText(kLSub, S(LicenseInline() ? "license.inlineSubtitle" : "license.subtitle"));
     for (int id : {kIHeading, kISub, kIPanel}) Show(id, inputs);
 
     UpdateFooter();
@@ -649,7 +733,7 @@ void Window::UpdateFooter() {
     switch (page_) {
         case Page::Welcome: {
             // "Change <App>": Repair on the left of the primary button; Change applies the toggles (after Settings).
-            const bool more = HasInputsPage() || ShowsLicense();
+            const bool more = HasInputsPage() || LicensePageInFlow();
             secondary = CanRepair();
             secondaryText = S("modify.repair");
             primaryText = more ? S("button.next") : PrimaryVerb();
@@ -660,8 +744,8 @@ void Window::UpdateFooter() {
         case Page::Inputs:
             secondary = true;
             secondaryText = S("button.back");
-            primaryText = ShowsLicense() ? S("button.next") : PrimaryVerb();
-            shield = !ShowsLicense() && NeedsElevation();
+            primaryText = LicensePageInFlow() ? S("button.next") : PrimaryVerb();
+            shield = !LicensePageInFlow() && NeedsElevation();
             primaryEnabled = InputsValid() && pathOk_;
             break;
         case Page::License:
@@ -669,7 +753,7 @@ void Window::UpdateFooter() {
             secondaryText = S("button.back");
             primaryText = PrimaryVerb();
             shield = NeedsElevation();
-            primaryEnabled = Checked(kLAccept) && pathOk_;
+            primaryEnabled = (LicenseInline() || Checked(kLAccept)) && pathOk_ && (!HasInputsPage() || InputsValid());
             break;
         case Page::Progress:
             primary = false;
@@ -728,6 +812,7 @@ void Window::Layout() {
             stack(kTitle, Px(4), textRight - titleLeft, -1, titleLeft);
             stack(kSignature, Px(8), textWidth);
             stack(kDescription, Px(8), textWidth);
+            stack(kLinks, Px(8), textWidth, LinkHeight(kLinks, textWidth));
             y += Px(12);
             // Aligned label / value rows.
             int labelW = 0;
@@ -822,6 +907,7 @@ void Window::Layout() {
                 place(kUserDataPaths, left + Px(26), y, right - left - Px(26), ph);
                 y += ph + Px(8);
             }
+            stack(kLicenseInline, Px(12), right - left, LinkHeight(kLicenseInline, right - left));
             stack(kDirError, Px(12), right - left);
             stack(kRepairNote, Px(8), right - left);
             stack(kUpdateInfo, Px(6), right - left);
@@ -992,12 +1078,12 @@ void Window::OnPrimary() {
     switch (page_) {
         case Page::Welcome:
             if (HasInputsPage()) ShowPage(Page::Inputs);
-            else if (ShowsLicense()) ShowPage(Page::License);
+            else if (LicensePageInFlow()) ShowPage(Page::License);
             else StartInstall();
             break;
         case Page::Inputs:
             if (!InputsValid()) break;
-            if (ShowsLicense()) ShowPage(Page::License);
+            if (LicensePageInFlow()) ShowPage(Page::License);
             else StartInstall();
             break;
         case Page::License: StartInstall(); break;
@@ -1019,7 +1105,7 @@ void Window::OnSecondary() {
             if (CanRepair()) StartRepair();
             break;
         case Page::Inputs: ShowPage(Page::Welcome); break;
-        case Page::License: ShowPage(HasInputsPage() ? Page::Inputs : Page::Welcome); break;
+        case Page::License: ShowPage(LicenseInline() ? licenseReturn_ : HasInputsPage() ? Page::Inputs : Page::Welcome); break;
         default: break;
     }
 }
@@ -1577,15 +1663,34 @@ LRESULT Window::Handle(UINT m, WPARAM w, LPARAM l) {
             if (id == kInfo) brush = theme_.infoBrush(), bg = c.infoFill;
             if (id == kLText || id == kResultDetail || inputPart == kInputControl || m == WM_CTLCOLORLISTBOX) brush = theme_.editBrush(), bg = c.editFill;
             if (id == kLblPublisher || id == kLblVersion || id == kLblLocation || id == kLblSize || id == kOScopeLabel || id == kOVariantLabel || id == kOVariantDesc || id == kUserDataPaths || id == kDescription || id == kPDetail || id == kPPercent || id == kResultCode || id == kRepairNote || inputPart == kInputDescription) fg = c.textSecondary;
-            if (id == kSignature) fg = c.textSecondary;
+            if (id == kSignature || id == kLicenseInline) fg = c.textSecondary;
             if (id == kDirError || inputPart == kInputError) fg = c.critical;
             ::SetTextColor(dc, fg);
             ::SetBkColor(dc, bg);
             return reinterpret_cast<LRESULT>(brush);
         }
-        case WM_NOTIFY:
-            if (reinterpret_cast<NMHDR*>(l)->code == NM_CUSTOMDRAW) return CustomDrawButton(reinterpret_cast<NMCUSTOMDRAW*>(l));
+        case WM_NOTIFY: {
+            const NMHDR* n = reinterpret_cast<NMHDR*>(l);
+            if (n->code == NM_CUSTOMDRAW) return CustomDrawButton(reinterpret_cast<NMCUSTOMDRAW*>(l));
+            if (n->idFrom == kLinks || n->idFrom == kLicenseInline) {
+                if (n->code == NM_CUSTOMTEXT) {
+                    const auto* t = reinterpret_cast<const NMCUSTOMTEXT*>(l);
+                    if (t->fLink) ::SetTextColor(t->hDC, theme_.colors().link);
+                    return 0;
+                }
+                if (n->code == NM_CLICK || n->code == NM_RETURN) {
+                    const auto* link = reinterpret_cast<const NMLINK*>(l);
+                    if (n->idFrom == kLicenseInline) {
+                        licenseReturn_ = page_;
+                        ShowPage(Page::License);
+                    } else {
+                        c_.OpenLink(static_cast<size_t>(_wtoi(link->item.szID)));
+                    }
+                    return 0;
+                }
+            }
             break;
+        }
         case WM_DRAWITEM:
             if (w == kStatus) {
                 DrawStatus(reinterpret_cast<DRAWITEMSTRUCT*>(l));
