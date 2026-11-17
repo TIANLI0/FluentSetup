@@ -7,6 +7,8 @@
     FluentSetup-<version>-Setup.exe         Builder app + CLI, packaged with FluentSetup itself
     FluentSetup.*.<version>.nupkg           NuGet packages: Builder.Core (+ .snupkg), Cli (.NET tool), MSBuild (scripts\pack-nuget.ps1)
     SHA256SUMS.txt                          "<sha256>  <file>" for all of them (sha256sum format)
+  Release builds (the release workflow, signed in with TIANLI0/codesign) sign fluentsetup.exe of the Windows zip, the
+  Builder app and the Setup.exe; scripts\build.ps1's FluentSetup.UI.exe is signed by the workflow before this runs.
   The .tar.gz archives need PowerShell 7 (System.Formats.Tar sets the executable bit); Windows PowerShell skips them
   with a warning, except with -Version (a release), where they are required.
 .PARAMETER Version
@@ -16,6 +18,14 @@ param([string] $Version)
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 Set-Location $root
+
+# Authenticode: only when the TIANLI0/codesign action has signed in to the Certum service (release workflow; it sets
+# CODESIGN_SIGN and CODESIGN_THUMBPRINT). Local and CI builds stay unsigned. Only FluentSetup's own binaries.
+function Invoke-CodeSign([string] $Root, [string[]] $Path) {
+    if ($env:CODESIGN_SIGN) {
+        & $env:CODESIGN_SIGN -Root $Root -Path $Path -Description 'FluentSetup' -DescriptionUrl 'https://github.com/TIANLI0/FluentSetup'
+    }
+}
 
 # One version everywhere: managed assemblies, native stub, self-package.
 $props = [xml](Get-Content Directory.Build.props -Raw)
@@ -41,6 +51,7 @@ dotnet publish src\CLI\FluentSetup.CLI.csproj -c Release -r win-x64 --self-conta
 if ($LASTEXITCODE -ne 0) { throw 'Publishing the CLI failed' }
 Copy-Item LICENSE, THIRD-PARTY-NOTICES.md, README.md $stage
 if (-not (Test-Path (Join-Path $stage 'runtime\x64\FluentSetup.Stub.exe'))) { throw 'The published CLI has no installer runtime' }
+Invoke-CodeSign $stage 'fluentsetup.exe'   # the single-file bundle, signed after bundling
 & (Join-Path $stage 'fluentsetup.exe') --version
 if ($LASTEXITCODE -ne 0) { throw 'The published CLI does not start' }
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $release "$name.zip") -CompressionLevel Optimal
