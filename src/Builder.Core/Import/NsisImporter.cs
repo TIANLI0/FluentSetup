@@ -1349,6 +1349,9 @@ internal sealed partial class NsisImporter(ImportContext ctx)
         }
         var url = new[] { "URLInfoAbout", "HelpLink", "URLUpdateInfo" }.FirstOrDefault(n => Value(n).Length > 0);
         if (url is not null) ImportHelpers.SetWebsite(ctx, Value(url), ValueAt(url), url);
+        // The uninstall key's help and update links keep their meaning (Settings > Apps and the installer's links).
+        if (Value("HelpLink").Length > 0) ImportHelpers.SetUrl(ctx, Value("HelpLink"), ValueAt("HelpLink"), "HelpLink", "app.supportUrl", v => p.App.SupportUrl = v);
+        if (Value("URLUpdateInfo").Length > 0) ImportHelpers.SetUrl(ctx, Value("URLUpdateInfo"), ValueAt("URLUpdateInfo"), "URLUpdateInfo", "app.releaseNotesUrl", v => p.App.ReleaseNotesUrl = v);
         else if (ctx.Variables.Keys.FirstOrDefault(k => (k.Contains("URL", StringComparison.OrdinalIgnoreCase) || k.Contains("WEBSITE", StringComparison.OrdinalIgnoreCase)) && !k.StartsWith("MUI", StringComparison.OrdinalIgnoreCase) && ProjectVariables.IsValidName(k)) is { } uk)
             ImportHelpers.SetWebsite(ctx, $"$({uk})", ctx.VariableNotes.TryGetValue(uk, out var un) ? un.At : ctx.Script, $"!define {uk}");
 

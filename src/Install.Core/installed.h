@@ -97,7 +97,7 @@ void RestoreArp(const std::wstring& appId, Scope scope, const json::Value& snaps
 
 struct ArpEntry {
     std::wstring displayName, displayVersion, publisher, displayIcon, installLocation, uninstallString,
-        quietUninstallString, urlInfoAbout, comments, recordSha256, variant, modifyPath;
+        quietUninstallString, urlInfoAbout, helpLink, urlUpdateInfo, comments, recordSha256, variant, modifyPath;
     uint32_t estimatedSizeKb = 0;
     uint32_t versionMajor = 0, versionMinor = 0;
 };

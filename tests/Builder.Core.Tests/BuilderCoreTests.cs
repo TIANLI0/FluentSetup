@@ -530,9 +530,14 @@ public class PackagingTests
         for (var i = 0; i < 50; i++) dir.File($"app/data/f{i}.txt", new string('x', i * 100));
         var project = new SetupProject
         {
-            App = new AppInfo { Id = "Test.Pkg", Name = "Pkg Test", Publisher = "P", Version = "3.1.0", MainExecutable = "App.exe" },
+            App = new AppInfo
+            {
+                Id = "Test.Pkg", Name = "Pkg Test", Publisher = "P", Version = "3.1.0", MainExecutable = "App.exe",
+                SupportUrl = "https://example.com/help", Links = [new AppLink { Url = "https://github.com/o/r" }],
+            },
             Files = new FileSettings { Source = "app" },
             Output = new OutputSettings { Directory = "out", Compression = "fast" },
+            Ui = new UiSettings { LicenseStyle = "inline" },
         };
         var projectPath = Path.Combine(dir.Path, "fluentsetup.json");
         ProjectSerializer.Save(project, projectPath);
@@ -547,6 +552,10 @@ public class PackagingTests
         var app = info.Header!.RootElement.GetProperty("app");
         Assert.Equal("Test.Pkg", app.GetProperty("id").GetString());
         Assert.Equal("3.1.0", app.GetProperty("version").GetString());
+        Assert.Equal("https://example.com/help", app.GetProperty("supportUrl").GetString());
+        Assert.Equal("https://github.com/o/r", app.GetProperty("links")[0].GetProperty("url").GetString());
+        Assert.False(app.TryGetProperty("releaseNotesUrl", out _));  // empty fields are left out
+        Assert.Equal("inline", info.Header.RootElement.GetProperty("ui").GetProperty("licenseStyle").GetString());
 
         // The version resource was applied to the stub (FileVersionInfo reads native resources on Windows only).
         var resources = Win32ResourceTree.Read(PeImage.Parse(File.ReadAllBytes(report.OutputPath!)));

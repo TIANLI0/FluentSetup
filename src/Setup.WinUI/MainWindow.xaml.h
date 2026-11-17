@@ -63,6 +63,12 @@ private:
     void UpdateFooter();
     [[nodiscard]] bool HasOptions() const;
     [[nodiscard]] bool ShowsLicense() const;
+    // ui.licenseStyle "inline": no license page in the flow; the first page links to the license instead.
+    [[nodiscard]] bool LicenseInline() const;
+    // A license page the flow goes through ("page" style) before the install starts.
+    [[nodiscard]] bool LicensePageInFlow() const { return ShowsLicense() && !LicenseInline(); }
+    void BuildLinks();
+    void OpenLink(size_t index);
     [[nodiscard]] bool LaunchOffered() const;
     [[nodiscard]] std::wstring PrimaryVerb() const;
     [[nodiscard]] bool NeedsElevation() const;
@@ -88,6 +94,7 @@ private:
 
     HWND hwnd_ = nullptr;
     Page page_ = Page::Welcome;
+    Page licenseReturn_ = Page::Welcome;  // inline license: the page "Back" returns to
     ResultKind result_ = ResultKind::None;
     bool cancellable_ = true;
     bool cancelRequested_ = false;

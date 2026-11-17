@@ -220,5 +220,12 @@
   "result.noProblems.title": "未發現問題",
   "prereq.officialDownload": "需要 {0}，將從 Microsoft 下載並安裝。",
 
+  "link.website": "官方網站",
+  "link.releaseNotes": "版本資訊",
+  "link.support": "說明與支援",
+  "license.inline": "安裝即表示您接受{0}。",
+  "license.inlineLink": "授權條款",
+  "license.inlineSubtitle": "安裝即表示您接受這些授權條款。",
+
   "usage": "用法：Setup.exe [選項]\n\n/quiet  不顯示任何介面進行安裝\n/passive  只顯示進度，不詢問任何問題\n/uninstall  解除安裝已安裝的應用程式\n/modify  變更已安裝應用程式的選項（搭配 /quiet 時不詢問）\n/repair  檢查已安裝的檔案，並還原遺失或損毀的檔案\n/dir <路徑>  安裝位置\n/scope user|machine  為目前使用者或所有使用者安裝\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  開啟或關閉套件定義的選項\n/input <id>=<值>  套件定義之設定的值（可重複指定）\n/variant <id>  套件變體（例如共用或內含的執行階段）\n/remove-user-data  解除安裝時同時刪除設定和資料\n/relaunch  無訊息安裝後啟動應用程式（供應用程式內更新使用）\n/check-update  有新版本時結束代碼為 18，否則為 0\n/install-update  下載、驗證並安裝最新版本（搭配 /passive 或 /quiet 時不詢問）\n也接受 Inno Setup 和 NSIS 的參數（/VERYSILENT、/SUPPRESSMSGBOXES、/DIR=、/TASKS=、/D= 等）。\n/log <檔案>  將記錄寫入此檔案\n/lang <語言>  介面語言（en-US、zh-CN、zh-TW、ja-JP、ko-KR、de-DE、fr-FR、es-ES、pt-BR、ru-RU、it-IT）\n/ui auto|winui|win32  介面技術（診斷用）\n\n結束代碼 0 表示成功；其他代碼請參閱文件。3010 表示成功，但需要重新啟動電腦才能完成。"
 }

@@ -86,6 +86,20 @@ GitHub Action 会在 Windows 构建机上安装命令行工具（下载后校验
 
 `-D Version=1.2.3` 会填入项目文件里的 `$(Version)`（例如 `"version": "$(Version)"`），版本号由发布流程决定。
 
+Action 也可以直接打包，并把结果交给后面的步骤：
+
+```yaml
+- id: setup
+  uses: TIANLI0/FluentSetup@latest
+  with:
+    project: installer/fluentsetup.json
+    defines: Version=1.2.3        # 每行一个 名称=值
+    args: --arch x64              # 其他 fluentsetup build 参数
+- run: gh release upload v1.2.3 "${{ steps.setup.outputs.setup-path }}"
+```
+
+输出：`setup-path`、`setup-sha256` 和 `app-version`（另有命令行工具的 `path` 和 `version`）。
+
 ### 从 Inno Setup 或 NSIS 切换过来
 
 保留应用原来的卸载项（`install.adoptExistingInstall` 或 `install.legacyUninstallKeys`）、应用内更新下载的安装包文件名（`output.fileName`）和它使用的命令行，已有安装（包括从旧版本内发起的更新）就会原地升级。[THRM](https://github.com/TIANLI0/THRM)、[EncoDeck](https://github.com/TIANLI0/EncoDeck)、[PinyinFlux](https://github.com/TIANLI0/PinyinFlux) 和 [MediaDuet](https://github.com/TIANLI0/MediaDuet) 的做法见 [docs/thrm.md](docs/thrm.md)。

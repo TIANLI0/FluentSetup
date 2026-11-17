@@ -21,6 +21,23 @@ $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $root
 Import-Module (Join-Path $PSScriptRoot 'Uia.psm1') -Force
+if (-not ('FsMsaa' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class FsMsaa {
+    [DllImport("oleacc.dll")]
+    static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint id, ref Guid iid, [MarshalAs(UnmanagedType.IDispatch)] out object acc);
+    // accName of the window's client object (what screen readers read), OBJID_CLIENT.
+    public static string Name(IntPtr hwnd) {
+        Guid iid = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
+        object acc;
+        if (AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref iid, out acc) != 0) return "";
+        return (string)acc.GetType().InvokeMember("accName", System.Reflection.BindingFlags.GetProperty, null, acc, new object[] { 0 });
+    }
+}
+'@
+}
 
 $cli = Join-Path $root 'src\CLI\bin\Release\net10.0\fluentsetup.exe'
 if (-not (Test-Path $cli)) { throw 'Build the CLI first (scripts/build.ps1).' }
@@ -62,6 +79,20 @@ function Remove-Existing {
 }
 
 # Win32 controls keep their mnemonic in the window text ("Create a &desktop shortcut"); try both spellings.
+# An element whose name contains every one of $parts (the Win32 front end shows its links in one SysLink, named with the
+# plain sentence: "Website  ·  GitHub  ·  Release notes").
+function Find-Containing($window, [string[]] $parts, [int] $timeout = 15) {
+    $deadline = (Get-Date).AddSeconds($timeout)
+    while ((Get-Date) -lt $deadline) {
+        foreach ($e in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+            $n = $e.Current.Name
+            if ($n -and @($parts | Where-Object { -not $n.Contains($_) }).Count -eq 0) { return $n }
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    throw "No element containing '$($parts -join "', '")' appeared within $timeout s"
+}
+
 function Find-Any($window, [string[]] $names, [int] $timeout = 15) {
     $deadline = (Get-Date).AddSeconds($timeout)
     while ((Get-Date) -lt $deadline) {
@@ -170,6 +201,9 @@ $project.app.version = $version
 $project.files.source = 'stage'
 $project.ui.license = '..\..\samples\DemoApp\LICENSE.txt'
 $project.output.directory = 'dist'
+# Links on the first page and the result page (app.website comes from the DemoApp project).
+$project.app | Add-Member -NotePropertyName releaseNotesUrl -NotePropertyValue 'https://example.com/fluentsetup-demo/releases' -Force
+$project.app | Add-Member -NotePropertyName links -NotePropertyValue @([ordered]@{ url = 'https://github.com/TIANLI0/FluentSetup' }) -Force
 # Settings page: a required address with a pattern, a choice and an optional password; the values go into a config file.
 $inputs = @(
     [ordered]@{ id = 'serverUrl'; label = @{ 'en-US' = $serverLabel }; description = @{ 'en-US' = 'The https address of your server.' }
@@ -239,6 +273,14 @@ foreach ($ui in $FrontEnds) {
         Check "${ui}: unsigned package shows no publisher warning" { -not (Test-UiaElement -Root $w -Name $en.'welcome.unknownPublisher') }
         Check "${ui}: Change button next to the location" { Find-Any $w @('Change', '&Change', $browseName) }
         Check "${ui}: install scope inline" { (Find-Any $w @('Only me')) -and (Find-Any $w @('All users')) }
+        Check "${ui}: app links on the first page (website, GitHub, release notes)" { Find-Containing $w @($en.'link.website', 'GitHub', $en.'link.releaseNotes') }
+        # Win32: the SysLink's window text is markup; screen readers get the annotated MSAA name (the managed UIA
+        # client used here reads the window text of Win32 controls instead).
+        Check "${ui}: no link markup in accessible names" {
+            @($w.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object {
+                if ($_.Current.ClassName -eq 'SysLink') { [FsMsaa]::Name([IntPtr]$_.Current.NativeWindowHandle) } else { $_.Current.Name }
+            } | Where-Object { $_ -like '*<a *' }).Count -eq 0
+        }
         $desktop = Find-Any $w @('Create a desktop shortcut', 'Create a &desktop shortcut')
         Check "${ui}: shortcut option inline on the first page" { $desktop }
         Set-UiaToggle -Root $w -Name $desktop -On $true
@@ -251,6 +293,7 @@ foreach ($ui in $FrontEnds) {
         Set-UiaToggle -Root $w -Name $accept -On $true
         Invoke-UiaButton -Root $w -Name 'Install'
         Check "${ui}: result page" { Find-Any $w @("$appName $version is installed") 120 }
+        Check "${ui}: release notes link on the result page" { Find-Containing $w @($en.'link.releaseNotes') }
         Invoke-UiaButton -Root $w -Name 'Close'
         Check "${ui}: Setup.exe exit code 0" { $setup.WaitForExit(30000) -and $setup.ExitCode -eq 0 }
     } finally {
@@ -364,6 +407,39 @@ if ($record.PSObject.Properties['sourcePackage']) {
 }
 
 Remove-Existing
+
+# --- ui.licenseStyle "inline": one step less (no license page, the first page links to the license) ----------------
+Write-Host '==> inline license' -ForegroundColor Cyan
+$inlineProject = $project | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+$inlineProject.PSObject.Properties.Remove('inputs')
+$inlineProject.PSObject.Properties.Remove('configFiles')
+$inlineProject.ui | Add-Member -NotePropertyName licenseStyle -NotePropertyValue 'inline' -Force
+$inlineProject.output | Add-Member -NotePropertyName fileName -NotePropertyValue '{AppName}-{Version}-inline-Setup.exe' -Force
+$inlinePath = Join-Path $work 'project-inline.json'
+[IO.File]::WriteAllText($inlinePath, ($inlineProject | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
+& $cli build $inlinePath | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Packaging (inline license) failed' }
+$inlineExe = Join-Path $work "dist\$appName-$version-inline-Setup.exe"
+foreach ($ui in $FrontEnds) {
+    if ($ui -eq 'winui' -and -not $runtime) { continue }
+    Remove-Existing
+    $setup = Start-Process -FilePath $inlineExe -ArgumentList '/ui', $ui, '/lang', 'en-US' -PassThru
+    try {
+        $w = Wait-Window $setup $ui
+        Check "${ui}: inline license: the first page links to the license terms" { Find-Containing $w @($en.'license.inlineLink') }
+        Check "${ui}: inline license: Install directly (no Next)" { (Find-Any $w @('Install', '&Install')) -and -not (Test-UiaElement -Root $w -Name 'Next') }
+        # UI Automation reaches the WinUI hyperlink; a link inside a Win32 SysLink is not an element of its own.
+        if ($ui -eq 'win32') { continue }
+        Invoke-UiaButton -Root $w -Name $en.'license.inlineLink'
+        Check "${ui}: inline license: the license can be read" { Find-Any $w @($en.'license.inlineSubtitle') }
+        Check "${ui}: inline license: no accept box" { -not (Test-UiaElement -Root $w -Name $en.'license.accept') -and -not (Test-UiaElement -Root $w -Name ('&' + $en.'license.accept')) }
+        Invoke-UiaButton -Root $w -Name 'Back'
+        Check "${ui}: inline license: Back returns to the first page" { Find-Any $w @("Install $appName ${version}?") }
+    } finally {
+        Stop-Tree $setup
+    }
+}
+
 $failed = @($results | Where-Object { -not $_.Passed }).Count
 $skipped = @($results | Where-Object { $_.Skipped }).Count
 Write-Host ''

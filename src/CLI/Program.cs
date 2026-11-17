@@ -35,7 +35,10 @@ public static class Program
               --msbuild                 Diagnostics as "<project> : error FS1234: ..." (for the MSBuild targets)
           fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
           fluentsetup inspect <Setup.exe> [--verify] [--json]
-          fluentsetup init [folder] --name <name> --id <app.id> --source <files folder> [--publisher <name>]
+          fluentsetup init [folder] --source <files folder> [--name <name>] [--id <app.id>] [--publisher <name>]
+                                        [--version <version>] [--main-exe <file.exe>]
+                                        Create fluentsetup.json; name, publisher, version and main program
+                                        default to the main program's version resource
           fluentsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [options]
                                         Write winget manifests (winget-pkgs layout) for a built Setup.exe
               -o, --output <dir>        Root folder (default: current folder): <dir>/manifests/<x>/<Publisher>/<App>/<version>
@@ -400,14 +403,27 @@ public static class Program
         bag.AddRange(variableDiagnostics.Items);
         var files = FileCollector.Collect(project, dir, project.Files.Variants);
         bag.AddRange(files.Diagnostics.Items);
+        // What "build" would write, with the variables (-D and "variables") already applied.
+        string? output = null;
+        try
+        {
+            output = Path.Combine(ProjectValidator.Resolve(dir, project.Output.Directory), ProjectValidator.ExpandFileName(project.Output.FileName, project));
+        }
+        catch (ArgumentException) { }
         if (json)
         {
-            Console.WriteLine(JsonSerializer.Serialize(new { valid = !bag.HasErrors, files = files.Files.Count, bytes = files.TotalSize, diagnostics = bag.Items }, ReportJson));
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                valid = !bag.HasErrors, files = files.Files.Count, bytes = files.TotalSize, output, version = project.App.Version,
+                architecture = project.Output.Architecture, diagnostics = bag.Items,
+            }, ReportJson));
         }
         else
         {
             PrintDiagnostics(bag.Items, verbose: true);
             Console.WriteLine(bag.HasErrors ? "Project has errors." : $"Project is valid: {files.Files.Count:N0} files, {PackageBuilder.Format(files.TotalSize)}.");
+            Console.WriteLine($"  {project.App.Name} {project.App.Version} ({project.App.Id}, {project.Output.Architecture}, compression {project.Output.Compression}, signing {(project.Signing.Enabled ? project.Signing.Provider : "off")})");
+            if (output is not null) Console.WriteLine($"  build writes {output}");
         }
         return bag.HasErrors ? 1 : 0;
     }
@@ -451,23 +467,40 @@ public static class Program
     private static int Init(ParsedArgs a)
     {
         var folder = Path.GetFullPath(a.PositionalOrDefault(0) ?? ".");
-        var name = a.Value("name") ?? throw new UsageException("--name is required.");
-        var id = a.Value("id") ?? throw new UsageException("--id is required.");
-        var source = a.Value("source") ?? throw new UsageException("--source is required.");
-        var publisher = a.Value("publisher") ?? "";
+        var source = a.Value("source") ?? throw new UsageException("--source is required: the folder with the built app, e.g. fluentsetup init installer --source bin\\Release\\publish");
+        var sourceFull = Path.GetFullPath(source);
+        if (!Directory.Exists(sourceFull)) throw new UsageException($"--source: folder not found: {sourceFull}");
+        // Name, publisher, version and main program come from the app's own version resource unless given.
+        var guess = ProjectGuess.FromFolder(sourceFull);
+        var name = a.Value("name") ?? guess.Name;
+        var publisher = a.Value("publisher") ?? guess.Publisher;
+        var id = a.Value("id") ?? (a.Value("name") is not null || a.Value("publisher") is not null ? ProjectGuess.MakeId(publisher, name) : guess.Id);
+        var version = a.Value("version") ?? guess.Version;
+        var exe = a.Value("main-exe") ?? guess.MainExecutable;
         a.EnsureAllUsed();
+        if (!PathRules.IsValidAppId(id)) throw new UsageException($"Cannot derive an app id from '{name}'; pass --id (letters, digits, '.', '-', '_'), e.g. --id Contoso.Notes");
+        if (!ProjectValidator.IsValidVersion(version)) throw new UsageException($"'{version}' is not a valid version; pass --version, e.g. --version 1.0.0");
         Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, "fluentsetup.json");
         if (File.Exists(path)) throw new UsageException($"{path} already exists.");
-        var sourceFull = Path.GetFullPath(source);
-        var exe = Directory.Exists(sourceFull) ? Directory.EnumerateFiles(sourceFull, "*.exe").Select(Path.GetFileName).FirstOrDefault() : null;
+        // Setup.exe goes to <project folder>\dist, or next to the app folder when that would be inside it.
+        var dist = Path.Combine(folder, "dist");
+        if (Path.GetFullPath(dist).StartsWith(Path.TrimEndingDirectorySeparator(sourceFull) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            dist = Path.Combine(Path.GetDirectoryName(sourceFull) ?? folder, "dist");
         var project = new SetupProject
         {
-            App = new AppInfo { Id = id, Name = name, Publisher = publisher, MainExecutable = exe ?? "" },
+            App = new AppInfo { Id = id, Name = name, Publisher = publisher, Version = version, MainExecutable = exe },
             Files = new FileSettings { Source = Path.GetRelativePath(folder, sourceFull) },
+            Output = new OutputSettings { Directory = Path.GetRelativePath(folder, dist) },
         };
         ProjectSerializer.Save(project, path);
         Console.WriteLine($"Created {path}");
+        Console.WriteLine($"  {name} {version} by {(publisher.Length > 0 ? publisher : "(no publisher)")}, id {id}, main program {(exe.Length > 0 ? exe : "(none found)")}");
+        var rel = Path.GetRelativePath(Environment.CurrentDirectory, path);
+        Console.WriteLine();
+        Console.WriteLine("Next:");
+        Console.WriteLine($"  fluentsetup validate {rel}");
+        Console.WriteLine($"  fluentsetup build {rel}");
         return 0;
     }
 

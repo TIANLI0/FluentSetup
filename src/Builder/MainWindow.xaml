@@ -65,6 +65,14 @@
                             <KeyboardAccelerator Modifiers="Control,Shift" Key="S" />
                         </Button.KeyboardAccelerators>
                     </Button>
+                    <!-- Builds from any page (F5) and shows the Build page with the progress. -->
+                    <Button x:Uid="TitleBuildButton" Click="OnBuildClick" Visibility="{x:Bind VM.HasProject, Mode=OneWay}"
+                            IsEnabled="{x:Bind VM.CanBuild, Mode=OneWay}" Style="{StaticResource TitleBarButtonStyle}">
+                        <FontIcon Glyph="&#xE7B8;" FontSize="16" />
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="F5" />
+                        </Button.KeyboardAccelerators>
+                    </Button>
                 </StackPanel>
             </TitleBar.RightHeader>
         </TitleBar>

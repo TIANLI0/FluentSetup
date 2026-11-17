@@ -363,8 +363,61 @@ void MainWindow::ApplyHello() {
     RemoveDataCheck().IsChecked(h["userData"]["value"].asBool());
     UserDataPaths().Text(h["userData"]["paths"].asWide());
     LicenseText().Text(h["ui"]["licenseText"].asWide());
+    if (LicenseInline()) {
+        // "By installing, you accept the {0}." with {0} as a link to the license page.
+        namespace Docs = winrt::Microsoft::UI::Xaml::Documents;
+        const std::wstring sentence = Str("license.inline");
+        const size_t at = sentence.find(L"{0}");
+        const auto run = [](const std::wstring& text) {
+            Docs::Run r;
+            r.Text(text);
+            return r;
+        };
+        auto inlines = LicenseInlineText().Inlines();
+        if (at != std::wstring::npos && at > 0) inlines.Append(run(sentence.substr(0, at)));
+        Docs::Hyperlink link;
+        link.Inlines().Append(run(Str("license.inlineLink")));
+        link.Click([this](auto&&, auto&&) {
+            licenseReturn_ = page_;
+            ShowPage(Page::License);
+        });
+        inlines.Append(link);
+        if (at != std::wstring::npos && at + 3 < sentence.size()) inlines.Append(run(sentence.substr(at + 3)));
+    }
+    BuildLinks();
     UpdateInfoLines();
     UpdateSpaceText();
+}
+
+void MainWindow::BuildLinks() {
+    // "Website · GitHub · Release notes": one wrapping line of hyperlinks. The address is the tooltip (so users see
+    // where a link goes); the bootstrapper opens it by index, never with an elevated token.
+    namespace Docs = winrt::Microsoft::UI::Xaml::Documents;
+    auto inlines = LinksText().Inlines();
+    inlines.Clear();
+    const auto& links = Hello()["links"].array();
+    for (size_t i = 0; i < links.size(); ++i) {
+        if (i > 0) {
+            Docs::Run separator;
+            separator.Text(L"  ·  ");
+            inlines.Append(separator);
+        }
+        Docs::Hyperlink link;
+        Docs::Run label;
+        label.Text(links[i]["label"].asWide());
+        link.Inlines().Append(label);
+        ToolTipService::SetToolTip(link, box_value(links[i]["url"].asWide()));
+        Automation::AutomationProperties::SetHelpText(link, links[i]["url"].asWide());
+        link.Click([this, i](auto&&, auto&&) { OpenLink(i); });
+        inlines.Append(link);
+    }
+}
+
+void MainWindow::OpenLink(size_t index) {
+    Value m;
+    m.set("t", "openLink");
+    m.set("index", static_cast<uint64_t>(index));
+    fsui::UiChannel::Get().Send(m);
 }
 
 void MainWindow::UpdateInfoLines() {
@@ -462,6 +515,7 @@ bool MainWindow::HasOptions() const {
 }
 
 bool MainWindow::ShowsLicense() const { return IsInstall() && !Hello()["ui"]["licenseText"].asString().empty(); }
+bool MainWindow::LicenseInline() const { return ShowsLicense() && Hello()["ui"]["licenseStyle"].asString() == "inline"; }
 bool MainWindow::LaunchOffered() const { return IsInstall() && Hello()["options"]["launchAfter"]["visible"].asBool(); }
 bool MainWindow::HasInputsPage() const { return Hello()["inputsPage"].asBool() && !inputs_.empty(); }
 bool MainWindow::NeedsElevation() const { return scope_ == L"machine" && !Hello()["elevated"].asBool(); }
@@ -499,6 +553,17 @@ void MainWindow::ShowPage(Page page) {
     SetVisible(UserDataPanel(), page == Page::Welcome && IsUninstall() && Hello()["userData"]["visible"].asBool());
     SetVisible(WelcomeDirError(), page == Page::Welcome);
     SetVisible(DescriptionText(), page == Page::Welcome && !DescriptionText().Text().empty());
+    // Links: on the first page of an install, and after a successful install or change (release notes, support). Not on
+    // the "Change" page, where the options and an update notice need the room above the fold.
+    const bool links = !IsUninstall() && !Hello()["links"].array().empty() &&
+                       ((page == Page::Welcome && IsInstall()) || (page == Page::Result && result_ == ResultKind::Success));
+    SetVisible(LinksText(), links);
+    SetVisible(LicenseInlineText(), page == Page::Welcome && LicenseInline());
+    if (page == Page::License) {
+        // Inline style: the page is only for reading; installing from here accepts it like the first page says.
+        SetVisible(LicenseAccept(), !LicenseInline());
+        LicenseSubtitle().Text(Str(LicenseInline() ? "license.inlineSubtitle" : "license.subtitle"));
+    }
 
     if (page == Page::Welcome) {
         const std::string relation = Hello()["existing"]["relation"].asString();
@@ -536,7 +601,7 @@ void MainWindow::UpdateFooter() {
 
     switch (page_) {
         case Page::Welcome: {  // options are on this page; "Change" picks the folder
-            const bool more = HasInputsPage() || ShowsLicense();
+            const bool more = HasInputsPage() || LicensePageInFlow();
             secondaryVisible = CanRepair();  // "Change <App>": Repair next to Change
             secondary = Str("modify.repair");
             primary = more ? Str("button.next") : PrimaryVerb();
@@ -547,8 +612,8 @@ void MainWindow::UpdateFooter() {
         case Page::Inputs:
             secondaryVisible = true;
             secondary = Str("button.back");
-            primary = ShowsLicense() ? Str("button.next") : PrimaryVerb();
-            shield = !ShowsLicense() && NeedsElevation();
+            primary = LicensePageInFlow() ? Str("button.next") : PrimaryVerb();
+            shield = !LicensePageInFlow() && NeedsElevation();
             primaryEnabled = InputsValid() && pathOk_ && !pathDirty_;
             break;
         case Page::License:
@@ -556,7 +621,8 @@ void MainWindow::UpdateFooter() {
             secondary = Str("button.back");
             primary = PrimaryVerb();
             shield = NeedsElevation();
-            primaryEnabled = LicenseAccept().IsChecked().Value() && pathOk_;
+            primaryEnabled = (LicenseInline() || LicenseAccept().IsChecked().Value()) && pathOk_ && !pathDirty_ &&
+                             (!HasInputsPage() || InputsValid());
             break;
         case Page::Progress:
             primaryVisible = false;
@@ -591,12 +657,12 @@ void MainWindow::OnPrimaryClick(IInspectable const&, RoutedEventArgs const&) {
     switch (page_) {
         case Page::Welcome:
             if (HasInputsPage()) ShowPage(Page::Inputs);
-            else if (ShowsLicense()) ShowPage(Page::License);
+            else if (LicensePageInFlow()) ShowPage(Page::License);
             else StartInstall();
             break;
         case Page::Inputs:
             if (!InputsValid()) break;
-            if (ShowsLicense()) ShowPage(Page::License);
+            if (LicensePageInFlow()) ShowPage(Page::License);
             else StartInstall();
             break;
         case Page::License: StartInstall(); break;
@@ -618,7 +684,7 @@ void MainWindow::OnSecondaryClick(IInspectable const&, RoutedEventArgs const&) {
             if (CanRepair()) StartRepair();
             break;
         case Page::Inputs: ShowPage(Page::Welcome); break;
-        case Page::License: ShowPage(HasInputsPage() ? Page::Inputs : Page::Welcome); break;
+        case Page::License: ShowPage(LicenseInline() ? licenseReturn_ : HasInputsPage() ? Page::Inputs : Page::Welcome); break;
         default: break;
     }
 }
@@ -765,6 +831,12 @@ void MainWindow::OnUpdateCheck(const Value& m) {
     UpdateInfo().Message(Fmt("modify.updateAvailable", {m["version"].asWide()}));
     UpdateInfo().IsOpen(true);
     SetVisible(UpdateInfo(), page_ == Page::Welcome);
+    // The answer arrives after the page is laid out; with a banner and several options the notice can end up below the
+    // fold, where nobody would see the offer.
+    if (page_ == Page::Welcome) {
+        UpdateInfo().UpdateLayout();
+        UpdateInfo().StartBringIntoView();
+    }
 }
 
 void MainWindow::OnUpdateClick(IInspectable const&, RoutedEventArgs const&) {

@@ -220,5 +220,12 @@
   "result.noProblems.title": "Nenhum problema encontrado",
   "prereq.officialDownload": "{0} é necessário e será baixado da Microsoft e instalado.",
 
+  "link.website": "Site",
+  "link.releaseNotes": "Notas de versão",
+  "link.support": "Ajuda e suporte",
+  "license.inline": "Ao instalar, você aceita os {0}.",
+  "license.inlineLink": "termos de licença",
+  "license.inlineSubtitle": "Ao instalar, você aceita estes termos de licença.",
+
   "usage": "Uso: Setup.exe [opções]\n\n/quiet  Instalar sem nenhuma interface do usuário\n/passive  Mostrar apenas o progresso, sem perguntas\n/uninstall  Remover o aplicativo instalado\n/modify  Alterar as opções do aplicativo instalado (com /quiet: sem perguntas)\n/repair  Verificar os arquivos instalados e restaurar os danificados\n/dir <caminho>  Local de instalação\n/scope user|machine  Instalar para o usuário atual ou para todos os usuários\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Ativar ou desativar uma opção definida pelo pacote\n/input <id>=<valor>  Valor de uma configuração definida pelo pacote (pode ser repetido)\n/variant <id>  Variante do pacote (por exemplo, runtimes compartilhados ou independentes)\n/remove-user-data  Desinstalação: excluir também as configurações e os dados\n/relaunch  Iniciar o aplicativo após uma instalação silenciosa (atualizações no aplicativo)\n/check-update  Código de saída 18 se houver uma versão mais recente publicada; 0 se não houver\n/install-update  Baixar, verificar e instalar a versão mais recente (com /passive ou /quiet: sem perguntas)\nAs opções do Inno Setup e do NSIS (/VERYSILENT, /SUPPRESSMSGBOXES, /DIR=, /TASKS=, /D=...) são aceitas.\n/log <arquivo>  Gravar o log neste arquivo\n/lang <idioma>  Idioma da interface (en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT)\n/ui auto|winui|win32  Tecnologia da interface (diagnóstico)\n\nO código de saída 0 indica êxito; consulte a documentação para os demais códigos. 3010 indica êxito, mas é preciso reiniciar o PC para concluir."
 }

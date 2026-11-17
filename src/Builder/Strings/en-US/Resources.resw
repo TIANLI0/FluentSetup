@@ -928,4 +928,26 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="ConfigTypeString.Content" xml:space="preserve"><value>Text</value></data>
   <data name="ConfigTypeNumber.Content" xml:space="preserve"><value>Number</value></data>
   <data name="ConfigTypeBool.Content" xml:space="preserve"><value>true / false</value></data>
+  <data name="TitleBuildButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Build installer (F5)</value></data>
+  <data name="TitleBuildButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Build installer</value></data>
+  <data name="AppSupportUrlBox.Header" xml:space="preserve"><value>Support URL</value></data>
+  <data name="AppSupportUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="AppReleaseNotesUrlBox.Header" xml:space="preserve"><value>Release notes URL</value></data>
+  <data name="AppReleaseNotesUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="AppLinksSection.Text" xml:space="preserve"><value>Links</value></data>
+  <data name="AppLinksDescription.Text" xml:space="preserve"><value>Shown in the installer next to the website, e.g. your GitHub repository. Leave the label empty to show the site's name.</value></data>
+  <data name="AppLinksAdd.Text" xml:space="preserve"><value>Add link</value></data>
+  <data name="AppLinksEmpty.Text" xml:space="preserve"><value>No links (up to 4).</value></data>
+  <data name="AppLinkUrlBox.Header" xml:space="preserve"><value>URL</value></data>
+  <data name="AppLinkUrlBox.PlaceholderText" xml:space="preserve"><value>https://</value></data>
+  <data name="AppLinkLabelBox.Header" xml:space="preserve"><value>Label per language (en-US = text; empty = site name)</value></data>
+  <data name="AppLinkLabelBox.PlaceholderText" xml:space="preserve"><value>en-US = Community</value></data>
+  <data name="AppearanceLicenseStyleTitle.Text" xml:space="preserve"><value>How the license is accepted</value></data>
+  <data name="AppearanceLicenseStyleDescription.Text" xml:space="preserve"><value>A separate license page, or one line with a link on the first page.</value></data>
+  <data name="AppearanceLicenseStyleCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>How the license is accepted</value></data>
+  <data name="LicenseStylePage.Content" xml:space="preserve"><value>License page with an "I accept" box</value></data>
+  <data name="LicenseStyleInline.Content" xml:space="preserve"><value>One step: "By installing, you accept the license terms" on the first page</value></data>
+  <data name="BuildRunSetup.Content" xml:space="preserve"><value>Run setup</value></data>
+  <data name="BuildInspect.Content" xml:space="preserve"><value>Inspect</value></data>
+  <data name="Build_RunSetupErrorTitle" xml:space="preserve"><value>Setup could not be started</value></data>
 </root>

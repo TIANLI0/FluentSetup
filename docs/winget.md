@@ -50,6 +50,8 @@ the SHA-256.
 | `Publisher`, `PackageName` | `app.publisher` (required, at least 2 characters), `app.name` |
 | `ShortDescription`, `Description` | `--short-description` or `app.description` (see above); `Description` is the full `app.description` when it is longer. |
 | `PackageUrl` | `app.website` |
+| `PublisherSupportUrl` | `app.supportUrl` (left out when empty) |
+| `ReleaseNotesUrl` | `--release-notes-url`, else `app.releaseNotesUrl`, else (with `--github`) the release page |
 | `License` | `--license`; otherwise MIT, Apache-2.0, GPL, LGPL, AGPL, MPL-2.0, BSD, BSL-1.0 or Unlicense when the package's license text (`ui.license`) is one of them, else `Proprietary`. |
 | `Architecture` | `output.architecture` of the build: `x64` or `arm64` |
 | `Scope` | `install.scope`: `user` or `machine` give one installer; `userOrMachine` gives two (same file), one per scope. |

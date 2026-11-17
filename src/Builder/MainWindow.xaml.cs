@@ -90,6 +90,14 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>The title bar's Build button (F5): the Build page's build, with that page shown for its progress.</summary>
+    private void OnBuildClick(object sender, RoutedEventArgs e)
+    {
+        if (!VM.CanBuild) return;
+        Navigate("build");
+        VM.BuildCommand.Execute(null);
+    }
+
     private void OnPaneToggleRequested(TitleBar sender, object args) => Nav.IsPaneOpen = !Nav.IsPaneOpen;
 
     private void OnNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)

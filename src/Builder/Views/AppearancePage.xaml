@@ -133,6 +133,20 @@
                 <Border Style="{StaticResource RowCardStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE73A;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppearanceLicenseStyleTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="AppearanceLicenseStyleDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            <TextBlock Text="{x:Bind VM.Errors.UiLicenseStyle, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UiLicenseStyle), Mode=OneWay}" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.LicenseStyleIndex, Mode=TwoWay}" x:Uid="AppearanceLicenseStyleCombo">
+                            <ComboBoxItem x:Uid="LicenseStylePage" /><ComboBoxItem x:Uid="LicenseStyleInline" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                         <FontIcon Glyph="&#xF2B7;" Style="{StaticResource RowIconStyle}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock x:Uid="AppearanceLocalizationTitle" Style="{StaticResource RowTitleStyle}" />

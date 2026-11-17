@@ -2,8 +2,11 @@
 
 #include "Common/error.h"
 #include "Common/hash.h"
+#include "Common/parallel.h"
 #include "Common/path.h"
 #include "Common/text.h"
+
+#include <atomic>
 
 namespace fsetup::fs {
 
@@ -163,29 +166,31 @@ DWORD DeleteFileForce(const std::wstring& p) {
 bool DeleteTree(const std::wstring& dir) {
     if (!Exists(dir)) return true;
     if (IsLinkLike(dir)) return ::RemoveDirectoryW(path::Long(dir).c_str()) != FALSE;
-    bool ok = true;
-    WIN32_FIND_DATAW fd{};
-    {
-        UniqueFind f(::FindFirstFileExW(path::Long(path::Join(dir, L"*")).c_str(), FindExInfoBasic, &fd,
-                                        FindExSearchNameMatch, nullptr, 0));
-        if (f.valid()) {
-            do {
-                if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
-                const std::wstring child = path::Join(dir, fd.cFileName);
-                if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-                    if (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
-                        ok &= ::RemoveDirectoryW(path::Long(child).c_str()) != FALSE;  // unlink, never recurse
-                    } else {
-                        ok &= DeleteTree(child);
-                    }
-                } else {
-                    ok &= DeleteFileForce(child) == 0;
-                }
-            } while (::FindNextFileW(f.get(), &fd));
-        }
+    // List the tree first (directories breadth-first, so every child comes after its parent), delete the files from
+    // several threads (per-file latency dominates: a backup folder holds a whole app version), then the directories
+    // deepest first. Directory links are unlinked, never entered.
+    std::vector<std::wstring> dirs{dir}, files, links;
+    for (size_t d = 0; d < dirs.size(); ++d) {
+        WIN32_FIND_DATAW fd{};
+        UniqueFind f(::FindFirstFileExW(path::Long(path::Join(dirs[d], L"*")).c_str(), FindExInfoBasic, &fd,
+                                        FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
+        if (!f.valid()) continue;
+        do {
+            if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+            std::wstring child = path::Join(dirs[d], fd.cFileName);
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) files.push_back(std::move(child));
+            else if (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) links.push_back(std::move(child));
+            else dirs.push_back(std::move(child));
+        } while (::FindNextFileW(f.get(), &fd));
     }
-    ok &= ::RemoveDirectoryW(path::Long(dir).c_str()) != FALSE;
-    return ok;
+    std::atomic<bool> ok{true};
+    ParallelFor(files.size(), [&](size_t i) {
+        if (DeleteFileForce(files[i]) != 0) ok = false;
+    }, files.size() >= 32 ? IoThreads() : 1);
+    bool rest = true;
+    for (const auto& l : links) rest &= ::RemoveDirectoryW(path::Long(l).c_str()) != FALSE;
+    for (auto it = dirs.rbegin(); it != dirs.rend(); ++it) rest &= ::RemoveDirectoryW(path::Long(*it).c_str()) != FALSE;
+    return ok && rest;
 }
 
 }  // namespace fsetup::fs

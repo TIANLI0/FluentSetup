@@ -123,7 +123,7 @@ index and the file's offset inside the **decoded** stream.
 | Payload, `"normal"` (default) | 12 | library defaults for the level |
 | Payload, `"max"` | 19 | `windowLog = 27`, long-distance matching enabled |
 | WinUI front-end stream | 19 | `windowLog = 27`, long-distance matching enabled |
-| Header | 19 | one-shot `Compressor(19).Wrap` |
+| Header | 12 (19 with `"max"`) | one-shot `Compressor(level).Wrap`; most of a large header is incompressible file hashes |
 | Any payload stream that holds a single file ≥ 16 MiB | as above | `nbWorkers = min(4, processor count)` |
 
 The native decoder for streams (`StreamReader`) is a streaming `ZSTD_DStream` with `ZSTD_d_windowLogMax = 27`: frames
@@ -145,9 +145,9 @@ bytes (at most 64 MiB); if the frame declares a content size it must equal `head
 
 ## 4. Header JSON
 
-UTF-8 JSON, written by `HeaderWriter.Write` with `Utf8JsonWriter` (relaxed escaping) and compressed at level 19. Paths
-inside the header use `\` as separator. `fluentsetup inspect <Setup.exe> --json` prints the decoded header under the
-`header` key; `--verify` additionally checks every stream hash.
+UTF-8 JSON, written by `HeaderWriter.Write` with `Utf8JsonWriter` (relaxed escaping) and compressed at level 12 (19 for
+`"max"`). Paths inside the header use `\` as separator. `fluentsetup inspect <Setup.exe> --json` prints the decoded
+header under the `header` key; `--verify` additionally checks every stream hash.
 
 ### 4.1 Example (trimmed)
 

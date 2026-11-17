@@ -202,10 +202,10 @@ internal sealed partial class InnoSetupImporter(ImportContext ctx)
         };
         var cosmetic = new List<string>();
         var entry = new List<string>();
-        var websiteFrom = new[] { "AppPublisherURL", "AppSupportURL", "AppUpdatesURL" }.FirstOrDefault(k => Setup(k) is { Length: > 0 });
+        string[] urlDirectives = ["AppPublisherURL", "AppSupportURL", "AppUpdatesURL"];
         foreach (var (key, (_, at)) in _setup)
         {
-            if (known.Contains(key) || key.Equals(websiteFrom, StringComparison.OrdinalIgnoreCase)) continue;
+            if (known.Contains(key) || urlDirectives.Contains(key, StringComparer.OrdinalIgnoreCase)) continue;
             if (CosmeticDirectives.Contains(key)) cosmetic.Add($"{key} (line {at.Line})");
             else if (UninstallEntryDirectives.Contains(key, StringComparer.OrdinalIgnoreCase)) entry.Add($"{key} (line {at.Line})");
             else ctx.Info(at, $"[Setup] {key} is not imported (no FluentSetup equivalent).");
@@ -421,8 +421,14 @@ internal sealed partial class InnoSetupImporter(ImportContext ctx)
         if (Setup("AppVersion") is { } version) ImportHelpers.SetVersion(ctx, version, SetupAt("AppVersion"), "AppVersion");
         else ctx.Manual(ctx.Script, "The script has no AppVersion; app.version is 1.0.0.", "app.version");
         if (Setup("AppPublisher") is { } pub) { p.App.Publisher = Constants(pub); ctx.Info(SetupAt("AppPublisher"), "AppPublisher → app.publisher", "app.publisher"); }
+        // AppPublisherURL is the website (the support or updates URL if it is missing, as in Settings > Apps before);
+        // AppSupportURL and AppUpdatesURL keep their own meaning: the installer's help and release-notes links.
         var url = new[] { "AppPublisherURL", "AppSupportURL", "AppUpdatesURL" }.FirstOrDefault(k => Setup(k) is { Length: > 0 });
         if (url is not null) ImportHelpers.SetWebsite(ctx, Setup(url)!, SetupAt(url), url);
+        if (Setup("AppSupportURL") is { Length: > 0 } support)
+            ImportHelpers.SetUrl(ctx, support, SetupAt("AppSupportURL"), "AppSupportURL", "app.supportUrl", v => p.App.SupportUrl = v);
+        if (Setup("AppUpdatesURL") is { Length: > 0 } updates)
+            ImportHelpers.SetUrl(ctx, updates, SetupAt("AppUpdatesURL"), "AppUpdatesURL", "app.releaseNotesUrl", v => p.App.ReleaseNotesUrl = v);
         if (Setup("AppComments") is { } comments) { p.App.Description = Constants(comments); ctx.Info(SetupAt("AppComments"), "AppComments → app.description", "app.description"); }
 
         // Inno's uninstall key is "<AppId>_is1" (AppId defaults to AppName); "{{" in AppId is a literal brace.

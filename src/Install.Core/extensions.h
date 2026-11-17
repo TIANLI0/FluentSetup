@@ -305,7 +305,13 @@ bool ParseRegistryNumber(const std::wstring& text, bool qword, uint64_t& out);
 std::wstring ExpandSystemTemplate(const std::wstring& tpl);
 
 // Display names of programs that use files of the installation (Windows Restart Manager), for the first page.
-std::vector<std::wstring> LockingApps(const std::vector<std::wstring>& files);
+std::vector<std::wstring> LockingApps(const std::wstring& dir, const std::vector<std::wstring>& files);
+
+// Registers with a Restart Manager session what an operation on the installation in `dir` must check: the running
+// programs whose executable lies in `dir` (by process, which stays fast for any number of files) and a bounded selection
+// of `files` (absolute paths; programs and libraries first). `skipImage` (absolute, may be empty) is never included,
+// e.g. the uninstaller that is waiting for the uninstall. False if there was nothing to register or it failed.
+bool RegisterWithRestartManager(DWORD session, const std::wstring& dir, const std::vector<std::wstring>& files, const std::wstring& skipImage);
 
 // "text" or { "en-US": "text", ... } (each up to 256 characters).
 LocalizedText ParseLocalizedText(const json::Value& v);

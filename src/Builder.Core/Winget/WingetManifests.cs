@@ -194,7 +194,10 @@ public static partial class WingetManifests
             ? website : repo is not null ? $"https://github.com/{repo}" : null;
         var publisherUrl = Link(options.PublisherUrl, "--publisher-url") ?? (repo is not null ? $"https://github.com/{repo.Split('/')[0]}" : null);
         var licenseUrl = Link(options.LicenseUrl, "--license-url");
-        var releaseNotesUrl = Link(options.ReleaseNotesUrl, "--release-notes-url") ?? (repo is not null ? $"https://github.com/{repo}/releases/tag/v{Uri.EscapeDataString(version)}" : null);
+        // app.releaseNotesUrl / app.supportUrl from the package when the command line does not say otherwise.
+        var releaseNotesUrl = Link(options.ReleaseNotesUrl, "--release-notes-url") ?? Link(Str(app, "releaseNotesUrl"), "app.releaseNotesUrl")
+            ?? (repo is not null ? $"https://github.com/{repo}/releases/tag/v{Uri.EscapeDataString(version)}" : null);
+        var supportUrl = Link(Str(app, "supportUrl"), "app.supportUrl");
 
         // ---- license, descriptions, tags -------------------------------------------------------------------------
         string license;
@@ -261,6 +264,7 @@ public static partial class WingetManifests
         y.Value("PackageLocale", options.Locale);
         y.Value("Publisher", publisher.Trim());
         y.Value("PublisherUrl", publisherUrl);
+        y.Value("PublisherSupportUrl", supportUrl);
         y.Value("PackageName", name.Trim());
         y.Value("PackageUrl", packageUrl);
         y.Value("License", license);

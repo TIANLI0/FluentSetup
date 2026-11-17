@@ -220,5 +220,12 @@
   "result.noProblems.title": "Nessun problema rilevato",
   "prereq.officialDownload": "{0} è necessario e verrà scaricato da Microsoft e installato.",
 
+  "link.website": "Sito web",
+  "link.releaseNotes": "Note sulla versione",
+  "link.support": "Guida e supporto",
+  "license.inline": "Installando, accetti i {0}.",
+  "license.inlineLink": "termini di licenza",
+  "license.inlineSubtitle": "Installando, accetti questi termini di licenza.",
+
   "usage": "Utilizzo: Setup.exe [opzioni]\n\n/quiet  Installa senza alcuna interfaccia utente\n/passive  Mostra solo lo stato di avanzamento, senza domande\n/uninstall  Rimuove l'app installata\n/modify  Modifica le opzioni dell'app installata (con /quiet: senza domande)\n/repair  Verifica i file installati e ripristina quelli danneggiati\n/dir <percorso>  Percorso di installazione\n/scope user|machine  Installa per l'utente corrente o per tutti gli utenti\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Attiva o disattiva un'opzione definita dal pacchetto\n/input <id>=<valore>  Valore di un'impostazione definita dal pacchetto (ripetibile)\n/variant <id>  Variante del pacchetto (ad esempio runtime condivisi o autonomi)\n/remove-user-data  Disinstallazione: elimina anche impostazioni e dati\n/relaunch  Avvia l'app dopo un'installazione invisibile (aggiornamenti dall'app)\n/check-update  Codice di uscita 18 se è pubblicata una versione più recente, altrimenti 0\n/install-update  Scarica, verifica e installa la versione più recente (con /passive o /quiet: senza domande)\nSono accettate le opzioni di Inno Setup e NSIS (/VERYSILENT, /SUPPRESSMSGBOXES, /DIR=, /TASKS=, /D=...).\n/log <file>  Scrive il log in questo file\n/lang <lingua>  Lingua dell'interfaccia (en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT)\n/ui auto|winui|win32  Tecnologia dell'interfaccia (diagnostica)\n\nIl codice di uscita 0 indica che l'operazione è riuscita; per gli altri codici consulta la documentazione. 3010 indica che l'operazione è riuscita, ma per completarla è necessario riavviare il PC."
 }

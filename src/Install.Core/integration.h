@@ -118,8 +118,9 @@ public:
     RestartManagerSession(const RestartManagerSession&) = delete;
     RestartManagerSession& operator=(const RestartManagerSession&) = delete;
     ~RestartManagerSession();
-    // Registers the files; true if a session could be started.
-    bool Start(const std::vector<std::wstring>& files);
+    // Registers the app's running programs and (a bounded selection of) its files, see RegisterWithRestartManager;
+    // true if a session could be started.
+    bool Start(const std::wstring& dir, const std::vector<std::wstring>& files, const std::wstring& skipImage = {});
     [[nodiscard]] std::vector<std::wstring> Apps() const;
     // Shuts the programs down (politely, then forced); returns the names still running.
     std::vector<std::wstring> Shutdown();

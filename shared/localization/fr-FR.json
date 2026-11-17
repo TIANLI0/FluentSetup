@@ -220,5 +220,12 @@
   "result.noProblems.title": "Aucun problème détecté",
   "prereq.officialDownload": "{0} est nécessaire : il sera téléchargé depuis le site de Microsoft puis installé.",
 
+  "link.website": "Site web",
+  "link.releaseNotes": "Notes de version",
+  "link.support": "Aide et support",
+  "license.inline": "En installant, vous acceptez les {0}.",
+  "license.inlineLink": "termes du contrat de licence",
+  "license.inlineSubtitle": "En installant, vous acceptez ces termes du contrat de licence.",
+
   "usage": "Utilisation : Setup.exe [options]\n\n/quiet  Installer sans aucune interface utilisateur\n/passive  Afficher uniquement la progression, sans poser de questions\n/uninstall  Supprimer l'application installée\n/modify  Modifier les options de l'application installée (avec /quiet : sans questions)\n/repair  Vérifier les fichiers installés et restaurer ceux qui sont endommagés\n/dir <chemin>  Emplacement d'installation\n/scope user|machine  Installer pour l'utilisateur actuel ou pour tous les utilisateurs\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Activer ou désactiver une option définie par le package\n/input <id>=<valeur>  Valeur d'un paramètre défini par le package (peut être répété)\n/variant <id>  Variante du package (par exemple runtimes partagés ou autonomes)\n/remove-user-data  Désinstallation : supprimer aussi les paramètres et les données\n/relaunch  Lancer l'application après une installation silencieuse (mises à jour intégrées)\n/check-update  Code de sortie 18 si une version plus récente est publiée, 0 sinon\n/install-update  Télécharger, vérifier et installer la dernière version (avec /passive ou /quiet : sans questions)\nLes commutateurs d'Inno Setup et de NSIS (/VERYSILENT, /SUPPRESSMSGBOXES, /DIR=, /TASKS=, /D=...) sont acceptés.\n/log <fichier>  Écrire le journal dans ce fichier\n/lang <langue>  Langue de l'interface (en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT)\n/ui auto|winui|win32  Technologie de l'interface (diagnostic)\n\nLe code de sortie 0 indique la réussite ; consultez la documentation pour les autres codes. 3010 indique la réussite, mais le PC doit être redémarré pour terminer."
 }

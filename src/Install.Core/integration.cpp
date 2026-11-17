@@ -878,19 +878,11 @@ RestartManagerSession::~RestartManagerSession() {
     if (active_) ::RmEndSession(session_);
 }
 
-bool RestartManagerSession::Start(const std::vector<std::wstring>& files) {
-    if (files.empty()) return false;
+bool RestartManagerSession::Start(const std::wstring& dir, const std::vector<std::wstring>& files, const std::wstring& skipImage) {
     WCHAR key[CCH_RM_SESSION_KEY + 1] = {};
     if (::RmStartSession(&session_, 0, key) != ERROR_SUCCESS) return false;
     active_ = true;
-    std::vector<LPCWSTR> list;
-    list.reserve(files.size());
-    for (const auto& f : files) list.push_back(f.c_str());
-    for (size_t i = 0; i < list.size(); i += 1000) {
-        const UINT n = static_cast<UINT>(std::min<size_t>(1000, list.size() - i));
-        if (::RmRegisterResources(session_, n, list.data() + i, 0, nullptr, 0, nullptr) != ERROR_SUCCESS) return false;
-    }
-    return true;
+    return RegisterWithRestartManager(session_, dir, files, skipImage);
 }
 
 std::vector<std::wstring> RestartManagerSession::Apps() const {

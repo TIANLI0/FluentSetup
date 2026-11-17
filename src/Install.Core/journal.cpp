@@ -185,6 +185,11 @@ RollbackStats Rollback(const std::vector<json::Value>& entries, const std::wstri
             const bool shortcutOrigin = IsAllowedShortcutPath(from, scope);
             if ((!insideDir(from) && !shortcutOrigin) || !path::IsSameOrUnder(to, workDir)) continue;
             if (!fs::Exists(to)) continue;  // the move never happened
+            // A whole folder that was moved away: an empty folder of the same name (re-created for the new files, or by
+            // a program) would block the move back, which cannot replace a directory.
+            if (fs::IsDirectory(to) && fs::IsDirectory(from) && !fs::IsLinkLike(from) && fs::IsDirectoryEmpty(from)) {
+                ::RemoveDirectoryW(path::Long(from).c_str());
+            }
             note(retry([&] { return fs::Move(to, from, true); }) == 0, L"backup", from);
         } else if (op == "mkdir") {
             const std::wstring p = e["path"].asWide();

@@ -306,6 +306,32 @@ bool Controller::ReadFrontendFile(const std::wstring& relativePath, std::vector<
     return true;
 }
 
+std::vector<Controller::Link> Controller::Links() const {
+    std::vector<Link> links;
+    const auto add = [&](std::wstring label, const std::wstring& url) {
+        if (url.empty() || !install::IsWebUrl(url)) return;
+        for (const auto& l : links) {
+            if (EqualsIgnoreCase(l.url, url)) return;
+        }
+        if (label.empty()) label = install::LinkLabelFromUrl(url);
+        links.push_back({std::move(label), url});
+    };
+    add(strings_.Get("link.website"), pkg_.website);
+    for (const auto& l : pkg_.links) add(l.label.Get(strings_.Language(), L""), l.url);
+    add(strings_.Get("link.releaseNotes"), pkg_.releaseNotesUrl);
+    add(strings_.Get("link.support"), pkg_.supportUrl);
+    return links;
+}
+
+bool Controller::OpenLink(size_t index) const {
+    const auto links = Links();
+    if (index >= links.size()) return false;
+    log::Info(L"Opening %s", links[index].url.c_str());
+    // Through Explorer when elevated (the browser must not run as administrator); off the UI message loop.
+    std::thread([url = links[index].url] { ShellOpenAsUser(url, L""); }).detach();
+    return true;
+}
+
 json::Value Controller::Hello(const std::wstring& iconPath, const std::wstring& bannerPath) const {
     install::Engine engine(pkg_, container_);
     const install::InstallOptions defaults = DefaultOptions();
@@ -325,6 +351,14 @@ json::Value Controller::Hello(const std::wstring& iconPath, const std::wstring& 
     app.set("version", mode_ != Mode::Install && existing_.product ? existing_.product->version : pkg_.version);
     app.set("iconPath", iconPath);
     h.set("app", app);
+    json::Value links = json::Value::MakeArray();
+    for (const auto& l : Links()) {
+        json::Value v;
+        v.set("label", l.label);
+        v.set("url", l.url);  // shown as a tooltip; opening goes through "openLink" with the index
+        links.push(v);
+    }
+    h.set("links", links);
 
     // Who signed the running file: "Verified publisher: X" or "Unknown publisher" on the first page.
     std::call_once(signerOnce_, [this] { signer_ = archive::GetSignerInfo(path::ModulePath()); });
@@ -345,6 +379,9 @@ json::Value Controller::Hello(const std::wstring& iconPath, const std::wstring& 
     ui.set("welcomeText", u["welcomeText"].asString());
     ui.set("finishText", u["finishText"].asString());
     ui.set("bannerPath", bannerPath);
+    // "inline": the first page says that installing accepts the license (with a link to read it) instead of a license
+    // page with an "I accept" box.
+    ui.set("licenseStyle", u["licenseStyle"].asString() == "inline" ? "inline" : "page");
     // The license is shown before a first install, or before every install when the package says so (e.g. an agreement
     // that changes between versions).
     if (mode_ == Mode::Install && (!existing_.product || u["licenseMode"].asString() == "always")) {
@@ -469,9 +506,9 @@ json::Value Controller::Hello(const std::wstring& iconPath, const std::wstring& 
         if (const auto record = PreviousRecord()) {
             std::vector<std::wstring> files;
             for (const auto& f : record->files) {
-                if (files.size() < 4000 && IsLockableFile(f.path)) files.push_back(path::Join(record->installDir, f.path));
+                if (IsLockableFile(f.path)) files.push_back(path::Join(record->installDir, f.path));
             }
-            for (const auto& n : install::LockingApps(files)) locking += (locking.empty() ? L"" : L", ") + n;
+            for (const auto& n : install::LockingApps(record->installDir, files)) locking += (locking.empty() ? L"" : L", ") + n;
         }
     }
     h.set("lockingApps", locking);

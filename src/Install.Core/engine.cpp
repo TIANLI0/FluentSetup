@@ -2,6 +2,7 @@
 
 #include "Common/fs.h"
 #include "Common/log.h"
+#include "Common/parallel.h"
 #include "Common/security.h"
 #include "Common/text.h"
 #include "Common/version.h"
@@ -13,6 +14,8 @@
 #include <shlobj.h>
 
 #include <algorithm>
+#include <system_error>
+#include <thread>
 #include <unordered_set>
 
 namespace fsetup::install {
@@ -301,6 +304,213 @@ bool ProbeWritable(const std::wstring& dir) {
     return true;
 }
 
+// ---- bulk file operations -------------------------------------------------------------------------------------
+// Installing, replacing and removing thousands of files is bound by per-file latency in the file system and its
+// filters (virus scanners), not by CPU or bandwidth. These helpers issue the independent calls from several threads.
+// They never touch the journal: callers write every journal entry on their own thread, before the change it covers.
+
+// The distinct parent directories of `rels` (relative paths), grouped by depth, shallowest first.
+std::vector<std::vector<std::wstring>> ParentDirsByDepth(const std::vector<const std::wstring*>& rels) {
+    std::vector<std::vector<std::wstring>> levels;
+    std::unordered_set<std::wstring> seen;
+    for (const std::wstring* rel : rels) {
+        for (size_t p = rel->rfind(L'\\'); p != std::wstring::npos && p > 0; p = rel->rfind(L'\\', p - 1)) {
+            std::wstring d = rel->substr(0, p);
+            if (!seen.insert(ToLower(d)).second) break;  // this one, and so every ancestor, is already listed
+            const size_t depth = static_cast<size_t>(std::count(d.begin(), d.end(), L'\\'));
+            if (levels.size() <= depth) levels.resize(depth + 1);
+            levels[depth].push_back(std::move(d));
+        }
+    }
+    return levels;
+}
+
+// Creates root\<d> for every directory of `levels` (parents first). Directories that already exist must be real
+// directories, not links (`root` itself has been checked by the caller). Newly created ones, outermost first, are
+// appended to `created`.
+void CreateDirectoryTree(const std::wstring& root, const std::vector<std::vector<std::wstring>>& levels, std::vector<std::wstring>* created) {
+    for (const auto& level : levels) {
+        std::vector<uint8_t> made(level.size(), 0);
+        ParallelFor(level.size(), [&](size_t i) {
+            const std::wstring d = path::Join(root, level[i]);
+            if (::CreateDirectoryW(path::Long(d).c_str(), nullptr)) {
+                made[i] = 1;
+                return;
+            }
+            const DWORD e = ::GetLastError();
+            if (e != ERROR_ALREADY_EXISTS) ThrowWin32(L"CreateDirectory failed: " + d, e);
+            const DWORD attrs = fs::Attributes(d);
+            if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY)) ThrowWin32(L"CreateDirectory failed: " + d, e);
+            if (fs::IsLinkLike(d)) throw Failure(ErrorCode::UnsafePath, L"Link inside the install directory: " + level[i]);
+        }, level.size() >= 8 ? IoThreads() : 1);
+        if (created) {
+            for (size_t i = 0; i < level.size(); ++i) {
+                if (made[i]) created->push_back(path::Join(root, level[i]));
+            }
+        }
+    }
+}
+
+// Lower-cased relative directories of `levels` that exist under `root` and are reached without a link. `root` itself
+// has been checked by the caller; a directory is safe when its parent is and it is not a link itself.
+std::unordered_set<std::wstring> SafeDirectories(const std::wstring& root, const std::vector<std::vector<std::wstring>>& levels) {
+    std::unordered_set<std::wstring> safe;
+    for (const auto& level : levels) {
+        std::vector<uint8_t> ok(level.size(), 0);
+        ParallelFor(level.size(), [&](size_t i) {
+            const size_t cut = level[i].rfind(L'\\');
+            if (cut != std::wstring::npos && !safe.count(ToLower(level[i].substr(0, cut)))) return;  // read-only here
+            const std::wstring d = path::Join(root, level[i]);
+            ok[i] = fs::IsDirectory(d) && !fs::IsLinkLike(d);
+        }, level.size() >= 8 ? IoThreads() : 1);
+        for (size_t i = 0; i < level.size(); ++i) {
+            if (ok[i]) safe.insert(ToLower(level[i]));
+        }
+    }
+    return safe;
+}
+
+// Appends to `out` the outermost directories under root\rel (relative to root) whose whole subtree belongs to the app:
+// every file in it is in `ownedFiles`, every directory in `knownDirs` (both lower-case relative paths) and nothing is a
+// link. Returns whether root\rel itself is such a directory (then nothing below it is appended). The root and its work
+// folder are never candidates.
+bool CollectOwnedSubtrees(const std::wstring& root, const std::wstring& rel, const std::unordered_set<std::wstring>& ownedFiles,
+                          const std::unordered_set<std::wstring>& knownDirs, std::vector<std::wstring>& out) {
+    bool owned = !rel.empty() && knownDirs.count(ToLower(rel)) > 0;
+    std::vector<std::wstring> inner;
+    WIN32_FIND_DATAW fd{};
+    UniqueFind f(::FindFirstFileExW(path::Long(path::Join(root, rel.empty() ? L"*" : rel + L"\\*")).c_str(), FindExInfoBasic, &fd,
+                                    FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
+    if (!f.valid()) return false;
+    do {
+        if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+        const std::wstring child = rel.empty() ? std::wstring(fd.cFileName) : rel + L"\\" + fd.cFileName;
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+            if (!ownedFiles.count(ToLower(child))) owned = false;
+        } else if ((fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) || (rel.empty() && EqualsIgnoreCase(fd.cFileName, kWorkDirName))) {
+            owned = false;
+        } else if (CollectOwnedSubtrees(root, child, ownedFiles, knownDirs, inner)) {
+            inner.push_back(child);
+        } else {
+            owned = false;
+        }
+    } while (::FindNextFileW(f.get(), &fd));
+    if (owned) return true;  // moves as a whole, with everything below it
+    out.insert(out.end(), std::make_move_iterator(inner.begin()), std::make_move_iterator(inner.end()));
+    return false;
+}
+
+// Moves the directories of `root` that belong to the app entirely (see CollectOwnedSubtrees) to the same relative
+// place under `to`, one rename each instead of one per file (each costs the file system's per-file latency, which
+// dominates removing or replacing an app). Every move is journaled ("backup") first. A directory that cannot be moved,
+// typically because a program holds a file in it open, stays: the caller then moves its files one by one.
+void MoveOwnedSubtrees(const std::wstring& root, const std::wstring& to, const std::unordered_set<std::wstring>& ownedFiles,
+                       const std::unordered_set<std::wstring>& knownDirs, Journal& journal) {
+    std::vector<std::wstring> dirs;
+    CollectOwnedSubtrees(root, L"", ownedFiles, knownDirs, dirs);
+    if (dirs.empty()) return;
+    std::vector<const std::wstring*> rels;
+    for (const auto& d : dirs) rels.push_back(&d);
+    CreateDirectoryTree(to, ParentDirsByDepth(rels), nullptr);
+    for (const auto& d : dirs) journal.Backup(path::Join(root, d), path::Join(to, d));
+    journal.Flush();
+    size_t moved = 0;
+    for (const auto& d : dirs) {
+        if (const DWORD e = fs::Move(path::Join(root, d), path::Join(to, d))) {
+            log::Info(L"Folder %s is moved file by file (error %lu)", d.c_str(), e);
+        } else {
+            ++moved;
+        }
+    }
+    log::Info(L"Moved %zu of %zu folders as a whole", moved, dirs.size());
+}
+
+// Creates the payload's files a little ahead of the decoder, on a few threads, so the time the file system takes to
+// create each file overlaps with decoding and writing the previous ones. Paths are taken in order; at most kAhead
+// handles are open but not yet taken. Every path must have been journaled ("place") before the opener is created.
+class AheadOpener {
+public:
+    struct Request {
+        const std::wstring* path;
+        uint64_t size;
+    };
+
+    explicit AheadOpener(std::vector<Request> requests) : requests_(std::move(requests)), slots_(requests_.size()) {
+        const unsigned threads = static_cast<unsigned>(std::min<size_t>(IoThreads(), requests_.size()));
+        try {
+            for (unsigned t = 0; t < threads && requests_.size() > 1; ++t) threads_.emplace_back([this] { Run(); });
+        } catch (const std::system_error&) {
+            // Fewer (or no) helper threads: Take() opens whatever no thread did.
+        }
+    }
+    ~AheadOpener() {
+        stop_ = true;
+        taken_.store(SIZE_MAX / 2);
+        taken_.notify_all();
+        for (auto& t : threads_) t.join();
+        for (auto& s : slots_) {
+            if (s.handle != INVALID_HANDLE_VALUE) ::CloseHandle(s.handle);  // never written: the journal removes the file
+        }
+    }
+    AheadOpener(const AheadOpener&) = delete;
+    AheadOpener& operator=(const AheadOpener&) = delete;
+
+    // The handle for request `i` (requests are taken in order). Throws if the file could not be created.
+    UniqueHandle Take(size_t i) {
+        Slot& s = slots_[i];
+        if (threads_.empty()) {
+            Open(i);
+        } else {
+            s.ready.wait(0, std::memory_order_acquire);
+        }
+        taken_.store(i + 1);
+        taken_.notify_all();
+        if (s.handle == INVALID_HANDLE_VALUE) ThrowWin32(L"Cannot create " + *requests_[i].path, s.error);
+        UniqueHandle h(s.handle);
+        s.handle = INVALID_HANDLE_VALUE;
+        return h;
+    }
+
+private:
+    static constexpr size_t kAhead = 64;
+    struct Slot {
+        HANDLE handle = INVALID_HANDLE_VALUE;
+        DWORD error = 0;
+        std::atomic<uint8_t> ready{0};
+    };
+
+    void Open(size_t i) {
+        Slot& s = slots_[i];
+        s.handle = ::CreateFileW(path::Long(*requests_[i].path).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                                 FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        if (s.handle == INVALID_HANDLE_VALUE) {
+            s.error = ::GetLastError();
+        } else if (requests_[i].size > (8u << 20)) {
+            FILE_ALLOCATION_INFO alloc{};
+            alloc.AllocationSize.QuadPart = static_cast<LONGLONG>(requests_[i].size);
+            ::SetFileInformationByHandle(s.handle, FileAllocationInfo, &alloc, sizeof(alloc));
+        }
+    }
+
+    void Run() {
+        for (;;) {
+            const size_t i = next_.fetch_add(1);
+            if (i >= requests_.size()) return;
+            for (size_t t = taken_.load(); !stop_ && i >= t + kAhead; t = taken_.load()) taken_.wait(t);
+            if (!stop_) Open(i);
+            slots_[i].ready.store(1, std::memory_order_release);
+            slots_[i].ready.notify_all();
+        }
+    }
+
+    std::vector<Request> requests_;
+    std::vector<Slot> slots_;
+    std::vector<std::thread> threads_;
+    std::atomic<size_t> next_{0};
+    std::atomic<size_t> taken_{0};
+    std::atomic<bool> stop_{false};
+};
+
 }  // namespace
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -454,25 +664,125 @@ void Engine::RecoverPending(Scope scope) const {
 }
 
 void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup, Journal& journal, Reporter& rep,
-                            const std::atomic<bool>& cancel, std::vector<RecordFile>& recordFiles) {
+                            const std::atomic<bool>& cancel, std::vector<RecordFile>& recordFiles, const InstallRecord* oldRecord) {
     // Files are decoded straight to their final location (renames are expensive on Windows because file-system filters
     // inspect each one). Safety comes from the write-ahead journal: an existing file is first moved to the backup
     // folder (journal "backup"), a new file is announced before it is created (journal "place"), so a failure, cancel or
     // crash at any point rolls back to exactly the previous state.
+    //
+    // The per-file file-system work is done in bulk and from several threads (see AheadOpener), in an order that keeps
+    // the journal ahead of every change: (0) on an update, folders that hold nothing but the app's files go to the
+    // backup folder with one rename each; (1) directories, journaled once created; (2) existing targets inspected;
+    // (3) every replaced file journaled ("backup"), then all of them moved to the backup folder; (4) every new file
+    // journaled ("place") - none of these paths holds a previous file any more, so rolling back a "place" never deletes
+    // anything but our own bytes; (5) the streams decoded in order into files created ahead of the decoder.
+    // Rolled back in reverse, this deletes the new files, removes the folders created in (1), moves the replaced files
+    // back and finally the folders of (0) - into places that are empty again by then.
     const auto& files = pkg_.payload.files;
+    struct Placement {
+        const FileInfo* file = nullptr;
+        std::wstring target;     // final location
+        std::wstring writePath;  // where the new bytes go: the target, or a side file moved over it at the next restart
+        std::wstring saved;      // backup location of the file it replaces, if there is one
+        DWORD attrs = INVALID_FILE_ATTRIBUTES;  // of the existing target
+        DWORD moveError = 0;
+        bool discard = false;  // preserved user data that already exists: decode (to verify) but keep the user's copy
+    };
+    std::vector<Placement> plan;
+    for (const auto& f : files) {
+        if (Selected(f)) plan.push_back({&f, path::Join(dir, f.path)});
+    }
+    std::vector<const std::wstring*> rels;
+    rels.reserve(plan.size());
+    for (const auto& p : plan) rels.push_back(&p.file->path);
+    const auto dirLevels = ParentDirsByDepth(rels);
+
+    // (0) Folders of the installed version that contain only files this update replaces or drops (never preserved
+    // files, files of other programs or the user's own).
+    {
+        std::unordered_set<std::wstring> owned, keep;
+        std::vector<std::wstring> allFiles;
+        const auto add = [&](const std::wstring& rel, bool preserve) {
+            allFiles.push_back(rel);
+            (preserve ? keep : owned).insert(ToLower(rel));
+        };
+        for (const auto& p : plan) add(p.file->path, p.file->preserve);
+        std::vector<std::wstring> extraDirs = pkg_.payload.directories;
+        if (oldRecord) {
+            for (const auto& f : oldRecord->files) add(f.path, f.preserve);
+            extraDirs.insert(extraDirs.end(), oldRecord->directories.begin(), oldRecord->directories.end());
+        }
+        for (const auto& k : keep) owned.erase(k);
+        std::unordered_set<std::wstring> known;
+        for (const auto& d : ImpliedDirectories(allFiles, extraDirs)) known.insert(ToLower(d));
+        if (!owned.empty()) MoveOwnedSubtrees(dir, backup, owned, known, journal);
+    }
+
+    // (1) Directories, parents first; existing ones must not be links.
+    std::vector<std::wstring> createdDirs;
+    CreateDirectoryTree(dir, dirLevels, &createdDirs);
+    for (const auto& d : createdDirs) journal.Mkdir(d);
+
+    // (2) What is already there.
+    ParallelFor(plan.size(), [&](size_t i) {
+        Placement& p = plan[i];
+        p.attrs = fs::Attributes(p.target);
+        if (p.attrs == INVALID_FILE_ATTRIBUTES) return;
+        if (p.file->preserve) {
+            p.discard = true;
+        } else if ((p.attrs & FILE_ATTRIBUTE_DIRECTORY) || fs::IsLinkLike(p.target)) {
+            throw Failure(ErrorCode::UnsafePath, L"Target is a directory or link: " + p.file->path);
+        } else {
+            p.saved = path::Join(backup, p.file->path);
+        }
+    }, plan.size() >= 16 ? IoThreads() : 1);
+
+    // (3) Files being replaced go to the backup folder.
+    std::vector<size_t> replaced;
+    std::vector<const std::wstring*> replacedRels;
+    for (size_t i = 0; i < plan.size(); ++i) {
+        if (plan[i].saved.empty()) continue;
+        replaced.push_back(i);
+        replacedRels.push_back(&plan[i].file->path);
+    }
+    if (!replaced.empty()) {
+        CreateDirectoryTree(backup, ParentDirsByDepth(replacedRels), nullptr);
+        for (const size_t i : replaced) journal.Backup(plan[i].target, plan[i].saved);
+        journal.Flush();
+        ParallelFor(replaced.size(), [&](size_t k) {
+            Placement& p = plan[replaced[k]];
+            if (p.attrs & FILE_ATTRIBUTE_READONLY) ::SetFileAttributesW(path::Long(p.target).c_str(), p.attrs & ~FILE_ATTRIBUTE_READONLY);
+            p.moveError = fs::Move(p.target, p.saved);
+        }, replaced.size() >= 16 ? IoThreads() : 1);
+        for (const size_t i : replaced) {
+            Placement& p = plan[i];
+            if (p.moveError == 0) continue;
+            if (!InUse(p.moveError) || !pkg_.ext.rebootForLockedFiles || !security::IsElevated()) ThrowMove(p.moveError, L"Cannot replace " + p.target);
+            p.writePath = p.target + L".fsetup-" + RandomToken().substr(0, 8);
+            pendingReplace_.emplace_back(p.writePath, p.target);
+            log::Warn(L"%s is in use; it is replaced at the next restart", p.target.c_str());
+        }
+    }
+    ThrowIfCancelled(cancel);
+
+    // (4) Every file about to be created, journaled before any of them is.
+    std::vector<AheadOpener::Request> requests;
+    for (auto& p : plan) {
+        if (p.discard) continue;
+        if (p.writePath.empty()) p.writePath = p.target;
+        journal.Place(p.writePath);
+        requests.push_back({&p.writePath, p.file->size});
+    }
+    journal.Flush();
+
+    // (5) Decode, verify and write.
+    AheadOpener opener(std::move(requests));
+    size_t nextPlan = 0, nextRequest = 0;
     const uint64_t total = std::max<uint64_t>(pkg_.payload.totalRaw, 1);
     uint64_t done = 0;
     unsigned placed = 0;
     constexpr size_t kChunk = 1u << 20;
     auto buffer = std::make_unique<uint8_t[]>(kChunk);
-    std::unordered_set<std::wstring> safeDirs;  // directories already verified to contain no links
-    const auto dirIsSafe = [&](const std::wstring& d) {
-        std::wstring key = ToLower(d);
-        if (safeDirs.count(key)) return true;
-        if (fs::HasLinkInPath(d)) return false;
-        safeDirs.insert(std::move(key));
-        return true;
-    };
 
     size_t index = 0;
     for (uint32_t s = 0; s < pkg_.payload.streams.size(); ++s) {
@@ -498,46 +808,12 @@ void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup,
                 }
                 continue;
             }
-            const std::wstring target = path::Join(dir, f.path);
-            std::vector<std::wstring> parents;
-            fs::CreateDirectories(path::Parent(target), &parents);
-            for (const auto& p : parents) journal.Mkdir(p);
-            if (!dirIsSafe(path::Parent(target))) throw Failure(ErrorCode::UnsafePath, L"Link inside the install directory: " + f.path);
-
-            bool discard = false;  // preserved user data that already exists: decode (to verify) but keep the user's copy
-            std::wstring writePath = target;  // a file still in use is written next to it and moved over it at the next restart
-            const DWORD attrs = fs::Attributes(target);
-            if (attrs != INVALID_FILE_ATTRIBUTES) {
-                if (f.preserve) {
-                    discard = true;
-                } else {
-                    if ((attrs & FILE_ATTRIBUTE_DIRECTORY) || fs::IsLinkLike(target)) {
-                        throw Failure(ErrorCode::UnsafePath, L"Target is a directory or link: " + f.path);
-                    }
-                    const std::wstring saved = path::Join(backup, f.path);
-                    fs::CreateDirectories(path::Parent(saved));
-                    journal.Backup(target, saved);
-                    if (attrs & FILE_ATTRIBUTE_READONLY) ::SetFileAttributesW(path::Long(target).c_str(), attrs & ~FILE_ATTRIBUTE_READONLY);
-                    if (const DWORD e = fs::Move(target, saved)) {
-                        if (!InUse(e) || !pkg_.ext.rebootForLockedFiles || !security::IsElevated()) ThrowMove(e, L"Cannot replace " + target);
-                        writePath = target + L".fsetup-" + RandomToken().substr(0, 8);
-                        pendingReplace_.emplace_back(writePath, target);
-                        log::Warn(L"%s is in use; it is replaced at the next restart", target.c_str());
-                    }
-                }
-            }
+            const Placement& p = plan[nextPlan++];
+            const std::wstring& target = p.target;
+            const bool discard = p.discard;
+            const std::wstring& writePath = p.writePath;
             UniqueHandle h;
-            if (!discard) {
-                journal.Place(writePath);
-                h.reset(::CreateFileW(path::Long(writePath).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-                                      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
-                if (!h) ThrowWin32(L"Cannot create " + target);
-                if (f.size > (8u << 20)) {
-                    FILE_ALLOCATION_INFO alloc{};
-                    alloc.AllocationSize.QuadPart = static_cast<LONGLONG>(f.size);
-                    ::SetFileInformationByHandle(h.get(), FileAllocationInfo, &alloc, sizeof(alloc));
-                }
-            }
+            if (!discard) h = opener.Take(nextRequest++);
             Sha256 hash;
             uint64_t remaining = f.size;
             while (remaining > 0) {
@@ -1133,11 +1409,12 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
             }
             // Other programs that use files about to be replaced (Explorer extensions, editors, the app itself).
             if (pkg_.ext.restartManager) {
+                // Existence is checked for the few files that get registered (RegisterWithRestartManager).
                 std::vector<std::wstring> files;
                 std::unordered_set<std::wstring> seen;
                 const auto addFile = [&](const std::wstring& rel) {
                     const std::wstring f = path::Join(dir, rel);
-                    if (seen.insert(ToLower(f)).second && fs::Exists(f)) files.push_back(f);
+                    if (seen.insert(ToLower(f)).second) files.push_back(f);
                 };
                 for (const auto& f : pkg_.payload.files) {
                     if (Selected(f)) addFile(f.path);
@@ -1146,7 +1423,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
                     for (const auto& f : oldRecord->files) addFile(f.path);
                 }
                 addFile(kUninstallerName);
-                if (restart.Start(files)) {
+                if (restart.Start(dir, files)) {
                     for (const auto& name : restart.Shutdown()) log::Warn(L"%s still uses the app's files", name.c_str());
                 }
             }
@@ -1155,7 +1432,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         // ---- Installing (decode + verify + place, journaled) ------------------------------------------------
         rep.Set(State::Installing, 0.02);
         std::vector<RecordFile> recordFiles;
-        InstallPayload(dir, backup, *journal, rep, cancel, recordFiles);
+        InstallPayload(dir, backup, *journal, rep, cancel, recordFiles, oldRecord ? &*oldRecord : nullptr);
         std::unordered_set<std::wstring> newSet;
         for (const auto& f : pkg_.payload.files) {
             if (Selected(f)) newSet.insert(ToLower(f.path));  // switching variants removes the other build's files
@@ -1309,6 +1586,8 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         arp.quietUninstallString = L"\"" + uninstaller + L"\" /uninstall /quiet";
         arp.modifyPath = L"\"" + uninstaller + L"\" /modify";
         arp.urlInfoAbout = pkg_.website;
+        arp.helpLink = pkg_.supportUrl;
+        arp.urlUpdateInfo = pkg_.releaseNotesUrl;
         arp.comments = pkg_.description;
         arp.variant = Utf8ToWide(variant_);
         arp.recordSha256 = Utf8ToWide(ToHex(Sha256::Of({reinterpret_cast<const uint8_t*>(recordJson.data()), recordJson.size()})));
@@ -1525,43 +1804,82 @@ Outcome Engine::Uninstall(const std::wstring& originDir, IProgressSink& sink, co
             // Programs that hold the app's files open (not uninstall.exe: the original uninstaller still waits on it).
             std::vector<std::wstring> files;
             for (const auto& f : record.files) {
-                const std::wstring t = path::Join(dir, f.path);
-                if (!f.preserve && fs::Exists(t)) files.push_back(t);
+                if (!f.preserve) files.push_back(path::Join(dir, f.path));
             }
-            if (restart.Start(files)) {
+            if (restart.Start(dir, files, path::Join(dir, kUninstallerName))) {
                 for (const auto& name : restart.Shutdown()) log::Warn(L"%s still uses the app's files", name.c_str());
             }
         }
         rep.Set(State::Removing, 0.0);
-        size_t i = 0;
-        std::unordered_set<std::wstring> safeDirs;
-        const auto dirIsSafe = [&](const std::wstring& d) {
-            std::wstring key = ToLower(d);
-            if (safeDirs.count(key)) return true;
-            if (fs::HasLinkInPath(d)) return false;
-            safeDirs.insert(std::move(key));
-            return true;
-        };
-        for (const auto& f : record.files) {
-            ++i;
-            ThrowIfCancelled(cancel);
-            if (f.preserve) continue;
-            const std::wstring target = path::Join(dir, f.path);
-            const DWORD attrs = fs::Attributes(target);
-            if (attrs == INVALID_FILE_ATTRIBUTES) continue;
-            if ((attrs & FILE_ATTRIBUTE_DIRECTORY) || fs::IsLinkLike(target) || !dirIsSafe(path::Parent(target))) {
-                log::Warn(L"Skipping %s: not a regular file inside the install directory", target.c_str());
-                continue;
+        {
+            // The installed files move to the trash folder (journaled first, so a failure puts them all back), from
+            // several threads: each move costs the file system's per-file latency, not CPU.
+            struct Removal {
+                const RecordFile* file;
+                std::wstring target, saved;
+                DWORD attrs = INVALID_FILE_ATTRIBUTES;
+                DWORD error = 0;
+                bool skip = false;  // not a regular file inside the install directory
+            };
+            std::vector<Removal> removals;
+            std::vector<const std::wstring*> rels;
+            std::unordered_set<std::wstring> owned, known;
+            std::vector<std::wstring> allFiles;
+            for (const auto& f : record.files) {
+                allFiles.push_back(f.path);
+                if (f.preserve) continue;
+                owned.insert(ToLower(f.path));
+                removals.push_back({&f, path::Join(dir, f.path), path::Join(trash, f.path)});
+                rels.push_back(&f.path);
             }
-            const std::wstring saved = path::Join(trash, f.path);
-            fs::CreateDirectories(path::Parent(saved));
-            journal->Backup(target, saved);
-            if (attrs & FILE_ATTRIBUTE_READONLY) ::SetFileAttributesW(path::Long(target).c_str(), attrs & ~FILE_ATTRIBUTE_READONLY);
-            if (const DWORD e = fs::Move(target, saved)) {
-                if (!InUse(e) || !pkg_.ext.rebootForLockedFiles || !security::IsElevated()) ThrowMove(e, L"Cannot remove " + target);
-                pendingDelete_.push_back(target);  // deleted at the next restart
+            // Folders that hold nothing but the app's own files go with one rename each; whatever remains (files next
+            // to user data, in folders a program holds open, at the top level) is moved file by file below.
+            for (const auto& d : ImpliedDirectories(allFiles, record.directories)) known.insert(ToLower(d));
+            MoveOwnedSubtrees(dir, trash, owned, known, *journal);
+            const auto levels = ParentDirsByDepth(rels);
+            const auto safeDirs = SafeDirectories(dir, levels);
+            const unsigned threads = removals.size() >= 16 ? IoThreads() : 1;
+            ParallelFor(removals.size(), [&](size_t k) {
+                Removal& r = removals[k];
+                r.attrs = fs::Attributes(r.target);
+                if (r.attrs == INVALID_FILE_ATTRIBUTES) return;
+                const size_t cut = r.file->path.rfind(L'\\');
+                r.skip = (r.attrs & FILE_ATTRIBUTE_DIRECTORY) || fs::IsLinkLike(r.target) ||
+                         (cut != std::wstring::npos && !safeDirs.count(ToLower(r.file->path.substr(0, cut))));
+            }, threads);
+            std::vector<size_t> moving;
+            std::vector<const std::wstring*> movingRels;
+            for (size_t k = 0; k < removals.size(); ++k) {
+                const Removal& r = removals[k];
+                if (r.attrs == INVALID_FILE_ATTRIBUTES) continue;
+                if (r.skip) {
+                    log::Warn(L"Skipping %s: not a regular file inside the install directory", r.target.c_str());
+                    continue;
+                }
+                moving.push_back(k);
+                movingRels.push_back(&r.file->path);
             }
-            rep.Update(0.9 * static_cast<double>(i) / static_cast<double>(std::max<size_t>(record.files.size(), 1)), f.path);
+            CreateDirectoryTree(trash, ParentDirsByDepth(movingRels), nullptr);
+            for (const size_t k : moving) journal->Backup(removals[k].target, removals[k].saved);
+            journal->Flush();
+            const auto caller = std::this_thread::get_id();
+            std::atomic<size_t> moved{0};
+            ParallelFor(moving.size(), [&](size_t m) {
+                ThrowIfCancelled(cancel);
+                Removal& r = removals[moving[m]];
+                if (r.attrs & FILE_ATTRIBUTE_READONLY) ::SetFileAttributesW(path::Long(r.target).c_str(), r.attrs & ~FILE_ATTRIBUTE_READONLY);
+                r.error = fs::Move(r.target, r.saved);
+                const size_t n = ++moved;
+                if (std::this_thread::get_id() == caller) {  // the reporter belongs to this thread
+                    rep.Update(0.9 * static_cast<double>(n) / static_cast<double>(moving.size()), r.file->path);
+                }
+            }, threads);
+            for (const size_t k : moving) {
+                const Removal& r = removals[k];
+                if (r.error == 0) continue;
+                if (!InUse(r.error) || !pkg_.ext.rebootForLockedFiles || !security::IsElevated()) ThrowMove(r.error, L"Cannot remove " + r.target);
+                pendingDelete_.push_back(r.target);  // deleted at the next restart
+            }
         }
         int linkIndex = 0;
         for (const auto& link : record.shortcuts) {

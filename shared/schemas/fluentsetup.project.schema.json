@@ -216,6 +216,23 @@
         "type": "string"
       }
     },
+    "appLink": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[^\\s\"<>\\\\^`{}|]+$",
+          "description": "Absolute http:// or https:// URL, e.g. https://github.com/owner/repo."
+        },
+        "label": {
+          "$ref": "#/$defs/localizedText",
+          "description": "Link text per language (1-64 characters each). Leave it out to show the site's name: GitHub, Gitee, GitLab, Codeberg, Discord, ... or the host name."
+        }
+      }
+    },
     "app": {
       "type": "object",
       "description": "Identity of the app; shown in the installer and in Windows Settings > Apps.",
@@ -263,7 +280,28 @@
           "type": "string",
           "pattern": "^(|[Hh][Tt][Tt][Pp][Ss]?://.+)$",
           "default": "",
-          "description": "Optional absolute http:// or https:// URL (Windows Settings \"About\" link)."
+          "description": "Optional absolute http:// or https:// URL (Windows Settings \"About\" link). Shown as the first link in the installer (\"Website\")."
+        },
+        "supportUrl": {
+          "type": "string",
+          "pattern": "^(|[Hh][Tt][Tt][Pp][Ss]?://.+)$",
+          "default": "",
+          "description": "Optional help/support page: a link in the installer (\"Help and support\") and the \"Help link\" of Windows Settings > Apps (HelpLink). winget: PublisherSupportUrl."
+        },
+        "releaseNotesUrl": {
+          "type": "string",
+          "pattern": "^(|[Hh][Tt][Tt][Pp][Ss]?://.+)$",
+          "default": "",
+          "description": "Optional page about what is new, e.g. https://github.com/owner/repo/releases: a link in the installer (\"Release notes\", also on the finish page) and \"Update information\" in Windows Settings > Apps (URLUpdateInfo). winget: ReleaseNotesUrl."
+        },
+        "links": {
+          "type": "array",
+          "maxItems": 4,
+          "default": [],
+          "description": "Further links shown in the installer after the website, e.g. the source repository or a community. Up to 4.",
+          "items": {
+            "$ref": "#/$defs/appLink"
+          }
         },
         "icon": {
           "type": "string",
@@ -1482,6 +1520,14 @@
           ],
           "default": "firstInstall",
           "description": "When the license must be accepted: before a first install only, or before every install (upgrades too)."
+        },
+        "licenseStyle": {
+          "enum": [
+            "page",
+            "inline"
+          ],
+          "default": "page",
+          "description": "How the license is accepted: \"page\" = a license page with an \"I accept\" box before installing; \"inline\" = the first page says \"By installing, you accept the license terms\" with a link to read them (one step less)."
         },
         "localization": {
           "type": "string",
