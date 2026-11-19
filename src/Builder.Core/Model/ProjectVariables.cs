@@ -8,7 +8,7 @@ namespace FluentSetup.Builder.Core.Model;
 
 /// <summary>
 /// $(Name) placeholders in project strings. Values come from the project's "variables" and, with priority, from the
-/// command line (<c>fluentsetup build -D Version=1.2.1</c>), so a CI release build can stamp the version (or any other
+/// command line (<c>fsetup build -D Version=1.2.1</c>), so a CI release build can stamp the version (or any other
 /// value) without rewriting the project file. "$$(" writes a literal "$(".
 /// </summary>
 public static partial class ProjectVariables

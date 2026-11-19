@@ -3,7 +3,7 @@ using FluentSetup.Builder.Core.Winget;
 
 namespace FluentSetup.Cli;
 
-/// <summary>fluentsetup winget &lt;Setup.exe&gt;: winget manifests for a built package (docs/winget.md).</summary>
+/// <summary>fsetup winget &lt;Setup.exe&gt;: winget manifests for a built package (docs/winget.md).</summary>
 internal static class WingetCommand
 {
     public static int Run(ParsedArgs a)

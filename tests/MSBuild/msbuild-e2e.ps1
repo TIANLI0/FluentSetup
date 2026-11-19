@@ -7,7 +7,7 @@
     FluentSetup.MSBuild       a new console app with <FluentSetupProject> gets a Setup.exe from "dotnet publish"
                               (version, files and architecture from the publish); a broken fluentsetup.json fails the
                               publish with its FS code; FluentSetupEnabled=false skips the installer
-    FluentSetup.Cli           dotnet tool install --tool-path, then fluentsetup build and winget with the tool's runtime
+    FluentSetup.Cli           dotnet tool install --tool-path, then fsetup build and winget with the tool's runtime
     FluentSetup.Builder.Core  a console app builds a Setup.exe with PackageBuilder and the runtime the package copies
 
 .PARAMETER Feed       Folder with the .nupkg files (default: packs them with scripts\pack-nuget.ps1 first).
@@ -105,7 +105,7 @@ Write-Utf8 (Join-Path $app 'installer\broken.json') $projectJson.Replace('"NuGet
 
 $r = Invoke-Dotnet (@('publish', $app, '-c', 'Release', '-r', 'win-x64', '--self-contained', 'false') + $quiet)
 $setup = Join-Path $app 'installer\dist\NuGet E2E-2.3.4-Setup.exe'
-$cli = Join-Path $env:NUGET_PACKAGES "fluentsetup.msbuild\$version\tools\cli\fluentsetup.dll"
+$cli = Join-Path $env:NUGET_PACKAGES "fluentsetup.msbuild\$version\tools\cli\fsetup.dll"
 Check 'dotnet publish succeeds and runs the FluentSetup target' { $r.Code -eq 0 -and $r.Out -match 'FluentSetup: building the installer' }
 if ($r.Code -ne 0) { Write-Host $r.Out }
 Check 'Setup.exe in output.directory, named with $(Version) of the app' { Test-Path $setup }
@@ -138,8 +138,8 @@ if (Test-Path (Join-Path $Feed "FluentSetup.Cli.$version.nupkg")) {
     Write-Host "FluentSetup.Cli $version" -ForegroundColor Cyan
     $tools = Join-Path $work 'tools'
     $r = Invoke-Dotnet @('tool', 'install', 'FluentSetup.Cli', '--version', $version, '--tool-path', $tools, '--configfile', (Join-Path $work 'nuget.config'))
-    $tool = Join-Path $tools 'fluentsetup.exe'
-    Check 'dotnet tool install --tool-path gives the fluentsetup command' { $r.Code -eq 0 -and (& $tool --version) -like "$version*" }
+    $tool = Join-Path $tools 'fsetup.exe'
+    Check 'dotnet tool install --tool-path gives the fsetup command' { $r.Code -eq 0 -and (& $tool --version) -like "$version*" }
     if ($r.Code -ne 0) { Write-Host $r.Out }
     $toolOut = Join-Path $work 'tool-dist'
     $build = & $tool build (Join-Path $app 'installer\fluentsetup.json') -D Version=5.6.7 -D "PublishDir=$publishDir" -o $toolOut 2>&1 | ForEach-Object { "$_" }
@@ -147,7 +147,7 @@ if (Test-Path (Join-Path $Feed "FluentSetup.Cli.$version.nupkg")) {
     Check 'the tool builds Setup.exe with the runtime inside the tool package' { $LASTEXITCODE -eq 0 -and (Inspect $tool $toolSetup).problems.Count -eq 0 }
     if (-not (Test-Path $toolSetup)) { Write-Host ($build -join "`n") }
     & $tool winget $toolSetup --url 'https://example.com/NuGetE2E-Setup.exe' --license MIT -o (Join-Path $work 'winget') | Out-Null
-    Check 'fluentsetup winget writes the three manifests' {
+    Check 'fsetup winget writes the three manifests' {
         $LASTEXITCODE -eq 0 -and @(Get-ChildItem (Join-Path $work 'winget\manifests\f\FluentSetup\NuGetE2E\5.6.7') -Filter *.yaml).Count -eq 3 }
     $r = Invoke-Dotnet @('tool', 'uninstall', 'FluentSetup.Cli', '--tool-path', $tools)
     Check 'dotnet tool uninstall --tool-path removes it again' { $r.Code -eq 0 -and -not (Test-Path $tool) }

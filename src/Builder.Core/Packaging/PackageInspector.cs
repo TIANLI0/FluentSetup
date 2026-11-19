@@ -24,7 +24,7 @@ public sealed class PackageInfo
     public bool StreamsVerified { get; set; }
 }
 
-/// <summary>Reads and checks a Setup.exe produced by FluentSetup (used by "fluentsetup inspect" and build verification).</summary>
+/// <summary>Reads and checks a Setup.exe produced by FluentSetup (used by "fsetup inspect" and build verification).</summary>
 public static class PackageInspector
 {
     public static PackageInfo Inspect(string path, bool verifyStreams)

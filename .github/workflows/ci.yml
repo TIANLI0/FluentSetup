@@ -150,14 +150,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - id: fluentsetup
+      - id: fsetup
         uses: ./
-      - name: fluentsetup is on PATH
+      - name: fsetup is on PATH
         shell: pwsh
         run: |
+          fsetup --version
+          if ($LASTEXITCODE -ne 0) { throw 'fsetup is not on PATH' }
           fluentsetup --version
-          if ($LASTEXITCODE -ne 0) { throw 'fluentsetup is not on PATH' }
-          Write-Host "FluentSetup ${{ steps.fluentsetup.outputs.version }} at ${{ steps.fluentsetup.outputs.path }}"
+          if ($LASTEXITCODE -ne 0) { throw 'fluentsetup (the alias) is not on PATH' }
+          Write-Host "FluentSetup ${{ steps.fsetup.outputs.version }} at ${{ steps.fsetup.outputs.path }}"
 
   cross-platform:
     # The CLI on Linux and macOS with the installer runtime from the Windows job: managed tests, the DemoApp package
@@ -199,7 +201,7 @@ jobs:
       - name: Build and inspect DemoApp with the CLI from source
         shell: pwsh
         run: |
-          $cli = 'src/CLI/bin/Release/net10.0/fluentsetup.dll'
+          $cli = 'src/CLI/bin/Release/net10.0/fsetup.dll'
           dotnet $cli build samples/DemoApp/fluentsetup.json -o out/xplat
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet $cli inspect 'out/xplat/FluentSetup Demo-1.0.0-Setup.exe' --verify
@@ -231,7 +233,7 @@ jobs:
             }
           }
           $project | ConvertTo-Json -Depth 10 | Set-Content samples/DemoApp/fluentsetup.signed.json
-          $cli = 'src/CLI/bin/Release/net10.0/fluentsetup.dll'
+          $cli = 'src/CLI/bin/Release/net10.0/fsetup.dll'
           dotnet $cli build samples/DemoApp/fluentsetup.signed.json -o out/xplat --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $info = dotnet $cli inspect 'out/xplat/FluentSetup Demo-1.0.0-Signed-Setup.exe' --verify --json | ConvertFrom-Json
@@ -247,7 +249,7 @@ jobs:
           tar -xzf $archive.FullName -C $dir
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$dir/fluentsetup" --version
-          if ($LASTEXITCODE -ne 0) { throw "$($archive.Name): fluentsetup does not start" }
+          if ($LASTEXITCODE -ne 0) { throw "$($archive.Name): fsetup does not start" }
           & "$dir/fluentsetup" build samples/DemoApp/fluentsetup.json -o out/xplat-release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$dir/fluentsetup" inspect 'out/xplat-release/FluentSetup Demo-1.0.0-Setup.exe' --verify

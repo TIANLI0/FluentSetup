@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
   Builds the release assets into out\release (run scripts\build.ps1 first):
-    fluentsetup-<version>-win-x64.zip       the fluentsetup CLI (self-contained: no .NET needed) with the installer runtime
+    fluentsetup-<version>-win-x64.zip       the fsetup CLI (self-contained: no .NET needed) with the installer runtime
     fluentsetup-<version>-linux-x64.tar.gz  the same for Linux (x64)
     fluentsetup-<version>-osx-arm64.tar.gz  the same for macOS (Apple silicon)
     FluentSetup-<version>-Setup.exe         Builder app + CLI, packaged with FluentSetup itself
     FluentSetup.*.<version>.nupkg           NuGet packages: Builder.Core (+ .snupkg), Cli (.NET tool), MSBuild (scripts\pack-nuget.ps1)
     SHA256SUMS.txt                          "<sha256>  <file>" for all of them (sha256sum format)
-  Release builds (the release workflow, signed in with TIANLI0/codesign) sign fluentsetup.exe of the Windows zip, the
+  Release builds (the release workflow, signed in with TIANLI0/codesign) sign fsetup.exe of the Windows zip, the
   Builder app and the Setup.exe; scripts\build.ps1's FluentSetup.UI.exe is signed by the workflow before this runs.
   The .tar.gz archives need PowerShell 7 (System.Formats.Tar sets the executable bit); Windows PowerShell skips them
   with a warning, except with -Version (a release), where they are required.
@@ -51,8 +51,8 @@ dotnet publish src\CLI\FluentSetup.CLI.csproj -c Release -r win-x64 --self-conta
 if ($LASTEXITCODE -ne 0) { throw 'Publishing the CLI failed' }
 Copy-Item LICENSE, THIRD-PARTY-NOTICES.md, README.md $stage
 if (-not (Test-Path (Join-Path $stage 'runtime\x64\FluentSetup.Stub.exe'))) { throw 'The published CLI has no installer runtime' }
-Invoke-CodeSign $stage 'fluentsetup.exe'   # the single-file bundle, signed after bundling
-& (Join-Path $stage 'fluentsetup.exe') --version
+Invoke-CodeSign $stage 'fsetup.exe'   # the single-file bundle, signed after bundling
+& (Join-Path $stage 'fsetup.exe') --version
 if ($LASTEXITCODE -ne 0) { throw 'The published CLI does not start' }
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $release "$name.zip") -CompressionLevel Optimal
 
@@ -67,7 +67,7 @@ function New-TarGz([string] $Folder, [string] $Archive) {
             $path = [IO.Path]::GetRelativePath($Folder, $file.FullName).Replace('\', '/')
             $entry = [Formats.Tar.PaxTarEntry]::new([Formats.Tar.TarEntryType]::RegularFile, $path)
             # The programs and native libraries are executable; everything else is plain data.
-            $executable = $file.Name -in 'fluentsetup', 'createdump' -or $file.Extension -in '.so', '.dylib'
+            $executable = $file.Name -in 'fsetup', 'createdump' -or $file.Extension -in '.so', '.dylib'
             $entry.Mode = [IO.UnixFileMode]$(if ($executable) { 'UserRead, UserWrite, UserExecute, GroupRead, GroupExecute, OtherRead, OtherExecute' } else { 'UserRead, UserWrite, GroupRead, OtherRead' })
             $entry.ModificationTime = [DateTimeOffset]$file.LastWriteTimeUtc
             $data = [IO.File]::OpenRead($file.FullName)
@@ -78,6 +78,11 @@ function New-TarGz([string] $Folder, [string] $Archive) {
                 $data.Dispose()
             }
         }
+        # "fluentsetup", the command's original name, as a symbolic link to fsetup.
+        $alias = [Formats.Tar.PaxTarEntry]::new([Formats.Tar.TarEntryType]::SymbolicLink, 'fluentsetup')
+        $alias.LinkName = 'fsetup'
+        $alias.Mode = [IO.UnixFileMode]'UserRead, UserWrite, UserExecute, GroupRead, GroupExecute, OtherRead, OtherExecute'
+        $tar.WriteEntry($alias)
     } finally {
         $tar.Dispose()
         $gzip.Dispose()
@@ -94,7 +99,7 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
         if ($LASTEXITCODE -ne 0) { throw "Publishing the CLI for $rid failed" }
         Copy-Item LICENSE, THIRD-PARTY-NOTICES.md, README.md $stage
         if (-not (Test-Path (Join-Path $stage 'runtime\x64\FluentSetup.Stub.exe'))) { throw "The published $rid CLI has no installer runtime" }
-        if (-not (Test-Path (Join-Path $stage 'fluentsetup'))) { throw "The published $rid CLI has no fluentsetup executable" }
+        if (-not (Test-Path (Join-Path $stage 'fsetup'))) { throw "The published $rid CLI has no fsetup executable" }
         New-TarGz $stage (Join-Path $release "$name.tar.gz")
     }
 } elseif ($Version) {

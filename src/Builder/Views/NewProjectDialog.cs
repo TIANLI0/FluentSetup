@@ -34,7 +34,7 @@ public sealed class NewProjectDialog : ContentDialog
         CloseButtonText = Loc.Get("Common_Cancel");
         DefaultButton = ContentDialogButton.Primary;
 
-        // Same guesses as "fluentsetup init": the main program and its version resource.
+        // Same guesses as "fsetup init": the main program and its version resource.
         var guess = ProjectGuess.FromFolder(folder);
         foreach (var e in guess.Executables) _exe.Items.Add(e);
         if (guess.MainExecutable.Length > 0) _exe.SelectedItem = guess.MainExecutable;

@@ -67,7 +67,7 @@ Arguments accepted by `FluentSetup.UI.exe` (each must be followed by a value; an
 |---|---|
 | `--pipe <name>` | Bare pipe name (without `\\.\pipe\`). |
 | `--server-pid <pid>` | Expected PID of the pipe server. |
-| `--simulate <mode>` | Test hook, forwarded from Setup.exe `--ui-simulate`: `runtime-missing`, `crash-before-ready`, `crash-after-ready`, `hang`. Setup.exe forwards it only for packages built with `fluentsetup build --test-hooks` (header `testHooks: true`); otherwise `--ui-simulate` is ignored with a warning in the log. |
+| `--simulate <mode>` | Test hook, forwarded from Setup.exe `--ui-simulate`: `runtime-missing`, `crash-before-ready`, `crash-after-ready`, `hang`. Setup.exe forwards it only for packages built with `fsetup build --test-hooks` (header `testHooks: true`); otherwise `--ui-simulate` is ignored with a warning in the log. |
 | `--preview <file>` | Builder preview: no pipe; `hello` is read from a JSON file, nothing is sent, and progress/completion are simulated locally. |
 
 ### 2.2 Handshake and timeouts

@@ -574,14 +574,14 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="LicenseModeFirstInstall.Content" xml:space="preserve"><value>仅首次安装时</value></data>
   <data name="LicenseModeAlways.Content" xml:space="preserve"><value>更新和重新安装前也显示</value></data>
   <data name="AppearanceLocalizationTitle.Text" xml:space="preserve"><value>本地化文件夹</value></data>
-  <data name="AppearanceLocalizationDescription.Text" xml:space="preserve"><value>每种语言一个 &lt;语言&gt;.json，包含选项标签、操作名称、许可协议和文本覆盖。可用 fluentsetup locale add 创建。</value></data>
+  <data name="AppearanceLocalizationDescription.Text" xml:space="preserve"><value>每种语言一个 &lt;语言&gt;.json，包含选项标签、操作名称、许可协议和文本覆盖。可用 fsetup locale add 创建。</value></data>
   <data name="AppearanceLocalizationBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>本地化文件夹</value></data>
   <data name="AppearanceLocalizationBox.PlaceholderText" xml:space="preserve"><value>locales</value></data>
   <data name="AppearanceLicensesBox.Header" xml:space="preserve"><value>各语言的许可协议（每行一个：zh-CN = license_zh.txt）</value></data>
   <data name="AppearanceStringsBox.Header" xml:space="preserve"><value>安装程序文本覆盖（每行一个：zh-CN: welcome.body = 文本）</value></data>
   <data name="AppearanceStringsHelp.Text" xml:space="preserve"><value>键名见 shared/localization/en-US.json。换行请写作 \n。</value></data>
   <data name="BuildVariablesSection.Text" xml:space="preserve"><value>变量</value></data>
-  <data name="BuildVariablesDescription.Text" xml:space="preserve"><value>可在项目的任何文本中使用 $(Name)。fluentsetup build -D Name=value 可覆盖其值，例如在 CI 中设置版本号。</value></data>
+  <data name="BuildVariablesDescription.Text" xml:space="preserve"><value>可在项目的任何文本中使用 $(Name)。fsetup build -D Name=value 可覆盖其值，例如在 CI 中设置版本号。</value></data>
   <data name="BuildVariablesAdd.Text" xml:space="preserve"><value>添加变量</value></data>
   <data name="BuildVariablesEmpty.Text" xml:space="preserve"><value>没有变量。</value></data>
   <data name="VariableNameBox.PlaceholderText" xml:space="preserve"><value>名称</value></data>

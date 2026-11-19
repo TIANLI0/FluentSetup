@@ -4,10 +4,10 @@ A FluentSetup `Setup.exe` is an ordinary EXE installer: one offline file, silent
 named after `app.id`, documented exit codes, and its own UAC prompt for per-machine installs. That is what the Windows
 Package Manager (winget) and the Microsoft Store expect from an EXE app, so neither needs anything special.
 
-## `fluentsetup winget`
+## `fsetup winget`
 
 ```
-fluentsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [options]
+fsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [options]
     -o, --output <dir>            Root folder (default: the current folder)
     --identifier <Publisher.App>  PackageIdentifier (default: app.id if it has that form, else publisher + name)
     --license <name>              License, e.g. MIT (default: recognized from the license text, else Proprietary)
@@ -103,7 +103,7 @@ virtual machine rather than on your own PC.
 
 1. Publish Setup.exe at its final address, for example as a GitHub release asset (tag `v<version>`).
 2. In a clone of your fork of [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs), on a new branch:
-   `fluentsetup winget path\to\Setup.exe --github owner/repo` (or `--url ...`).
+   `fsetup winget path\to\Setup.exe --github owner/repo` (or `--url ...`).
 3. `winget validate --manifest manifests\...\<version>`, commit the folder and open a pull request (title
    `New package: Contoso.MyApp version 1.2.0`, or `New version: ...` for an update). Alternatively let
    [wingetcreate](https://github.com/microsoft/winget-create) open it: `wingetcreate submit --token <PAT> manifests\...\<version>`.
@@ -119,7 +119,7 @@ new. In a release workflow (after the GitHub release exists):
   env:
     WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
   run: |
-    $m = fluentsetup winget "dist/My App-$env:VERSION-Setup.exe" --github $env:GITHUB_REPOSITORY -o winget --json | ConvertFrom-Json
+    $m = fsetup winget "dist/My App-$env:VERSION-Setup.exe" --github $env:GITHUB_REPOSITORY -o winget --json | ConvertFrom-Json
     Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
     ./wingetcreate.exe submit --token $env:WINGET_TOKEN $m.folder
 ```

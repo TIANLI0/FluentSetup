@@ -30,10 +30,10 @@
 
 从[最新发布](https://github.com/TIANLI0/FluentSetup/releases/latest)下载：
 
-- **`FluentSetup-<版本>-Setup.exe`**：Builder 图形界面加 `fluentsetup` 命令行（自动加入 PATH）。缺少 .NET 10 运行时或 Windows App Runtime 时安装程序会自动安装。需要 Windows 10 1809 或更高版本。
+- **`FluentSetup-<版本>-Setup.exe`**：Builder 图形界面加 `fsetup` 命令行（自动加入 PATH）。缺少 .NET 10 运行时或 Windows App Runtime 时安装程序会自动安装。需要 Windows 10 1809 或更高版本。
 - **`fluentsetup-<版本>-win-x64.zip`**：只有命令行，自包含（不需要 .NET），解压到任意位置即可，适合构建服务器和脚本。
 
-FluentSetup 会自动更新：Builder 每天检查一次新版本（可在“设置 > 更新”中关闭），点击**更新**即可安装；命令行用 `fluentsetup update` 更新，`fluentsetup update --check` 只检查不安装。下载的文件会用发布附带的 `SHA256SUMS.txt` 校验。
+FluentSetup 会自动更新：Builder 每天检查一次新版本（可在“设置 > 更新”中关闭），点击**更新**即可安装；命令行用 `fsetup update` 更新，`fsetup update --check` 只检查不安装。下载的文件会用发布附带的 `SHA256SUMS.txt` 校验。
 
 ### 2. 描述你的应用
 
@@ -42,7 +42,7 @@ FluentSetup 会自动更新：Builder 每天检查一次新版本（可在“设
 也可以用命令行：
 
 ```powershell
-fluentsetup init my-app --name "My App" --id Contoso.MyApp --source C:\build\MyApp\bin --publisher Contoso
+fsetup init my-app --name "My App" --id Contoso.MyApp --source C:\build\MyApp\bin --publisher Contoso
 ```
 
 两种方式都会生成 `fluentsetup.json`。最简单的项目文件如下：
@@ -59,16 +59,16 @@ fluentsetup init my-app --name "My App" --id Contoso.MyApp --source C:\build\MyA
 }
 ```
 
-所有设置项见 [docs/project-file.md](docs/project-file.md)（英文）；`fluentsetup guide` 会输出完整的编写指南，也适合交给 AI 助手。
+所有设置项见 [docs/project-file.md](docs/project-file.md)（英文）；`fsetup guide` 会输出完整的编写指南，也适合交给 AI 助手。
 
 ### 3. 生成 Setup.exe
 
 在 Builder 中打开“构建”页并开始构建，或者：
 
 ```powershell
-fluentsetup validate my-app\fluentsetup.json          # 列出错误和警告（带代码和字段路径）
-fluentsetup build my-app\fluentsetup.json             # -> my-app\dist\My App-1.0.0-Setup.exe
-fluentsetup inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
+fsetup validate my-app\fluentsetup.json          # 列出错误和警告（带代码和字段路径）
+fsetup build my-app\fluentsetup.json             # -> my-app\dist\My App-1.0.0-Setup.exe
+fsetup inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
 ```
 
 直接运行生成的安装包试一试，或无人值守测试：`Setup.exe /quiet /log setup.log`，再用 `"<安装目录>\uninstall.exe" /uninstall /quiet` 卸载。
@@ -79,7 +79,7 @@ GitHub Action 会在 Windows 构建机上安装命令行工具（下载后校验
 
 ```yaml
 - uses: TIANLI0/FluentSetup@latest
-- run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3
+- run: fsetup build installer/fluentsetup.json -D Version=1.2.3
 ```
 
 `@latest` 总是使用最新发布的版本（action 和命令行），`@v1` 是最新的 1.x，`@v1.4.1` 则固定为该版本。
@@ -94,7 +94,7 @@ Action 也可以直接打包，并把结果交给后面的步骤：
   with:
     project: installer/fluentsetup.json
     defines: Version=1.2.3        # 每行一个 名称=值
-    args: --arch x64              # 其他 fluentsetup build 参数
+    args: --arch x64              # 其他 fsetup build 参数
 - run: gh release upload v1.2.3 "${{ steps.setup.outputs.setup-path }}"
 ```
 

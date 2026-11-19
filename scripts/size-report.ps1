@@ -3,7 +3,7 @@
   Measures everything a FluentSetup Setup.exe carries besides the app's own (compressed) payload, and checks it against
   the 5 MiB budget. Nothing is estimated: sizes come from the built files, the stub's linker map and the package itself.
 
-.PARAMETER Setup     A Setup.exe built by fluentsetup (default: builds samples/DemoApp into out/size-report).
+.PARAMETER Setup     A Setup.exe built by fsetup (default: builds samples/DemoApp into out/size-report).
 .PARAMETER Json      Also write the report as JSON to this path.
 .EXAMPLE
   scripts/size-report.ps1
@@ -13,7 +13,7 @@ param([string] $Setup, [string] $Json)
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 $bin = Join-Path $root 'out\bin\x64\Release'
-$cli = Join-Path $root 'src\CLI\bin\Release\net10.0\fluentsetup.exe'
+$cli = Join-Path $root 'src\CLI\bin\Release\net10.0\fsetup.exe'
 $budget = 5MB
 
 if (-not $Setup) {

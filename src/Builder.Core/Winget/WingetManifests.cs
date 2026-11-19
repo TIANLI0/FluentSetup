@@ -8,7 +8,7 @@ using FluentSetup.Builder.Core.Updates;
 
 namespace FluentSetup.Builder.Core.Winget;
 
-/// <summary>What the winget manifests need that a Setup.exe does not carry ("fluentsetup winget" options).</summary>
+/// <summary>What the winget manifests need that a Setup.exe does not carry ("fsetup winget" options).</summary>
 public sealed class WingetOptions
 {
     /// <summary>https URL users download this Setup.exe from (InstallerUrl). Required unless <see cref="GitHubRepository"/> is set.</summary>
@@ -443,7 +443,7 @@ public static partial class WingetManifests
 
         public void Header(string manifestType)
         {
-            _sb.Append("# Created with FluentSetup ").Append(FluentSetupUpdates.CurrentVersion).Append(" (fluentsetup winget)\n");
+            _sb.Append("# Created with FluentSetup ").Append(FluentSetupUpdates.CurrentVersion).Append(" (fsetup winget)\n");
             _sb.Append("# yaml-language-server: $schema=https://aka.ms/winget-manifest.").Append(manifestType).Append('.').Append(ManifestVersion).Append(".schema.json\n\n");
         }
 

@@ -9,7 +9,7 @@ Source of truth (keep this page in sync with them):
 |---|---|---|
 | Footer, PE parsing, stream decoding, signature check | `src/Archive/container.h`, `container.cpp` | `src/Builder.Core/Packaging/PackageFormat.cs` |
 | Writing the container and the header JSON | – | `PackageBuilder.cs` (`Build`, `CompressFiles`, `HeaderWriter`) |
-| Reading back / verification | `container.cpp` | `PackageInspector.cs` (`fluentsetup inspect`) |
+| Reading back / verification | `container.cpp` | `PackageInspector.cs` (`fsetup inspect`) |
 | Header parsing and validation | `src/Install.Core/package.cpp`, `extensions.cpp`, `src/Common/json.cpp` | – |
 | Uninstaller generation | `src/Install.Core/engine.cpp` (`Engine::WriteUninstaller`) | – |
 | Authenticode signing | – | `Signer.cs` |
@@ -146,7 +146,7 @@ bytes (at most 64 MiB); if the frame declares a content size it must equal `head
 ## 4. Header JSON
 
 UTF-8 JSON, written by `HeaderWriter.Write` with `Utf8JsonWriter` (relaxed escaping) and compressed at level 12 (19 for
-`"max"`). Paths inside the header use `\` as separator. `fluentsetup inspect <Setup.exe> --json` prints the decoded
+`"max"`). Paths inside the header use `\` as separator. `fsetup inspect <Setup.exe> --json` prints the decoded
 header under the `header` key; `--verify` additionally checks every stream hash.
 
 ### 4.1 Example (trimmed)
@@ -327,7 +327,7 @@ All optional; an older stub never reads a 1.2 header (every Setup.exe reads only
 | `ui.banner` | File name in the `frontend` set (`banner.png` …). A `frontend` set without `entry` carries only the icon and banner (no WinUI front end). |
 | `redist` | File set (like `frontend`) of bundled official prerequisite installers, one stream each; never installed, extracted into a private temporary folder only when the prerequisite is missing. Not copied into the uninstaller. |
 | `uninstallerImage` | `{header: base64, certificates: base64, checksum, sha256}`: the exact header of the signed `uninstall.exe`, its Authenticode certificate table and PE checksum, and the SHA-256 of the finished file (section 7). Not copied into the uninstaller. |
-| `testHooks` | `true` only in packages built with `fluentsetup build --test-hooks` (FluentSetup's own tests): enables `FLUENTSETUP_TEST_FAULT_AFTER` and `--ui-simulate`. |
+| `testHooks` | `true` only in packages built with `fsetup build --test-hooks` (FluentSetup's own tests): enables `FLUENTSETUP_TEST_FAULT_AFTER` and `--ui-simulate`. |
 
 ### 4.8 JSON parser limits
 
@@ -426,7 +426,7 @@ otherwise it writes the unsigned uninstaller.
 
 ## 9. Known differences between the readers
 
-`PackageInspector` (used by `fluentsetup inspect` and the build's verification step) is more lenient than the native
+`PackageInspector` (used by `fsetup inspect` and the build's verification step) is more lenient than the native
 reader. A file it accepts can still be rejected by Setup.exe:
 
 * it does not check `overlayStart` alignment or that `overlayStart` lies after the PE sections;

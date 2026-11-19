@@ -167,7 +167,7 @@
                 </Expander>
             </StackPanel>
 
-            <!-- $(Name) values; fluentsetup build -D Name=value overrides them -->
+            <!-- $(Name) values; fsetup build -D Name=value overrides them -->
             <Grid Margin="0,28,0,8">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center" Margin="1,0,16,0">

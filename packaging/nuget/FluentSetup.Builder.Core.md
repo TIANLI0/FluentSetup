@@ -1,6 +1,6 @@
 # FluentSetup.Builder.Core
 
-The library behind [FluentSetup](https://github.com/TIANLI0/FluentSetup)'s `fluentsetup` CLI and Builder app: the
+The library behind [FluentSetup](https://github.com/TIANLI0/FluentSetup)'s `fsetup` CLI and Builder app: the
 `fluentsetup.json` project model, validation with diagnostic codes, and the packager that turns a project into a single
 native `Setup.exe` (install, upgrade, rollback, uninstall, Windows 11-style WinUI 3 interface).
 

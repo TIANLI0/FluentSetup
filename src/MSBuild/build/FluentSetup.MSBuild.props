@@ -7,15 +7,15 @@
       FluentSetupOutputDirectory   Folder for Setup.exe (default: output.directory of fluentsetup.json).
       FluentSetupArchitecture      x64 | arm64 (default: from RuntimeIdentifier, e.g. win-arm64, else output.architecture).
       FluentSetupDefines           More $(Name) values for the project: "Channel=stable;Edition=Pro".
-      FluentSetupArguments         More arguments for "fluentsetup build" (the sign and verbose switches, see docs/msbuild.md).
+      FluentSetupArguments         More arguments for "fsetup build" (the sign and verbose switches, see docs/msbuild.md).
       FluentSetupEnabled           false skips the installer (e.g. -p:FluentSetupEnabled=false).
-      FluentSetupCliPath           Another fluentsetup.dll or fluentsetup.exe (default: the copy in this package).
+      FluentSetupCliPath           Another fsetup.dll or fsetup.exe (default: the copy in this package).
 
     The project gets $(Version) and $(PublishDir) (absolute) as -D values, so fluentsetup.json can say
     "version": "$(Version)" and "files": { "source": "$(PublishDir)" }.
   -->
   <PropertyGroup>
     <FluentSetupEnabled Condition="'$(FluentSetupEnabled)' == ''">true</FluentSetupEnabled>
-    <FluentSetupCliPath Condition="'$(FluentSetupCliPath)' == ''">$(MSBuildThisFileDirectory)..\tools\cli\fluentsetup.dll</FluentSetupCliPath>
+    <FluentSetupCliPath Condition="'$(FluentSetupCliPath)' == ''">$(MSBuildThisFileDirectory)..\tools\cli\fsetup.dll</FluentSetupCliPath>
   </PropertyGroup>
 </Project>

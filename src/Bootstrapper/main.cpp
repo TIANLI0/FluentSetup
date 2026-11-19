@@ -271,7 +271,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     log::Info(L"Package %s %s (%s), %zu files, %s", pkg.appId.c_str(), pkg.version.c_str(), pkg.kind.c_str(),
               pkg.payload.files.size(), FormatBytes(pkg.payload.totalRaw).c_str());
     if (!args.uiSimulate.empty() && !pkg.testHooks) {
-        // Test hook for the WinUI fallback tests: only packages built with "fluentsetup build --test-hooks" honour it.
+        // Test hook for the WinUI fallback tests: only packages built with "fsetup build --test-hooks" honour it.
         log::Warn(L"--ui-simulate is ignored: the package was not built with test hooks");
         args.uiSimulate.clear();
     }

@@ -727,7 +727,7 @@ void Controller::Run(install::InstallOptions options, HWND owner) {
     } else {
         install::Engine engine(pkg_, container_);
         if (const DWORD fault = ::GetEnvironmentVariableW(L"FLUENTSETUP_TEST_FAULT_AFTER", nullptr, 0); fault > 0) {
-            // Test hook (e2e rollback test): only packages built with "fluentsetup build --test-hooks" honour it.
+            // Test hook (e2e rollback test): only packages built with "fsetup build --test-hooks" honour it.
             if (pkg_.testHooks) {
                 wchar_t buffer[16] = {};
                 ::GetEnvironmentVariableW(L"FLUENTSETUP_TEST_FAULT_AFTER", buffer, 16);

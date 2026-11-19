@@ -1,5 +1,5 @@
 name: Setup FluentSetup
-description: Installs the fluentsetup CLI (self-contained, with the installer runtime) and puts it on PATH; optionally builds a project. Windows, Linux x64 and macOS arm64 runners.
+description: Installs the fsetup CLI (also on PATH as fluentsetup; self-contained, with the installer runtime) and puts it on PATH; optionally builds a project. Windows, Linux x64 and macOS arm64 runners.
 author: TIANLI0
 branding:
   icon: package
@@ -20,17 +20,17 @@ inputs:
     default: ''
   defines:
     description: >-
-      Values for $(Name) in the project, one Name=Value per line (fluentsetup build -D), e.g. Version=1.4.1 (or the release tag from the workflow).
+      Values for $(Name) in the project, one Name=Value per line (fsetup build -D), e.g. Version=1.4.1 (or the release tag from the workflow).
     required: false
     default: ''
   args:
-    description: Further fluentsetup build arguments, e.g. "--arch arm64 --sign".
+    description: Further fsetup build arguments, e.g. "--arch arm64 --sign".
     required: false
     default: ''
 
 outputs:
   path:
-    description: Full path of fluentsetup.exe (fluentsetup on Linux and macOS).
+    description: Full path of fsetup.exe (fsetup on Linux and macOS).
     value: ${{ steps.install.outputs.path }}
   version:
     description: The installed version.
@@ -68,13 +68,13 @@ runs:
         }
         # Windows x64 (also used on Windows Arm64), Linux x64, macOS Apple silicon.
         $arch = "$env:RUNNER_ARCH".ToUpperInvariant()
-        if ($IsWindows) { $rid = 'win-x64'; $ext = 'zip'; $exeName = 'fluentsetup.exe' }
-        elseif ($IsLinux -and $arch -eq 'X64') { $rid = 'linux-x64'; $ext = 'tar.gz'; $exeName = 'fluentsetup' }
-        elseif ($IsMacOS -and $arch -eq 'ARM64') { $rid = 'osx-arm64'; $ext = 'tar.gz'; $exeName = 'fluentsetup' }
+        if ($IsWindows) { $rid = 'win-x64'; $ext = 'zip'; $suffix = '.exe' }
+        elseif ($IsLinux -and $arch -eq 'X64') { $rid = 'linux-x64'; $ext = 'tar.gz'; $suffix = '' }
+        elseif ($IsMacOS -and $arch -eq 'ARM64') { $rid = 'osx-arm64'; $ext = 'tar.gz'; $suffix = '' }
         else { throw "FluentSetup has no build for this runner ($([Runtime.InteropServices.RuntimeInformation]::OSDescription), $arch). Use a Windows, Linux x64 or macOS arm64 runner." }
         $name = "fluentsetup-$version-$rid.$ext"
         $base = "https://github.com/$repo/releases/download/v$version"
-        $dir = Join-Path $env:RUNNER_TEMP 'fluentsetup' $version
+        $dir = Join-Path $env:RUNNER_TEMP 'fsetup' $version
         New-Item -ItemType Directory -Force $dir | Out-Null
         $archive = Join-Path $env:RUNNER_TEMP $name
         Write-Host "FluentSetup $version ($rid) from $base"
@@ -98,9 +98,14 @@ runs:
           tar -xzf $archive -C $dir
           if ($LASTEXITCODE -ne 0) { throw "Could not extract $name" }
         }
-        $exe = Join-Path $dir $exeName
+        # Both names on PATH: fsetup and fluentsetup, its original name (older releases ship only fluentsetup; the
+        # Windows zip only fsetup.exe). A hard link costs no space.
+        $exe = Join-Path $dir "fsetup$suffix"
+        $alias = Join-Path $dir "fluentsetup$suffix"
+        if (-not (Test-Path $exe)) { New-Item -ItemType HardLink -Path $exe -Target $alias | Out-Null }
+        elseif (-not (Test-Path $alias)) { New-Item -ItemType HardLink -Path $alias -Target $exe | Out-Null }
         & $exe --version
-        if ($LASTEXITCODE -ne 0) { throw 'fluentsetup does not start' }
+        if ($LASTEXITCODE -ne 0) { throw 'fsetup does not start' }
         Add-Content $env:GITHUB_PATH $dir
         "path=$exe" >> $env:GITHUB_OUTPUT
         "version=$version" >> $env:GITHUB_OUTPUT
@@ -121,7 +126,7 @@ runs:
         # Further arguments split like a command line (quotes keep spaces).
         if ($env:FS_ARGS.Trim()) { $arguments += [regex]::Matches($env:FS_ARGS, '"([^"]*)"|(\S+)') | ForEach-Object { if ($_.Groups[1].Success) { $_.Groups[1].Value } else { $_.Groups[2].Value } } }
         & $env:FS_EXE @arguments
-        if ($LASTEXITCODE -ne 0) { throw "fluentsetup build failed (exit code $LASTEXITCODE)" }
+        if ($LASTEXITCODE -ne 0) { throw "fsetup build failed (exit code $LASTEXITCODE)" }
         $r = Get-Content $report -Raw | ConvertFrom-Json
         "setup-path=$($r.outputPath)" >> $env:GITHUB_OUTPUT
         "setup-sha256=$($r.sha256)" >> $env:GITHUB_OUTPUT

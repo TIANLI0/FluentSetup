@@ -182,7 +182,7 @@ public static class Localization
             if (SupportedLanguages.Contains(lang, StringComparer.OrdinalIgnoreCase) || keys.Count == 0) continue;
             var (done, total, missing) = Coverage(table, keys);
             if (missing.Count > 0)
-                d!.Warning("FS1327", $"ui.localization/{lang}.json", $"{done} of {total} installer strings translated; missing ones are shown in English (e.g. {string.Join(", ", missing.Take(5))}). fluentsetup locale add {lang} lists them all.");
+                d!.Warning("FS1327", $"ui.localization/{lang}.json", $"{done} of {total} installer strings translated; missing ones are shown in English (e.g. {string.Join(", ", missing.Take(5))}). fsetup locale add {lang} lists them all.");
         }
         foreach (var lang in options.Values.SelectMany(t => t.Keys).Concat(licenses.Keys).Distinct())
         {

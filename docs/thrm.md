@@ -21,7 +21,7 @@ What every migration needed:
    `THRM-amd64-installer.exe`, `MediaDuet-<v>-x64-setup.exe`); `output.fileName` keeps them.
 3. **The same command line.** Inno `/SILENT … /RELAUNCH=1` (a progress window, then the app starts again), NSIS
    `/S /UPDATE`, elevated `/S`: all understood, see [project-file.md](project-file.md#setupexe-command-line).
-4. **The version from the build.** `"version": "$(Version)"` with `fluentsetup build -D Version=<v>`; in GitHub
+4. **The version from the build.** `"version": "$(Version)"` with `fsetup build -D Version=<v>`; in GitHub
    Actions `uses: TIANLI0/FluentSetup@latest` provides the CLI.
 
 ## THRM: NSIS script → FluentSetup project
@@ -31,7 +31,7 @@ What every migration needed:
 (`build/windows/installer/project.nsi`). Since 3.8.1, `wails3 task package` builds it with:
 
 ```powershell
-fluentsetup build build\windows\installer\fluentsetup.json -D Version=3.8.1 -D PawnIOVersion=2.2.0.0 -o build\bin
+fsetup build build\windows\installer\fluentsetup.json -D Version=3.8.1 -D PawnIOVersion=2.2.0.0 -o build\bin
 # -> build\bin\THRM-amd64-installer.exe
 ```
 

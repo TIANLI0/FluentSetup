@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- NuGet package FluentSetup.MSBuild (scripts/pack-nuget.ps1, docs/msbuild.md): build\FluentSetup.MSBuild.props and
        .targets make "dotnet publish" of a .NET app also build its Setup.exe. Nothing is compiled here: the package carries
-       the fluentsetup CLI (framework-dependent, with its installer runtime) in tools\cli, which the targets run, so the
+       the fsetup CLI (framework-dependent, with its installer runtime) in tools\cli, which the targets run, so the
        app needs no global tool. -->
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -12,8 +12,8 @@
     <DevelopmentDependency>true</DevelopmentDependency>
     <NoWarn>$(NoWarn);NU5128</NoWarn>
     <PackageId>FluentSetup.MSBuild</PackageId>
-    <Description>Builds a native Windows 11-style installer (Setup.exe) of your .NET app as part of dotnet publish: set FluentSetupProject to a fluentsetup.json. Brings its own fluentsetup CLI and installer runtime.</Description>
-    <PackageTags>installer;setup;setup.exe;windows;winui;msbuild;publish;fluentsetup</PackageTags>
+    <Description>Builds a native Windows 11-style installer (Setup.exe) of your .NET app as part of dotnet publish: set FluentSetupProject to a fluentsetup.json. Brings its own fsetup CLI and installer runtime.</Description>
+    <PackageTags>installer;setup;setup.exe;windows;winui;msbuild;publish;fsetup;fluentsetup</PackageTags>
     <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_FluentSetupPackCli</TargetsForTfmSpecificContentInPackage>
     <_FluentSetupCliDir>$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)cli\</_FluentSetupCliDir>
   </PropertyGroup>

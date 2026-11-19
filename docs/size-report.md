@@ -10,7 +10,7 @@ scripts/size-report.ps1 -Setup out\thrm\THRM-3.8.0-Setup.exe -Json out\size.json
 ```
 
 Sizes come from the built files, the stub's linker map (`out/bin/x64/Release/FluentSetup.Stub.map`) and the package
-container (`fluentsetup inspect --json`). The package-level numbers (stub PE, front end, metadata, payload) are exact.
+container (`fsetup inspect --json`). The package-level numbers (stub PE, front end, metadata, payload) are exact.
 The per-component split of the stub is attributed from the linker map by symbol address; it shows which component
 costs what. Its rows can add up to slightly more than the PE size because padding between symbols is counted against
 the preceding symbol.

@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $root
 Import-Module (Join-Path $PSScriptRoot 'Uia.psm1') -Force
-$cli = Join-Path $root 'src\CLI\bin\Release\net10.0\fluentsetup.exe'
+$cli = Join-Path $root 'src\CLI\bin\Release\net10.0\fsetup.exe'
 if (-not (Test-Path $cli)) { throw 'Build first (scripts/build.ps1).' }
 $capture = Join-Path $root 'scripts\capture-window.ps1'
 $Out = [IO.Path]::GetFullPath((Join-Path $root $Out))

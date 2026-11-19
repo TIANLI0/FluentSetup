@@ -1,7 +1,7 @@
 # FluentSetup.MSBuild
 
 Builds a native Windows 11-style installer of your .NET app as part of `dotnet publish`, with
-[FluentSetup](https://github.com/TIANLI0/FluentSetup). The package brings its own `fluentsetup` CLI and installer
+[FluentSetup](https://github.com/TIANLI0/FluentSetup). The package brings its own `fsetup` CLI and installer
 runtime: no global tool to install.
 
 ```xml
@@ -34,9 +34,9 @@ a failed installer build fails the publish.
 | `FluentSetupOutputDirectory` | Folder for Setup.exe (default: `output.directory` of the project). |
 | `FluentSetupArchitecture` | `x64` or `arm64` (default: from `RuntimeIdentifier`, else `output.architecture`). |
 | `FluentSetupDefines` | More `$(Name)` values: `Channel=stable;Edition=Pro`. |
-| `FluentSetupArguments` | More `fluentsetup build` arguments, e.g. `--sign` or `--verbose`. |
+| `FluentSetupArguments` | More `fsetup build` arguments, e.g. `--sign` or `--verbose`. |
 | `FluentSetupEnabled` | `false` skips the installer. |
-| `FluentSetupCliPath` | Another `fluentsetup.dll` or `fluentsetup.exe` to run. |
+| `FluentSetupCliPath` | Another `fsetup.dll` or `fsetup.exe` to run. |
 
 Needs the .NET 10 SDK or newer on Windows 10 1809 or later. Documentation:
 [MSBuild integration](https://github.com/TIANLI0/FluentSetup/blob/main/docs/msbuild.md),

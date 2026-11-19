@@ -109,7 +109,7 @@ public static partial class ProjectImporter
         switch (d.Code)
         {
             case "FS1102" or "FS1103":
-                ctx.Warn(ctx.Script, $"{message} (the app's build output may not exist yet: build it before 'fluentsetup build').", d.Field);
+                ctx.Warn(ctx.Script, $"{message} (the app's build output may not exist yet: build it before 'fsetup build').", d.Field);
                 break;
             case "FS1010" or "FS1305" or "FS1310":
                 ctx.Warn(ctx.Script, $"{message} (fix the path, or copy the file).", d.Field);

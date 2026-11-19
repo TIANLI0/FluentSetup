@@ -17,7 +17,7 @@ FluentSetup has two halves:
 ```mermaid
 flowchart LR
     subgraph BuildTime["Build time (.NET)"]
-        CLI["src/CLI<br/>fluentsetup.exe"]
+        CLI["src/CLI<br/>fsetup.exe"]
         GUI["src/Builder<br/>WinUI 3 C# GUI (MVVM)"]
         Core["src/Builder.Core<br/>model, validation,<br/>collector, zstd, PE resources,<br/>signtool"]
         CLI --> Core
@@ -76,7 +76,7 @@ flowchart LR
 | Component | Responsibility |
 |---|---|
 | `src/Builder.Core` (`net10.0`; Windows, Linux, macOS) | `Model/` project model and serializer (unknown properties are round-tripped, newer `schemaVersion` rejected). `Validation/` project validation with stable diagnostic codes (`FSxxxx`) and extension validation against the collected files. `Packaging/`: `FileCollector` (include/exclude/preserve globs, extra sources; does not follow junctions), `PathRules` (the managed mirror of the native path rules), `PackageBuilder` (solid zstd blocks of ~32 MiB, files >= 16 MiB in their own stream, compression level 3/12/19 for fast/default/max, header compressed at level 12 (19 with `max`), the WinUI front end compressed alongside the payload, footer), `PeResources` with `PeImage` and `Win32ResourceTree` (replaces icon and version resources in the copied stub by rewriting its resource section in managed code), `IconConverter`, `Signer` (providers signtool, trustedSigning and command), `PackageInspector` (reads a built `Setup.exe` back and optionally verifies stream hashes), `RuntimeAssets` (locates `runtime/<arch>/FluentSetup.Stub.exe`, `runtime/<arch>/ui/*`, `runtime/localization/*.json`, `runtime/default-app.ico`). |
-| `src/CLI` (`fluentsetup`, `net10.0`) | `build`, `validate`, `inspect [--verify]`, `init`, `locale add`, `guide`, `schema`, `update`, `winget`, `versions`, `import`, `--version` (see docs/project-file.md). Exit codes 0 success, 1 validation/build failure, 2 usage error, 3 unexpected error, 4 cancelled. The project file copies the native runtime from `out/bin/x64/Release` (and `ARM64/Release` when present) into `runtime/` next to the CLI. |
+| `src/CLI` (`fsetup`, `net10.0`) | `build`, `validate`, `inspect [--verify]`, `init`, `locale add`, `guide`, `schema`, `update`, `winget`, `versions`, `import`, `--version` (see docs/project-file.md). Exit codes 0 success, 1 validation/build failure, 2 usage error, 3 unexpected error, 4 cancelled. The project file copies the native runtime from `out/bin/x64/Release` (and `ARM64/Release` when present) into `runtime/` next to the CLI. |
 | `src/Builder` (WinUI 3 C#, `net10.0-windows10.0.26100.0`, unpackaged) | GUI over `Builder.Core` using CommunityToolkit.Mvvm: one `MainViewModel` and pages Overview, AppInfo, Files, Install, Upgrade, Appearance, Build, History, Settings; services for settings, localization (`Strings/en-US`, `Strings/zh-CN` `.resw`), and `PreviewLauncher`, which writes a `hello` document and starts the real `FluentSetup.UI.exe --preview`. |
 
 ### 1.4 Package layout (format v1)
@@ -158,7 +158,7 @@ Public switches: `/quiet|/verysilent|/s`, `/passive|/silent`, `/relaunch|/update
 |---|---|
 | `--worker --pipe <name> --parent-pid <n> [--origin-dir <dir>] [--wait-pid <n>]` (+ `/uninstall` or `/modify`, `/log`, `/lang`) | Controller -> elevated worker |
 | `--phase2 --origin-dir <dir> --origin-process <handle> --result-pipe <handle>` | uninstall phase 1 -> phase 2 |
-| `--ui-simulate runtime-missing|crash-before-ready|crash-after-ready|hang` | tests of the WinUI fallback; honoured only by packages built with `fluentsetup build --test-hooks` (header `testHooks`), ignored with a log warning otherwise. The same applies to the `FLUENTSETUP_TEST_FAULT_AFTER` environment variable (e2e rollback test). |
+| `--ui-simulate runtime-missing|crash-before-ready|crash-after-ready|hang` | tests of the WinUI fallback; honoured only by packages built with `fsetup build --test-hooks` (header `testHooks`), ignored with a log warning otherwise. The same applies to the `FLUENTSETUP_TEST_FAULT_AFTER` environment variable (e2e rollback test). |
 
 ### 2.2 WinUI front end as a child process (`winui_host.cpp`)
 

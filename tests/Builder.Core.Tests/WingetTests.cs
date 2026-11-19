@@ -10,7 +10,7 @@ using YamlDotNet.Serialization;
 namespace FluentSetup.Builder.Core.Tests;
 
 /// <summary>
-/// fluentsetup winget: the manifests are read back with a YAML parser and checked against the rules of the winget
+/// fsetup winget: the manifests are read back with a YAML parser and checked against the rules of the winget
 /// manifest schema 1.28.0 (required fields, patterns, enums) that matter for a FluentSetup Setup.exe.
 /// </summary>
 public class WingetTests

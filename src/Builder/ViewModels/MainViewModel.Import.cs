@@ -4,7 +4,7 @@ using FluentSetup.Builder.Services;
 
 namespace FluentSetup.Builder.ViewModels;
 
-/// <summary>Import from an Inno Setup or NSIS script (fluentsetup import in the GUI).</summary>
+/// <summary>Import from an Inno Setup or NSIS script (fsetup import in the GUI).</summary>
 public partial class MainViewModel
 {
     [RelayCommand]

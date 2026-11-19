@@ -574,14 +574,14 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="LicenseModeFirstInstall.Content" xml:space="preserve"><value>On first install only</value></data>
   <data name="LicenseModeAlways.Content" xml:space="preserve"><value>Also before updates and reinstalls</value></data>
   <data name="AppearanceLocalizationTitle.Text" xml:space="preserve"><value>Localization folder</value></data>
-  <data name="AppearanceLocalizationDescription.Text" xml:space="preserve"><value>One &lt;language&gt;.json per language with option labels, action names, license and text overrides. fluentsetup locale add creates one.</value></data>
+  <data name="AppearanceLocalizationDescription.Text" xml:space="preserve"><value>One &lt;language&gt;.json per language with option labels, action names, license and text overrides. fsetup locale add creates one.</value></data>
   <data name="AppearanceLocalizationBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Localization folder</value></data>
   <data name="AppearanceLocalizationBox.PlaceholderText" xml:space="preserve"><value>locales</value></data>
   <data name="AppearanceLicensesBox.Header" xml:space="preserve"><value>License per language (one per line: zh-CN = license_zh.txt)</value></data>
   <data name="AppearanceStringsBox.Header" xml:space="preserve"><value>Installer text overrides (one per line: zh-CN: welcome.body = text)</value></data>
   <data name="AppearanceStringsHelp.Text" xml:space="preserve"><value>Keys are listed in shared/localization/en-US.json. Write line breaks as \n.</value></data>
   <data name="BuildVariablesSection.Text" xml:space="preserve"><value>Variables</value></data>
-  <data name="BuildVariablesDescription.Text" xml:space="preserve"><value>Use $(Name) in any text of the project. fluentsetup build -D Name=value overrides a value, e.g. the version in CI.</value></data>
+  <data name="BuildVariablesDescription.Text" xml:space="preserve"><value>Use $(Name) in any text of the project. fsetup build -D Name=value overrides a value, e.g. the version in CI.</value></data>
   <data name="BuildVariablesAdd.Text" xml:space="preserve"><value>Add variable</value></data>
   <data name="BuildVariablesEmpty.Text" xml:space="preserve"><value>No variables.</value></data>
   <data name="VariableNameBox.PlaceholderText" xml:space="preserve"><value>Name</value></data>

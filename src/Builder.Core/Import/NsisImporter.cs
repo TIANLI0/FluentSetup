@@ -252,7 +252,7 @@ internal sealed partial class NsisImporter(ImportContext ctx)
                     ctx.Info(at, "!searchparse reads values when the script is compiled; variables it defines are reported where used.");
                     break;
                 case "system" or "execute" or "makensis":
-                    ctx.Manual(at, $"{cmd} {string.Join(' ', tokens.Skip(1))} runs a command when the script is compiled; do that in your build before 'fluentsetup build'.");
+                    ctx.Manual(at, $"{cmd} {string.Join(' ', tokens.Skip(1))} runs a command when the script is compiled; do that in your build before 'fsetup build'.");
                     break;
                 case "packhdr":
                     ctx.Info(at, "!packhdr (header compression) is not needed.");
@@ -764,8 +764,8 @@ internal sealed partial class NsisImporter(ImportContext ctx)
         ctx.Info(_languages[0].At, $"Languages: the installer shows Windows' display language when it has it{(builtIn.Count > 0 ? ": built in " + string.Join(", ", builtIn) : "")}.", "ui.defaultLanguage");
         foreach (var l in _languages.Where(l => !Localization.SupportedLanguages.Contains(l.Tag)))
             ctx.Manual(l.At, l.Tag.Length > 0
-                ? $"Language {l.Name}: the installer's texts are built in for en-US, zh-CN, ja-JP and ko-KR. Add {l.Tag} with 'fluentsetup locale add {l.Tag} fluentsetup.json' (set ui.localization first)."
-                : $"Language {l.Name} is not recognised; add it with 'fluentsetup locale add <tag> fluentsetup.json'.", "ui.localization");
+                ? $"Language {l.Name}: the installer's texts are built in for en-US, zh-CN, ja-JP and ko-KR. Add {l.Tag} with 'fsetup locale add {l.Tag} fluentsetup.json' (set ui.localization first)."
+                : $"Language {l.Name} is not recognised; add it with 'fsetup locale add <tag> fluentsetup.json'.", "ui.localization");
         if (_languages.Count == 1 && _languages[0].Tag is { Length: > 0 } only && only != "en-US" && Localization.SupportedLanguages.Contains(only))
         {
             ctx.Project.Ui.DefaultLanguage = only;

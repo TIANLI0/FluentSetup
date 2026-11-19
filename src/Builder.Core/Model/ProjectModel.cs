@@ -13,7 +13,7 @@ public sealed class SetupProject
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     /// <summary>
     /// Values for $(Name) placeholders in any string of the project, e.g. { "Version": "1.2.0" } with
-    /// "version": "$(Version)". <c>fluentsetup build -D Version=1.2.1</c> overrides them (CI release builds).
+    /// "version": "$(Version)". <c>fsetup build -D Version=1.2.1</c> overrides them (CI release builds).
     /// </summary>
     public Dictionary<string, string> Variables { get; set; } = [];
     public AppInfo App { get; set; } = new();

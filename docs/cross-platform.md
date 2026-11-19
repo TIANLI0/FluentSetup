@@ -1,6 +1,6 @@
 # Building installers on Linux and macOS
 
-`fluentsetup` runs on Windows, Linux and macOS. On every system it turns the same project into the same Windows
+`fsetup` runs on Windows, Linux and macOS. On every system it turns the same project into the same Windows
 `Setup.exe`: the installer runtime inside it (`FluentSetup.Stub.exe` and the WinUI front end) is prebuilt for Windows
 and only copied, and the icon and version resources are written by managed code, not by Windows APIs. Testing the
 result still needs Windows.
@@ -18,7 +18,7 @@ result still needs Windows.
 
   On macOS a browser download is quarantined; clear it with `xattr -dr com.apple.quarantine ~/fluentsetup`.
 - **GitHub Actions**: `uses: TIANLI0/FluentSetup@v1` works on Linux x64 (`ubuntu-*`) and Apple silicon (`macos-*`)
-  runners too (FluentSetup 1.2.0 and later) and puts `fluentsetup` on `PATH`.
+  runners too (FluentSetup 1.2.0 and later) and puts `fsetup` on `PATH`.
 - **From source**: with the .NET 10 SDK, `dotnet build src/CLI -c Release` builds the CLI anywhere, but the installer
   runtime is built on Windows (Visual Studio). Take the `runtime/` folder of a release archive and pass it with
   `build --runtime <dir>` or the `FLUENTSETUP_RUNTIME` environment variable.
@@ -101,7 +101,7 @@ Other jsign store types cover Azure Key Vault, AWS KMS, Google Cloud KMS, DigiCe
   `"run": "pwsh", "arguments": ["-NoProfile", "-File", "tools/sign.ps1", "{file}", "{output}"]`, and reads its API
   token from the environment.
 
-Check a signed package with `fluentsetup inspect Setup.exe --verify` (it reports `signed: yes` and verifies every
+Check a signed package with `fsetup inspect Setup.exe --verify` (it reports `signed: yes` and verifies every
 stream); `osslsigncode verify -in Setup.exe` checks the signature itself.
 
 ## Example: GitHub Actions on Linux
@@ -122,8 +122,8 @@ jobs:
           mkdir -p installer/secrets
           printf '%s' "$PFX_BASE64" | base64 -d > installer/secrets/codesign.pfx
           printf '%s' "$PFX_PASSWORD" > installer/secrets/pfx-password.txt
-      - run: fluentsetup build installer/fluentsetup.json -D Version=${GITHUB_REF_NAME#v}
-      - run: fluentsetup inspect installer/dist/*.exe --verify
+      - run: fsetup build installer/fluentsetup.json -D Version=${GITHUB_REF_NAME#v}
+      - run: fsetup inspect installer/dist/*.exe --verify
       - uses: actions/upload-artifact@v7
         with:
           name: setup

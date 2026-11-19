@@ -255,8 +255,8 @@ internal sealed partial class InnoSetupImporter(ImportContext ctx)
         foreach (var l in other)
         {
             ctx.Manual(l.At, l.Tag.Length > 0
-                ? $"Language {l.Name}: the installer's texts are built in for en-US, zh-CN, ja-JP and ko-KR. Add {l.Tag} with 'fluentsetup locale add {l.Tag} fluentsetup.json' (set ui.localization first)."
-                : $"Language {l.Name} is not recognised; add it with 'fluentsetup locale add <tag> fluentsetup.json'.", "ui.localization");
+                ? $"Language {l.Name}: the installer's texts are built in for en-US, zh-CN, ja-JP and ko-KR. Add {l.Tag} with 'fsetup locale add {l.Tag} fluentsetup.json' (set ui.localization first)."
+                : $"Language {l.Name} is not recognised; add it with 'fsetup locale add <tag> fluentsetup.json'.", "ui.localization");
         }
         if (_languages.Count == 1 && _languages[0].Tag is { Length: > 0 } only && only != "en-US" && Localization.SupportedLanguages.Contains(only))
         {
@@ -587,7 +587,7 @@ internal sealed partial class InnoSetupImporter(ImportContext ctx)
         if (in64.Length == 0)
             ctx.Warn(archAt, "The script builds a 32-bit installation (no ArchitecturesInstallIn64BitMode); FluentSetup packages are x64 or arm64 and install into the native Program Files. A 32-bit app runs from there unchanged.", "output.architecture");
         else ctx.Info(archAt, $"ArchitecturesInstallIn64BitMode → output.architecture \"{p.Output.Architecture}\"", "output.architecture");
-        if (x64 && arm) ctx.Info(archAt, "For Arm64 PCs build a second package: fluentsetup build fluentsetup.json --arch arm64.", "output.architecture");
+        if (x64 && arm) ctx.Info(archAt, "For Arm64 PCs build a second package: fsetup build fluentsetup.json --arch arm64.", "output.architecture");
 
         if (Setup("MinVersion") is { Length: > 0 } minVersion)
         {

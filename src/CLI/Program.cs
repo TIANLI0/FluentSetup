@@ -9,7 +9,7 @@ using FluentSetup.Builder.Core.Validation;
 namespace FluentSetup.Cli;
 
 /// <summary>
-/// fluentsetup - command-line front end of FluentSetup.
+/// fsetup - command-line front end of FluentSetup.
 /// Exit codes: 0 success, 1 validation or build failure, 2 usage error, 3 unexpected error, 4 cancelled.
 /// </summary>
 public static class Program
@@ -39,14 +39,14 @@ public static class Program
                                         [--version <version>] [--main-exe <file.exe>]
                                         Create fluentsetup.json; name, publisher, version and main program
                                         default to the main program's version resource
-          fluentsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [options]
+          fsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [options]
                                         Write winget manifests (winget-pkgs layout) for a built Setup.exe
               -o, --output <dir>        Root folder (default: current folder): <dir>/manifests/<x>/<Publisher>/<App>/<version>
               --identifier <id>         PackageIdentifier (default: app.id if it is Publisher.App)
               --license <name>          e.g. MIT (default: recognized from the license text, else Proprietary)
               --license-url, --publisher-url, --release-notes-url <url>
               --short-description <text>, --tags <a,b,...>, --json
-          fluentsetup import <setup.iss|script.nsi> [-o <folder>] [--force] [--json]
+          fsetup import <setup.iss|script.nsi> [-o <folder>] [--force] [--json]
                                         Convert an Inno Setup or NSIS script into <folder>\fluentsetup.json
                                         (default folder: the script's) plus import-report.md, a checklist of
                                         what was mapped and what needs manual work
@@ -54,11 +54,11 @@ public static class Program
                                         Create <ui.localization>/<language>.json with every text to translate
                                         (option/action/variant ids, and the installer strings for a language it
                                         does not ship); any BCP-47 tag, e.g. nl-NL or pt-PT
-          fluentsetup update [--check] [--prerelease] [--json]
+          fsetup update [--check] [--prerelease] [--json]
                                         Update FluentSetup (Builder and CLI) to the latest release on GitHub:
                                         downloads Setup.exe, verifies its SHA-256 and installs it (Windows only).
                                         --check only reports; --json (with --check) prints the result as JSON
-          fluentsetup versions <webview2|windowsappruntime|dotnet|vcredist> [--json]
+          fsetup versions <webview2|windowsappruntime|dotnet|vcredist> [--json]
                                         Versions to use as a prerequisite's minimum (from Microsoft's
                                         update feeds, cached for a day; vcredist: common minimums)
           fluentsetup guide                     Print the complete project-authoring guide (for people and AI tools)
@@ -169,7 +169,7 @@ public static class Program
         if (!OperatingSystem.IsWindows())
         {
             // Updating in place runs FluentSetup's own Setup.exe.
-            Console.Error.WriteLine($"fluentsetup update installs updates on Windows only. Download the new version for this system from {latest.PageUrl}");
+            Console.Error.WriteLine($"fsetup update installs updates on Windows only. Download the new version for this system from {latest.PageUrl}");
             return 1;
         }
         if (installed is null)
@@ -243,7 +243,7 @@ public static class Program
     private static int UsageError(string message)
     {
         Console.Error.WriteLine($"error: {message}");
-        Console.Error.WriteLine("Run 'fluentsetup --help' for usage.");
+        Console.Error.WriteLine("Run 'fsetup --help' for usage.");
         return 2;
     }
 
@@ -467,7 +467,7 @@ public static class Program
     private static int Init(ParsedArgs a)
     {
         var folder = Path.GetFullPath(a.PositionalOrDefault(0) ?? ".");
-        var source = a.Value("source") ?? throw new UsageException("--source is required: the folder with the built app, e.g. fluentsetup init installer --source bin\\Release\\publish");
+        var source = a.Value("source") ?? throw new UsageException("--source is required: the folder with the built app, e.g. fsetup init installer --source bin\\Release\\publish");
         var sourceFull = Path.GetFullPath(source);
         if (!Directory.Exists(sourceFull)) throw new UsageException($"--source: folder not found: {sourceFull}");
         // Name, publisher, version and main program come from the app's own version resource unless given.
@@ -499,8 +499,8 @@ public static class Program
         var rel = Path.GetRelativePath(Environment.CurrentDirectory, path);
         Console.WriteLine();
         Console.WriteLine("Next:");
-        Console.WriteLine($"  fluentsetup validate {rel}");
-        Console.WriteLine($"  fluentsetup build {rel}");
+        Console.WriteLine($"  fsetup validate {rel}");
+        Console.WriteLine($"  fsetup build {rel}");
         return 0;
     }
 
@@ -558,7 +558,7 @@ public static class Program
             Console.WriteLine($"{(n.Severity == ImportSeverity.Manual ? "manual " : "warning")} {where}{n.Message}");
         }
         Console.WriteLine();
-        Console.WriteLine($"Next: work through {ProjectImporter.ReportFileName}, build the app, then run: fluentsetup validate \"{result.ProjectPath}\"");
+        Console.WriteLine($"Next: work through {ProjectImporter.ReportFileName}, build the app, then run: fsetup validate \"{result.ProjectPath}\"");
         return 0;
     }
 

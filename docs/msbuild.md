@@ -5,7 +5,7 @@ FluentSetup is also published as three NuGet packages, with the same version num
 | Package | What it is | Use it to |
 |---|---|---|
 | `FluentSetup.MSBuild` | MSBuild targets plus their own copy of the CLI | build Setup.exe as part of `dotnet publish` |
-| `FluentSetup.Cli` | `fluentsetup` as a .NET tool | use the CLI where .NET is installed: `dotnet tool install -g FluentSetup.Cli` |
+| `FluentSetup.Cli` | `fsetup` as a .NET tool | use the CLI where .NET is installed: `dotnet tool install -g FluentSetup.Cli` |
 | `FluentSetup.Builder.Core` | The library behind the CLI and the Builder app | build, validate and inspect packages from your own .NET code |
 
 Each package carries the installer runtime (setup stub, WinUI front end, installer strings, default icon), so none of
@@ -30,7 +30,7 @@ Reference the package and point `FluentSetupProject` at the installer's project 
 ```
 
 Take the version and the files from the publish in `installer\fluentsetup.json`. The `variables` are only defaults for
-editing the project in the Builder app or running `fluentsetup validate` by hand; the build overrides them:
+editing the project in the Builder app or running `fsetup validate` by hand; the build overrides them:
 
 ```json
 {
@@ -65,9 +65,9 @@ including a non-zero exit code without such a line, fails the publish.
 | `FluentSetupOutputDirectory` | `""` | Folder for Setup.exe, relative to the project file. Empty means `output.directory` of the FluentSetup project. |
 | `FluentSetupArchitecture` | `""` | `x64` or `arm64`. Empty means: from `RuntimeIdentifier` (`win-x64`, `win-arm64`, ...), else `output.architecture`. |
 | `FluentSetupDefines` | `""` | More `$(Name)` values, separated by semicolons: `Channel=stable;Edition=Pro`. |
-| `FluentSetupArguments` | `""` | More arguments for `fluentsetup build`, e.g. `--sign` or `--verbose`. |
+| `FluentSetupArguments` | `""` | More arguments for `fsetup build`, e.g. `--sign` or `--verbose`. |
 | `FluentSetupEnabled` | `true` | `false` skips the installer, e.g. `dotnet publish -p:FluentSetupEnabled=false`. |
-| `FluentSetupCliPath` | the package's copy | Another `fluentsetup.dll` (run with `dotnet`) or `fluentsetup.exe`. |
+| `FluentSetupCliPath` | the package's copy | Another `fsetup.dll` (run with `dotnet`) or `fsetup.exe`. |
 
 Notes:
 
@@ -80,15 +80,15 @@ Notes:
 ## FluentSetup.Cli: the .NET tool
 
 ```powershell
-dotnet tool install -g FluentSetup.Cli         # fluentsetup on PATH for this user
-dotnet tool update -g FluentSetup.Cli          # later versions (fluentsetup update is for the Setup.exe installation)
+dotnet tool install -g FluentSetup.Cli         # fsetup on PATH for this user
+dotnet tool update -g FluentSetup.Cli          # later versions (fsetup update is for the Setup.exe installation)
 
 dotnet new tool-manifest                       # or per repository, pinned in .config/dotnet-tools.json:
 dotnet tool install FluentSetup.Cli
-dotnet tool run fluentsetup build installer\fluentsetup.json
+dotnet tool run fsetup build installer\fluentsetup.json
 ```
 
-The tool is the same `fluentsetup` as in the release zip and FluentSetup's own installer (all commands, see the
+The tool is the same `fsetup` as in the release zip and FluentSetup's own installer (all commands, see the
 [CLI reference](project-file.md#cli-fluentsetup)); it needs the .NET runtime instead of being self-contained. Its
 installer runtime is part of the tool's files.
 
@@ -102,7 +102,7 @@ using FluentSetup.Builder.Core.Validation;
 var path = Path.GetFullPath(@"installer\fluentsetup.json");
 var project = ProjectSerializer.Load(path);
 
-// Validate only (what "fluentsetup validate" does before collecting files):
+// Validate only (what "fsetup validate" does before collecting files):
 var problems = ProjectValidator.Validate(ProjectVariables.Expand(project, null), Path.GetDirectoryName(path)!);
 
 var report = await new PackageBuilder().BuildAsync(project, path, new BuildOptions
@@ -122,8 +122,8 @@ if (report.Success) Console.WriteLine($"{report.OutputPath} ({report.Sizes.Total
 | `ProjectVariables` | `$(Name)` expansion with overrides, as `-D` does. |
 | `ProjectValidator`, `FileCollector` | The checks and the file collection of `validate`, with `Diagnostic` codes and field paths. |
 | `PackageBuilder`, `BuildOptions`, `BuildReport` | Build Setup.exe; the report has the sizes, the SHA-256 and the diagnostics. |
-| `PackageInspector` | Read and verify a built Setup.exe (`fluentsetup inspect`). |
-| `WingetManifests` | winget manifests for a built Setup.exe (`fluentsetup winget`, see [winget](winget.md)). |
+| `PackageInspector` | Read and verify a built Setup.exe (`fsetup inspect`). |
+| `WingetManifests` | winget manifests for a built Setup.exe (`fsetup winget`, see [winget](winget.md)). |
 
 The installer runtime is copied into the app's output and publish folders as `runtime\` (by the package's
 `buildTransitive` targets), where `RuntimeAssets` looks for it by default. To use another runtime folder, set

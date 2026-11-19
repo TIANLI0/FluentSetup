@@ -30,9 +30,9 @@ public static class ImportReport
 
         var sb = new StringBuilder();
         sb.Append("# Import report: ").AppendLine(Escape(script)).AppendLine();
-        sb.Append("`fluentsetup import` converted the ").Append(result.FormatName).Append(" script **").Append(Escape(script)).Append("** into **")
+        sb.Append("`fsetup import` converted the ").Append(result.FormatName).Append(" script **").Append(Escape(script)).Append("** into **")
           .Append(Escape(projectRel)).AppendLine("**. Work through the lists below, then build the app and run")
-          .Append("`fluentsetup validate ").Append(projectRel).AppendLine("`.").AppendLine();
+          .Append("`fsetup validate ").Append(projectRel).AppendLine("`.").AppendLine();
         sb.AppendLine("| | |").AppendLine("|---|---|");
         sb.Append("| App | ").Append(Escape(Value(p.App.Name))).Append(' ').Append(Escape(Value(p.App.Version))).Append(" (").Append(Code(p.App.Id)).AppendLine(") |");
         if (p.App.Publisher.Length > 0) sb.Append("| Publisher | ").Append(Escape(Value(p.App.Publisher))).AppendLine(" |");
@@ -63,8 +63,8 @@ public static class ImportReport
 
         sb.AppendLine("## Next steps").AppendLine();
         sb.AppendLine("1. Work through the two checklists above and edit the project (in the FluentSetup Builder or a text editor).");
-        sb.Append("2. Build the app so that `files.source` exists, then run `fluentsetup validate ").Append(projectRel).AppendLine("`.");
-        sb.Append("3. Run `fluentsetup build ").Append(projectRel).AppendLine("` and test the installer on a test PC or VM: `Setup.exe /quiet /log setup.log`,");
+        sb.Append("2. Build the app so that `files.source` exists, then run `fsetup validate ").Append(projectRel).AppendLine("`.");
+        sb.Append("3. Run `fsetup build ").Append(projectRel).AppendLine("` and test the installer on a test PC or VM: `Setup.exe /quiet /log setup.log`,");
         sb.AppendLine("   an upgrade over the version the old installer installed, and the uninstall.");
         return sb.ToString();
     }

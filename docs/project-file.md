@@ -1,7 +1,7 @@
 # Project file reference (`fluentsetup.json`)
 
 A FluentSetup project is one JSON file, usually named `fluentsetup.json`, that describes the app, the files to
-install and how the generated `Setup.exe` behaves. The builder (GUI and `fluentsetup` CLI) reads it with these rules:
+install and how the generated `Setup.exe` behaves. The builder (GUI and `fsetup` CLI) reads it with these rules:
 
 - Property names are camelCase. They are matched case-insensitively.
 - `//` and `/* */` comments and trailing commas are accepted.
@@ -37,7 +37,7 @@ Everything else takes the defaults below. With these defaults the app is install
 `%LocalAppData%\Programs\Contoso Notes`. You get a Start menu shortcut and an optional, unchecked desktop shortcut.
 The installer offers to launch the app at the end, and the output is `dist\Contoso Notes-1.2.0-Setup.exe`.
 
-`fluentsetup init` writes a complete file with every property set to its default value.
+`fsetup init` writes a complete file with every property set to its default value.
 
 ## Root
 
@@ -70,7 +70,7 @@ The installer offers to launch the app at the end, and the output is `dist\Conto
 ## variables
 
 Any string in the project can use `$(Name)` placeholders. Their values come from `variables` and, with priority, from
-the command line: `fluentsetup build -D Version=1.4.2 -D Channel=stable` (also `validate`). A release pipeline can
+the command line: `fsetup build -D Version=1.4.2 -D Channel=stable` (also `validate`). A release pipeline can
 stamp the version, or the version of a bundled driver, without rewriting the project file.
 
 ```json
@@ -93,7 +93,7 @@ stamp the version, or the version of a bundled driver, without rewriting the pro
 | `version` | string | `"1.0.0"` | 1–4 dot-separated numbers, optionally followed by `-tag`, e.g. `2.0.0-beta.1`. Max 64 characters. See [upgrades](#upgrades-and-downgrades). |
 | `description` | string | `""` | Max 1024. Shown in Windows Settings and used as the shortcut comment. |
 | `website` | string | `""` | Absolute `http://` or `https://` URL, or empty. Settings > Apps "About" link (`URLInfoAbout`) and the first link in the installer ("Website"). |
-| `supportUrl` | string | `""` | Help or support page (http/https). Shown in the installer ("Help and support"), written as `HelpLink` (Settings > Apps) and as `PublisherSupportUrl` by `fluentsetup winget`. |
+| `supportUrl` | string | `""` | Help or support page (http/https). Shown in the installer ("Help and support"), written as `HelpLink` (Settings > Apps) and as `PublisherSupportUrl` by `fsetup winget`. |
 | `releaseNotesUrl` | string | `""` | What's new, e.g. `https://github.com/owner/repo/releases`. Shown in the installer ("Release notes", also on the page after a successful install), written as `URLUpdateInfo` and as the winget `ReleaseNotesUrl`. |
 | `links` | array | `[]` | Up to 4 further links shown in the installer after the website, e.g. `[{ "url": "https://github.com/owner/repo" }, { "url": "https://example.com/forum", "label": { "en-US": "Forum", "zh-CN": "论坛" } }]`. `label` is per language (1–64 characters); without it the installer shows the site's name: GitHub, Gitee, GitLab, Codeberg, Discord, … or the host name. |
 
@@ -138,7 +138,7 @@ How it works:
 
 - **Build time.** The builder collects every variant. Files with the same path and content in all variants are stored
   once as shared files; the rest is stored per variant in separate streams, so installing one variant never
-  decompresses the other's data. `output.variants` (or `fluentsetup build --variant id[,id]`) limits which variants go
+  decompresses the other's data. `output.variants` (or `fsetup build --variant id[,id]`) limits which variants go
   into a package: with one variant the package has no choice at all.
 - **Install time.** The first page shows a *Runtime* choice when the package has more than one variant;
   `Setup.exe /variant <id>` selects one from the command line (also in quiet mode). An update keeps the variant that is
@@ -336,7 +336,7 @@ With neither `installer` nor `download`, a missing prerequisite stops setup befo
 `"auto": "bundle"` and `"auto": "download"` use these links. They always serve Microsoft's current installer, so an
 installer that setup downloads is accepted by its signature (a valid, trusted Authenticode signature issued to
 "Microsoft Corporation"), not by a SHA-256. For `bundle` the builder downloads the file, checks the same signature (on
-Windows) and keeps it for a day under `%LocalAppData%\FluentSetup\cache\installers` (`fluentsetup build
+Windows) and keeps it for a day under `%LocalAppData%\FluentSetup\cache\installers` (`fsetup build
 --refresh-installers` downloads it again; an offline build uses the last copy; the environment variable
 `FLUENTSETUP_CACHE` moves the cache to `<folder>\installers`). The build report lists every bundled
 installer with its SHA-256.
@@ -349,7 +349,7 @@ installer with its SHA-256.
 | Windows App Runtime | `https://aka.ms/windowsappsdk/<M.m>/latest/windowsappruntimeinstall-<x64\|arm64>.exe` | `--quiet` |
 | VC++ Redistributable | `https://aka.ms/vs/17/release/vc_redist.<x64\|x86\|arm64>.exe` | `/install /quiet /norestart` |
 
-`arguments` overrides the silent arguments. The Builder app and `fluentsetup versions <webview2|windowsappruntime|dotnet|vcredist>`
+`arguments` overrides the silent arguments. The Builder app and `fsetup versions <webview2|windowsappruntime|dotnet|vcredist>`
 list current versions from Microsoft (Edge Stable for WebView2, NuGet for the Windows App SDK, the .NET release index).
 
 ## options
@@ -677,7 +677,7 @@ them against `en-US.json`). Regional tags use the table of their language: `zh-T
 → zh-TW, other Chinese (`zh-SG`, `zh-Hans-*`) → zh-CN; `de-AT`, `de-CH` → de-DE; `fr-CA`, `fr-BE` → fr-FR; `es-*` →
 es-ES; `pt-PT` and other Portuguese → pt-BR; `ru-*` → ru-RU; `it-CH` → it-IT; `en-*` → en-US. **Any other language**
 can be added by a package: give its localization file (named with any BCP-47 tag, e.g. `nl-NL.json`, `pl.json`,
-`pt-PT.json`) a `strings` table with the installer's texts. `fluentsetup locale add <tag> <project.json>` creates that
+`pt-PT.json`) a `strings` table with the installer's texts. `fsetup locale add <tag> <project.json>` creates that
 file with every key (to translate, starting from the installer's table of the same language, e.g. pt-BR for `pt-PT`,
 else English) and the package's option, action and variant ids. Language choice: `/lang`, else `ui.defaultLanguage`,
 else the user's Windows display languages in order; the first tag that matches wins, checked as: the package's
@@ -838,7 +838,7 @@ More examples (osslsigncode, jsign with Artifact Signing or a cloud key, AzureSi
 | FS1518 | signtool: the thumbprint is not 40 hex digits |
 | FS1519 | signtool or trustedSigning on Linux or macOS: a warning from `validate`, an error when the build signs |
 
-## CLI: `fluentsetup`
+## CLI: `fsetup`
 
 The CLI runs on Windows, Linux and macOS; the result is the same Windows `Setup.exe` on each. Release downloads:
 `fluentsetup-<version>-win-x64.zip`, `-linux-x64.tar.gz` and `-osx-arm64.tar.gz` (self-contained, with the installer
@@ -862,15 +862,15 @@ fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
 fluentsetup inspect <Setup.exe> [--verify] [--json]
 fluentsetup init [folder] --source <files folder> [--name <name>] [--id <app.id>] [--publisher <name>]
                  [--version <version>] [--main-exe <file.exe>]
-fluentsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [-o <dir>] [--identifier <Publisher.App>]
+fsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [-o <dir>] [--identifier <Publisher.App>]
                    [--license <name>] [--license-url <url>] [--short-description <text>] [--publisher-url <url>]
                    [--tags <a,b>] [--release-notes-url <url>] [--json]
-fluentsetup versions <webview2|windowsappruntime|dotnet|vcredist> [--json]
-fluentsetup locale add <language> <project.json> [--force]
-fluentsetup guide | schema
-fluentsetup update [--check] [--prerelease] [--json]
-fluentsetup import <setup.iss|script.nsi> [-o <folder>] [--force] [--json]
-fluentsetup --version | --help
+fsetup versions <webview2|windowsappruntime|dotnet|vcredist> [--json]
+fsetup locale add <language> <project.json> [--force]
+fsetup guide | schema
+fsetup update [--check] [--prerelease] [--json]
+fsetup import <setup.iss|script.nsi> [-o <folder>] [--force] [--json]
+fsetup --version | --help
 ```
 
 - `validate` runs all project checks and collects the files, the same steps `build` performs before compressing, and prints diagnostics as `severity CODE [field]: message`, then the app, version, architecture, compression, signing and the Setup.exe path `build` would write (with `-D` values applied). With `--json` it prints `{ valid, files, bytes, output, version, architecture, diagnostics }`.
@@ -918,7 +918,7 @@ The installed `uninstall.exe` accepts the same switches.
 `yes|no` also accepts `true`/`false` and `1`/`0`. `/uninstall`, `/modify` and `/repair` exclude each other. The
 switches `--worker`, `--pipe`, `--parent-pid`, `--wait-pid`, `--origin-dir`, `--phase2`, `--origin-process`,
 `--result-pipe` and `--ui-simulate` are used internally between FluentSetup processes; `--ui-simulate` (and the
-`FLUENTSETUP_TEST_FAULT_AFTER` environment variable) only work in packages built with `fluentsetup build --test-hooks`.
+`FLUENTSETUP_TEST_FAULT_AFTER` environment variable) only work in packages built with `fsetup build --test-hooks`.
 
 Exit codes (from `src/Common/error.h`):
 

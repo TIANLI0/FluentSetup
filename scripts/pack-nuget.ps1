@@ -46,8 +46,8 @@ $props = [xml](Get-Content Directory.Build.props -Raw)
 $version = ($props.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
 $expected = [ordered]@{
     'FluentSetup.Builder.Core' = @('lib/*/FluentSetup.Builder.Core.dll', 'buildTransitive/FluentSetup.Builder.Core.targets', 'runtime/x64/FluentSetup.Stub.exe', 'runtime/localization/en-US.json', 'runtime/default-app.ico')
-    'FluentSetup.Cli'          = @('tools/*/any/fluentsetup.dll', 'tools/*/any/DotnetToolSettings.xml', 'tools/*/any/runtime/x64/FluentSetup.Stub.exe', 'tools/*/any/runtime/localization/en-US.json')
-    'FluentSetup.MSBuild'      = @('build/FluentSetup.MSBuild.props', 'build/FluentSetup.MSBuild.targets', 'tools/cli/fluentsetup.dll', 'tools/cli/runtime/x64/FluentSetup.Stub.exe', 'tools/cli/runtime/localization/en-US.json')
+    'FluentSetup.Cli'          = @('tools/*/any/fsetup.dll', 'tools/*/any/DotnetToolSettings.xml', 'tools/*/any/runtime/x64/FluentSetup.Stub.exe', 'tools/*/any/runtime/localization/en-US.json')
+    'FluentSetup.MSBuild'      = @('build/FluentSetup.MSBuild.props', 'build/FluentSetup.MSBuild.targets', 'tools/cli/fsetup.dll', 'tools/cli/runtime/x64/FluentSetup.Stub.exe', 'tools/cli/runtime/localization/en-US.json')
 }
 foreach ($id in $expected.Keys) {
     $file = Join-Path $Output "$id.$version.nupkg"

@@ -196,7 +196,7 @@ when `output.includeWinUI` is set and the WinUI runtime files exist for the arch
    running operation or its result ("resuming session"). The WinUI front end is never restarted.
 
 Test hook: `--ui-simulate runtime-missing|crash-before-ready|crash-after-ready|hang` exercises these fallback paths. It
-works only in packages built with `fluentsetup build --test-hooks`; other packages log "--ui-simulate is ignored" and
+works only in packages built with `fsetup build --test-hooks`; other packages log "--ui-simulate is ignored" and
 start normally.
 
 ## 5. Uninstall specifics
@@ -235,7 +235,7 @@ Not an error. The log line `Front end: falling back to Win32 (…)` gives the re
   stop it (logged as `signature=2`).
 * Any byte change of the header or of a stream is detected through SHA-256 even for unsigned packages (exit code 4,
   "This setup file is damaged or incomplete"). Typical causes: incomplete download, a modified file, or tools that
-  rewrite the PE after the build. Download or build the file again; `fluentsetup inspect <Setup.exe> --verify` checks
+  rewrite the PE after the build. Download or build the file again; `fsetup inspect <Setup.exe> --verify` checks
   the header and stream hashes.
 * `uninstall.exe` is generated on the target machine from the stub and is always unsigned, even when Setup.exe was
   signed. A per-machine uninstall therefore shows a UAC prompt for an unsigned program.

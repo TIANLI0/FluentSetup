@@ -1,6 +1,6 @@
 # Importing Inno Setup and NSIS scripts
 
-`fluentsetup import` turns an existing Inno Setup script (`.iss`) or NSIS script (`.nsi`, `.nsh`) into a FluentSetup
+`fsetup import` turns an existing Inno Setup script (`.iss`) or NSIS script (`.nsi`, `.nsh`) into a FluentSetup
 project. It writes two files:
 
 - `fluentsetup.json`: the project, with every setting the script had that FluentSetup can express.
@@ -9,9 +9,9 @@ project. It writes two files:
   the project, in the report, or in both.
 
 ```powershell
-fluentsetup import installer\setup.iss                 # writes installer\fluentsetup.json and installer\import-report.md
-fluentsetup import build\installer.nsi -o packaging    # writes into another folder; paths are made relative to it
-fluentsetup import setup.iss --force --json            # overwrite an earlier import, print the result as JSON
+fsetup import installer\setup.iss                 # writes installer\fluentsetup.json and installer\import-report.md
+fsetup import build\installer.nsi -o packaging    # writes into another folder; paths are made relative to it
+fsetup import setup.iss --force --json            # overwrite an earlier import, print the result as JSON
 ```
 
 | Option | Meaning |
@@ -32,7 +32,7 @@ The Builder and other tools use the same code through `FluentSetup.Builder.Core.
 
 1. Work through **To do by hand** and **To check** in `import-report.md`.
 2. Build the app, so the folders the script installed from exist. A missing build output is only a note in the report.
-3. `fluentsetup validate fluentsetup.json`, then `fluentsetup build fluentsetup.json`.
+3. `fsetup validate fluentsetup.json`, then `fsetup build fluentsetup.json`.
 4. Test on a test PC or VM: a fresh install, an upgrade over the version the old installer installed (the project
    adopts it, see below), and the uninstall.
 
@@ -43,7 +43,7 @@ The Builder and other tools use the same code through `FluentSetup.Builder.Core.
 - **Variables.** Inno `#define Name "value"` and NSIS `!define NAME "value"` used in project text become
   [`variables`](project-file.md#variables): `AppVersion={#MyAppVersion}` gives `"version": "$(MyAppVersion)"` with
   `"variables": { "MyAppVersion": "2.4.1" }`, so a release build keeps passing the version:
-  `fluentsetup build fluentsetup.json -D MyAppVersion=2.4.2`. A define built from others (`"App-" + Version`,
+  `fsetup build fluentsetup.json -D MyAppVersion=2.4.2`. A define built from others (`"App-" + Version`,
   `"App-${VERSION}"`) is written out with those as variables. Values the script computes when it is compiled
   (`GetVersionNumbersString(...)`, `!define /date`, `!searchparse`) get a placeholder and a manual note; a file version
   that can be read already is used as the starting value.
@@ -92,7 +92,7 @@ The Builder and other tools use the same code through `FluentSetup.Builder.Core.
 | `Compression` | `output.compression` (`ultra` → `max`, `zip`/`fast` → `fast`) |
 | `CloseApplications=no`, `AppMutex` | `install.restartManager: "off"`; note (FluentSetup closes the app) |
 | `SignTool`, `Password`, `Encryption`, `InfoBeforeFile`, `Uninstallable=no`, … | manual notes; wizard look and Inno bookkeeping (`WizardStyle`, `SolidCompression`, `UsePreviousAppDir` …) are listed as not needed |
-| `[Languages]` | the four built-in languages are noted; others get a `fluentsetup locale add` note; a single non-English built-in language sets `ui.defaultLanguage` |
+| `[Languages]` | the four built-in languages are noted; others get a `fsetup locale add` note; a single non-English built-in language sets `ui.defaultLanguage` |
 | `[CustomMessages]`, `{cm:…}` | option labels per language (built-in messages such as `CreateDesktopIcon` included) |
 | `[Tasks]`, `[Components]` (`fixed` → `required`; default from the first `[Types]` entry) | `options` or shortcut checkboxes, see *Options* |
 | `[Files]` (`recursesubdirs`, `Excludes`, `onlyifdoesntexist`/`uninsneveruninstall`/`confirmoverwrite` → preserve, `restartreplace` → `install.lockedFiles: "reboot"` for per-machine) | `files.*`; files for `{tmp}` are matched with `[Run]`; other targets outside `{app}`, `DestName`, `external`, `regserver`, fonts and GAC are reported |

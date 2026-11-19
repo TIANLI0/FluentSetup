@@ -48,7 +48,7 @@ with a Fluent WinUI 3 interface and no .NET, VC++ redistributable, WebView2 or n
   stored once); the user picks at install time, or `--variant` builds a single-variant package.
 - **Accessible and localized.** English, Simplified and Traditional Chinese, Japanese, Korean, German, French, Spanish,
   Brazilian Portuguese, Russian and Italian built in, following the Windows display language; any other language can be
-  added by a package (`fluentsetup locale add nl-NL`). UI Automation names, keyboard navigation,
+  added by a package (`fsetup locale add nl-NL`). UI Automation names, keyboard navigation,
   light/dark/high-contrast themes, and per-monitor DPI.
 - **Three ways to build:** the Builder app, the `fluentsetup` CLI (also as a GitHub Action), or the `Builder.Core`
   library.
@@ -61,14 +61,14 @@ with a Fluent WinUI 3 interface and no .NET, VC++ redistributable, WebView2 or n
 
 Download from the [latest release](https://github.com/TIANLI0/FluentSetup/releases/latest):
 
-- **`FluentSetup-<version>-Setup.exe`**: the Builder app and the `fluentsetup` command-line tool (put on PATH).
+- **`FluentSetup-<version>-Setup.exe`**: the Builder app and the `fsetup` command-line tool (put on PATH).
   Setup installs the .NET 10 runtime and the Windows App Runtime if they are missing. Windows 10 1809 or later.
 - **`fluentsetup-<version>-win-x64.zip`**: the command-line tool alone, self-contained (no .NET needed). Unzip it
   anywhere; for build servers and scripts.
 
 FluentSetup keeps itself up to date: the Builder looks for a new release once a day (Settings > Updates turns this
-off) and installs it when you click **Update**; on the command line, `fluentsetup update` does the same and
-`fluentsetup update --check` only reports. Downloads are verified against the release's `SHA256SUMS.txt`.
+off) and installs it when you click **Update**; on the command line, `fsetup update` does the same and
+`fsetup update --check` only reports. Downloads are verified against the release's `SHA256SUMS.txt`.
 
 ### 2. Describe your app
 
@@ -79,7 +79,7 @@ prerequisites, options and actions, upgrade, uninstall, appearance. Problems are
 Or with the command line:
 
 ```powershell
-fluentsetup init my-app --name "My App" --id Contoso.MyApp --source C:\build\MyApp\bin --publisher Contoso
+fsetup init my-app --name "My App" --id Contoso.MyApp --source C:\build\MyApp\bin --publisher Contoso
 ```
 
 Both create a `fluentsetup.json`. A minimal one looks like this:
@@ -96,7 +96,7 @@ Both create a `fluentsetup.json`. A minimal one looks like this:
 }
 ```
 
-Every setting is explained in [docs/project-file.md](docs/project-file.md); `fluentsetup guide` prints a complete
+Every setting is explained in [docs/project-file.md](docs/project-file.md); `fsetup guide` prints a complete
 authoring guide (also useful for AI assistants).
 
 ### 3. Build Setup.exe
@@ -104,9 +104,9 @@ authoring guide (also useful for AI assistants).
 Click **Build** in the Builder app, or:
 
 ```powershell
-fluentsetup validate my-app\fluentsetup.json          # errors and warnings with codes and field paths
-fluentsetup build my-app\fluentsetup.json             # -> my-app\dist\My App-1.0.0-Setup.exe
-fluentsetup inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
+fsetup validate my-app\fluentsetup.json          # errors and warnings with codes and field paths
+fsetup build my-app\fluentsetup.json             # -> my-app\dist\My App-1.0.0-Setup.exe
+fsetup inspect "my-app\dist\My App-1.0.0-Setup.exe" --verify
 ```
 
 Run the result to try it, or test it unattended: `Setup.exe /quiet /log setup.log`, then
@@ -118,7 +118,7 @@ The GitHub Action installs the command-line tool (verified download) on a Window
 
 ```yaml
 - uses: TIANLI0/FluentSetup@latest
-- run: fluentsetup build installer/fluentsetup.json -D Version=1.2.3
+- run: fsetup build installer/fluentsetup.json -D Version=1.2.3
 ```
 
 `@latest` always uses the newest release (action and CLI), `@v1` the newest 1.x, and `@v1.4.1` exactly that version.
@@ -134,7 +134,7 @@ The action can also build and hand the result to later steps:
   with:
     project: installer/fluentsetup.json
     defines: Version=1.2.3        # one Name=Value per line
-    args: --arch x64              # further fluentsetup build options
+    args: --arch x64              # further fsetup build options
 - run: gh release upload v1.2.3 "${{ steps.setup.outputs.setup-path }}"
 ```
 
@@ -198,7 +198,7 @@ The CLI built from source is `src\CLI\bin\Release\net10.0\fluentsetup.exe`.
 | `src/Install.Core`, `src/Install.Worker` | Install engine (state machine, journal, rollback, uninstall, extensions), elevated worker |
 | `src/Archive`, `src/IPC`, `src/Common` | Container reader + zstd, named-pipe IPC, JSON/crypto/path/security helpers |
 | `src/Setup.WinUI`, `src/Setup.Win32` | C++/WinRT WinUI 3 front end, Win32 fallback front end |
-| `src/Builder.Core`, `src/CLI`, `src/Builder` | C# packaging library, `fluentsetup` CLI, WinUI 3 Builder app |
+| `src/Builder.Core`, `src/CLI`, `src/Builder` | C# packaging library, `fsetup` CLI, WinUI 3 Builder app |
 | `shared` | Localization strings, JSON schema, IPC protocol |
 | `tests` | Native unit tests, Builder.Core tests, end-to-end install tests, UI Automation tests |
 | `docs` | Architecture, package format, security, diagnostics, size report |

@@ -1,12 +1,12 @@
 # FluentSetup authoring guide
 
 This guide is for anyone, human or AI, who writes or changes a FluentSetup project (`fluentsetup.json`). It is
-embedded in the CLI: `fluentsetup guide` prints it, `fluentsetup schema` prints the JSON Schema with every property,
-type, default and limit. When the guide and the schema disagree, the schema and `fluentsetup validate` win.
+embedded in the CLI: `fsetup guide` prints it, `fsetup schema` prints the JSON Schema with every property,
+type, default and limit. When the guide and the schema disagree, the schema and `fsetup validate` win.
 
 ## 1. What FluentSetup does
 
-A project file describes an app. `fluentsetup build` turns it into a single `Setup.exe` that installs, upgrades,
+A project file describes an app. `fsetup build` turns it into a single `Setup.exe` that installs, upgrades,
 repairs and uninstalls the app: native, no .NET or other runtime needed on the target PC, WinUI 3 interface with a
 Win32 fallback, transactional (any failure rolls back), Apps & features entry, self-removing `uninstall.exe`.
 
@@ -15,19 +15,19 @@ Win32 fallback, transactional (any failure rolls back), Apps & features entry, s
 1. Look at the app's build output (the folder you would zip). Note the main `.exe`, subfolders, runtimes it needs
    (.NET, Windows App Runtime, WebView2, VC++), drivers or services it installs, and anything it registers at run time
    (scheduled tasks, Run entries, data folders).
-2. `fluentsetup init <folder> --name "App" --id Company.App --source <build output>` writes a complete project with
+2. `fsetup init <folder> --name "App" --id Company.App --source <build output>` writes a complete project with
    every default spelled out. Edit it; keep only what differs from the defaults if you prefer.
-3. `fluentsetup validate <project.json> --json` → fix every `Error` (each has a code, a field path and a message;
+3. `fsetup validate <project.json> --json` → fix every `Error` (each has a code, a field path and a message;
    see §9). Warnings are worth reading, infos are hints.
-4. `fluentsetup build <project.json>` → `Setup.exe` in `output.directory`. `--variant id` builds a single-variant
+4. `fsetup build <project.json>` → `Setup.exe` in `output.directory`. `--variant id` builds a single-variant
    package, `--report r.json` writes a machine-readable report.
-5. `fluentsetup inspect <Setup.exe> --verify --json` → what is inside, sizes, integrity.
+5. `fsetup inspect <Setup.exe> --verify --json` → what is inside, sizes, integrity.
 6. Test without a UI: `Setup.exe /quiet /log <file>` then `"<install dir>\uninstall.exe" /uninstall /quiet`. Exit code
    0 = success (§8). Per-user packages need no administrator rights; a per-machine quiet install started without them
    shows the UAC prompt (start it elevated for unattended tests).
 
 Relative paths in the project are relative to the project file; `\` and `/` both work, so the same project builds on
-Windows, Linux and macOS (`fluentsetup` runs on all three; the result is always a Windows `Setup.exe`). Absolute
+Windows, Linux and macOS (`fsetup` runs on all three; the result is always a Windows `Setup.exe`). Absolute
 paths work but make the project machine-specific.
 
 ## 3. Decisions to make
@@ -43,7 +43,7 @@ paths work but make the project machine-specific.
 | Programs to run after install / before uninstall | `actions[]`: only `.exe` files from the package itself, no shell. |
 | App running while updating? | `install.closeProcesses` (image names) and `install.closeCommand` (e.g. `App.exe --exit` for tray apps). |
 | Replacing another installer (NSIS, Inno, MSI-less)? | `install.adoptExistingInstall` (same uninstall key = app id) or `install.legacyUninstallKeys` (old key names, e.g. Inno `"{GUID}_is1"`), plus `install.cleanup` for old tasks/Run values/shortcuts (`"Folder\\Old.lnk"` for a Start menu folder) and `install.cleanup.removeFiles` for the old uninstaller (`"unins*.exe"`, `"unins*.dat"`). Keep the old Start menu folder with `install.startMenuFolder`, the asset file name the app's updater looks for with `output.fileName`, and its command line (§11). |
-| Version (or other values) set by the release pipeline | `"variables": { "Version": "1.0.0" }`, `"version": "$(Version)"`, then `fluentsetup build p.json -D Version=1.2.3`. |
+| Version (or other values) set by the release pipeline | `"variables": { "Version": "1.0.0" }`, `"version": "$(Version)"`, then `fsetup build p.json -D Version=1.2.3`. |
 | Command-line tool? | `install.addToPath: ["cli"]` (folder relative to the install folder; `""` = the folder itself): user PATH for per-user installs, machine PATH for per-machine; removed on uninstall. |
 | Settings/data to ask about on uninstall | `uninstall.userData: { "paths": ["{LocalAppData}\\App"], "default": false }`: a checkbox on the uninstall page; silent uninstalls keep the data unless `/remove-user-data`. |
 | Things the app did with administrator rights (ETW sessions, service permissions, scheduled tasks, ProgramData files) | `uninstall.elevated` (§8): undone with one UAC prompt during an interactive per-user uninstall, directly in a per-machine one. |
@@ -128,7 +128,7 @@ Each requirement is checked before anything changes. Missing or too old → the 
 4. stops with exit code 17 and shows `helpUrl`.
 
 Prefer `"auto": "bundle"` for offline-capable installers of .NET, the Windows App Runtime and VC++ (WebView2's official
-installer is a small bootstrapper that needs the internet anyway). `fluentsetup versions <webview2|windowsappruntime|dotnet|vcredist>`
+installer is a small bootstrapper that needs the internet anyway). `fsetup versions <webview2|windowsappruntime|dotnet|vcredist>`
 lists current versions to put in `version`/`minVersion`.
 
 After the installer ran the requirement is checked again: `onFailure: "warn"` (default) keeps the app installed and
@@ -267,7 +267,7 @@ committed. Apps & features "Modify" runs `uninstall.exe /modify` (Change page + 
 
 ## 9. Validation codes
 
-`fluentsetup validate --json` returns `{ valid, diagnostics: [{ severity, code, field, message }] }`.
+`fsetup validate --json` returns `{ valid, diagnostics: [{ severity, code, field, message }] }`.
 
 | Range | Area |
 |---|---|
@@ -292,12 +292,12 @@ committed. Apps & features "Modify" runs `uninstall.exe /modify` (Change page + 
 - Package texts per language live in `ui.localization` (a folder), one `<tag>.json` each:
   `{ "options": { id: text }, "actions": { id: text }, "variants": { id: { "label", "description" } },
   "license": "file relative to the folder", "strings": { key: text } }`. Inline texts in the project are the fallback.
-- **Adding a language the installer does not ship** (e.g. `nl-NL`): `fluentsetup locale add nl-NL project.json`
+- **Adding a language the installer does not ship** (e.g. `nl-NL`): `fsetup locale add nl-NL project.json`
   creates `locales/nl-NL.json` with every installer string in English plus the package's ids; translate the values
   (keep `{0}` placeholders and `&` mnemonics in `fallback.*` keys). The installer then offers Dutch on Dutch
   Windows. `validate` reports how many strings are still untranslated (FS1327). For a regional variant of a built-in
   language (e.g. `pt-PT`, `fr-CA`) the strings start from the built-in table (pt-BR, fr-FR) instead of English.
-- `strings` in a built-in language overrides single installer texts (keys: `fluentsetup locale add en-US` output or
+- `strings` in a built-in language overrides single installer texts (keys: `fsetup locale add en-US` output or
   `shared/localization/en-US.json`).
 
 ## 11. Setup.exe command line and exit codes

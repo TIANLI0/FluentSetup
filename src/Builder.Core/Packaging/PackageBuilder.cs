@@ -22,7 +22,7 @@ public sealed class BuildOptions
     /// <summary>null = as configured in the project.</summary>
     public bool? Sign { get; set; }
     public string? RuntimeRoot { get; set; }
-    /// <summary>$(Name) values that override the project's "variables" (fluentsetup build -D Name=Value).</summary>
+    /// <summary>$(Name) values that override the project's "variables" (fsetup build -D Name=Value).</summary>
     public Dictionary<string, string>? Defines { get; set; }
     public bool VerifyOutput { get; set; } = true;
     public Action<string>? Log { get; set; }

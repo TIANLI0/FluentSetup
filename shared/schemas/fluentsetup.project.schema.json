@@ -31,7 +31,7 @@
       "additionalProperties": {
         "type": "string"
       },
-      "description": "Values for $(Name) placeholders in any string of the project, e.g. { \"Version\": \"1.2.0\" } with \"version\": \"$(Version)\". \"fluentsetup build -D Version=1.2.1\" overrides them (CI release builds). \"$$(\" writes a literal \"$(\"."
+      "description": "Values for $(Name) placeholders in any string of the project, e.g. { \"Version\": \"1.2.0\" } with \"version\": \"$(Version)\". \"fsetup build -D Version=1.2.1\" overrides them (CI release builds). \"$$(\" writes a literal \"$(\"."
     },
     "app": {
       "$ref": "#/$defs/app"
@@ -1532,7 +1532,7 @@
         "localization": {
           "type": "string",
           "default": "",
-          "description": "Folder with one <language>.json per language, named by any language tag (e.g. ja-JP.json, nl-NL.json): {\"options\": {id: text}, \"actions\": {id: text}, \"variants\": {id: {\"label\", \"description\"}}, \"license\": file, \"strings\": {key: text}}. fluentsetup locale add <tag> creates one."
+          "description": "Folder with one <language>.json per language, named by any language tag (e.g. ja-JP.json, nl-NL.json): {\"options\": {id: text}, \"actions\": {id: text}, \"variants\": {id: {\"label\", \"description\"}}, \"license\": file, \"strings\": {key: text}}. fsetup locale add <tag> creates one."
         },
         "banner": {
           "type": "string",
@@ -1573,7 +1573,7 @@
           ],
           "type": "string",
           "default": "dist",
-          "description": "Output folder, relative to the project file or absolute. Overridden by fluentsetup build -o."
+          "description": "Output folder, relative to the project file or absolute. Overridden by fsetup build -o."
         },
         "fileName": {
           "type": "string",
@@ -1588,7 +1588,7 @@
             "arm64"
           ],
           "default": "x64",
-          "description": "Target CPU architecture of Setup.exe. Overridden by fluentsetup build --arch."
+          "description": "Target CPU architecture of Setup.exe. Overridden by fsetup build --arch."
         },
         "compression": {
           "type": "string",
@@ -1623,7 +1623,7 @@
         "enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Sign the output. Overridden by fluentsetup build --sign / --no-sign."
+          "description": "Sign the output. Overridden by fsetup build --sign / --no-sign."
         },
         "provider": {
           "enum": [

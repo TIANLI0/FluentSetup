@@ -6,7 +6,7 @@ namespace FluentSetup.Builder.Core.Model;
 /// <summary>
 /// Starting values for a new project from the folder of a built app: the main program (named like the folder, else the
 /// largest .exe that is not an uninstaller or setup) and name, publisher and version from its version resource.
-/// Shared by "fluentsetup init" and the Builder's New project dialog.
+/// Shared by "fsetup init" and the Builder's New project dialog.
 /// </summary>
 public sealed record ProjectGuess(string Name, string Id, string Publisher, string Version, string MainExecutable, IReadOnlyList<string> Executables)
 {

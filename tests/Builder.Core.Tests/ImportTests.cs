@@ -5,7 +5,7 @@ using Xunit;
 
 namespace FluentSetup.Builder.Core.Tests;
 
-/// <summary>fluentsetup import: Inno Setup and NSIS scripts under tests/fixtures/import become projects plus notes.</summary>
+/// <summary>fsetup import: Inno Setup and NSIS scripts under tests/fixtures/import become projects plus notes.</summary>
 public sealed class ImportTests
 {
     private static string FixturesRoot()
@@ -267,7 +267,7 @@ public sealed class ImportTests
         Assert.True(Has(r, ImportSeverity.Manual, "Event functions: InitializeSetup"));
         Assert.True(Has(r, ImportSeverity.Manual, "requirements.netFramework"));
         Assert.True(Has(r, ImportSeverity.Manual, "SignTool"));
-        Assert.False(Has(r, ImportSeverity.Manual, "fluentsetup locale add de-DE"));  // German is built into the installer
+        Assert.False(Has(r, ImportSeverity.Manual, "fsetup locale add de-DE"));  // German is built into the installer
         Assert.True(Has(r, ImportSeverity.Warning, "Check: NeedsAddPath"));
 
         // Files: the build output is the source; other folders are extra.

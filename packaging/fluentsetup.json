@@ -7,7 +7,7 @@
     "name": "FluentSetup",
     "publisher": "TIANLI0",
     "version": "1.4.1",
-    "description": "Builder for native Windows 11-style installers (Builder app + fluentsetup CLI)",
+    "description": "Builder for native Windows 11-style installers (Builder app + fsetup CLI)",
     "website": "https://github.com/TIANLI0/FluentSetup",
     "icon": "../assets/default-app.ico",
     "mainExecutable": "FluentSetup.Builder.exe"
@@ -33,7 +33,7 @@
     "startMenuShortcut": "on",
     "launchAfterInstall": "optionalOff",
     "minWindowsBuild": 17763,
-    "closeProcesses": ["FluentSetup.Builder.exe", "fluentsetup.exe"],
+    "closeProcesses": ["FluentSetup.Builder.exe", "fsetup.exe", "fluentsetup.exe"],
     "addToPath": ["cli"]
   },
   "requirements": {

@@ -39,7 +39,7 @@ public static class FsMsaa {
 '@
 }
 
-$cli = Join-Path $root 'src\CLI\bin\Release\net10.0\fluentsetup.exe'
+$cli = Join-Path $root 'src\CLI\bin\Release\net10.0\fsetup.exe'
 if (-not (Test-Path $cli)) { throw 'Build the CLI first (scripts/build.ps1).' }
 $msbuild = & (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe') -latest -prerelease -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
 

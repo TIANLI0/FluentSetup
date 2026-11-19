@@ -1,6 +1,6 @@
 <Project>
   <!--
-    FluentSetup.MSBuild: after Publish, runs "fluentsetup build <FluentSetupProject>" with the bundled CLI (settings in
+    FluentSetup.MSBuild: after Publish, runs "fsetup build <FluentSetupProject>" with the bundled CLI (settings in
     FluentSetup.MSBuild.props). Diagnostics come back as MSBuild errors and warnings with their FS codes; any failure
     fails the publish.
   -->
@@ -20,7 +20,7 @@
       <!-- NormalizeDirectory ends with "\", so the value ends with "\\" before the quote: one backslash, then the quote. -->
       <_FluentSetupArgs Condition="'$(FluentSetupOutputDirectory)' != ''">$(_FluentSetupArgs) -o &quot;$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(FluentSetupOutputDirectory)'))\&quot;</_FluentSetupArgs>
 
-      <!-- A fluentsetup.dll runs on the dotnet that runs this build; an .exe runs as it is. -->
+      <!-- A fsetup.dll runs on the dotnet that runs this build; an .exe runs as it is. -->
       <_FluentSetupDotnet>$(DOTNET_HOST_PATH)</_FluentSetupDotnet>
       <_FluentSetupDotnet Condition="'$(_FluentSetupDotnet)' == ''">dotnet</_FluentSetupDotnet>
       <_FluentSetupCommand>&quot;$(_FluentSetupCliPath)&quot;</_FluentSetupCommand>
@@ -45,6 +45,6 @@
     </Exec>
     <!-- The CLI's own errors are MSBuild errors already; this adds the exit code and covers failures without such a line. -->
     <Error Condition="'$(_FluentSetupExitCode)' != '0'" File="$(_FluentSetupProjectPath)"
-           Text="fluentsetup build failed with exit code $(_FluentSetupExitCode)." />
+           Text="fsetup build failed with exit code $(_FluentSetupExitCode)." />
   </Target>
 </Project>

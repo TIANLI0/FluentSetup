@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Packages FluentSetup itself (Builder app + fluentsetup CLI) with FluentSetup: publishes both into out/product/app
+  Packages FluentSetup itself (Builder app + fsetup CLI) with FluentSetup: publishes both into out/product/app
   (CLI in cli\, which the installer puts on PATH) and builds out/product/dist/FluentSetup-<version>-Setup.exe.
   Run scripts/build.ps1 first (it builds the installer runtime the package embeds).
   Release builds (signed in with TIANLI0/codesign) sign the published Builder and CLI binaries, then FluentSetup signs
@@ -24,7 +24,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Publishing the Builder app failed' }
 dotnet publish src\CLI\FluentSetup.CLI.csproj -c Release -o (Join-Path $app 'cli') --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw 'Publishing the CLI failed' }
 Invoke-CodeSign $app @('FluentSetup.Builder.exe', 'FluentSetup.Builder.dll', 'FluentSetup.Builder.Core.dll',
-                       'cli/fluentsetup.exe', 'cli/fluentsetup.dll', 'cli/FluentSetup.Builder.Core.dll')
+                       'cli/fsetup.exe', 'cli/fluentsetup.exe', 'cli/fsetup.dll', 'cli/FluentSetup.Builder.Core.dll')
 $signArgs = if ($env:CODESIGN_SIGN) { @('--sign', '-D', "CodesignThumbprint=$env:CODESIGN_THUMBPRINT") } else { @() }
-& (Join-Path $app 'cli\fluentsetup.exe') build packaging\fluentsetup.json @signArgs
+& (Join-Path $app 'cli\fsetup.exe') build packaging\fluentsetup.json @signArgs
 if ($LASTEXITCODE -ne 0) { throw 'Building the FluentSetup installer failed' }
