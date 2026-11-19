@@ -46,6 +46,7 @@ public sealed partial class MainViewModel
     [ObservableProperty] public partial bool UpdatePrerelease { get; set; }
     [ObservableProperty] public partial string UpdateChecksums { get; set; } = "";
     [ObservableProperty] public partial string UpdateSigner { get; set; } = "";
+    [ObservableProperty] public partial bool UpdateDifferential { get; set; }
     public bool UpdateIsOn => UpdateSourceIndex != 0;
     public bool UpdateIsGitHub => UpdateSourceIndex == 1;
     public bool UpdateIsFeed => UpdateSourceIndex == 2;
@@ -230,6 +231,7 @@ public sealed partial class MainViewModel
         UpdatePrerelease = upd.Prerelease;
         UpdateChecksums = upd.Checksums ?? "";
         UpdateSigner = upd.Signer ?? "";
+        UpdateDifferential = upd.Differential;
 
         LoadIntegration(p);
     }
@@ -323,6 +325,7 @@ public sealed partial class MainViewModel
         upd.Prerelease = github && UpdatePrerelease;
         upd.Checksums = github ? TextForms.Keep(UpdateChecksums, upd.Checksums) : "";
         upd.Signer = github || feed ? TextForms.Keep(UpdateSigner, upd.Signer) : "";
+        upd.Differential = (github || feed) && UpdateDifferential;
 
         ApplyIntegration(p);
     }

@@ -133,6 +133,8 @@
                         </Grid>
                         <TextBox x:Uid="UpdateFeedBox" Text="{x:Bind VM.UpdateFeed, Mode=TwoWay}" Visibility="{x:Bind VM.UpdateIsFeed, Mode=OneWay}" />
                         <TextBox x:Uid="UpdateSignerBox" Text="{x:Bind VM.UpdateSigner, Mode=TwoWay}" />
+                        <ToggleSwitch x:Uid="UpdateDifferentialToggle" IsOn="{x:Bind VM.UpdateDifferential, Mode=TwoWay}" />
+                        <TextBlock x:Uid="UpdateDifferentialDescription" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />
                         <TextBlock x:Uid="UpdateHowToUse" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />
                         <TextBlock Text="{x:Bind VM.Errors.Update, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.Update), Mode=OneWay}" />
                     </StackPanel>

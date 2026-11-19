@@ -623,6 +623,8 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="UpdateFeedBox.PlaceholderText" xml:space="preserve"><value>https://example.com/myapp/latest.json</value></data>
   <data name="UpdateSignerBox.Header" xml:space="preserve"><value>要求的签名者（可选）</value></data>
   <data name="UpdateSignerBox.PlaceholderText" xml:space="preserve"><value>证书使用者名称，例如 Contoso Ltd</value></data>
+  <data name="UpdateDifferentialToggle.Header" xml:space="preserve"><value>只下载有变化的部分（增量更新）</value></data>
+  <data name="UpdateDifferentialDescription.Text" xml:space="preserve"><value>在用户电脑上保留最近一次下载的 Setup.exe（每个用户占用一份安装包的磁盘空间），下次更新时只下载变化的部分。适合体积较大的应用；更新服务器需要支持范围请求（GitHub 支持）。</value></data>
   <data name="UpdateHowToUse.Text" xml:space="preserve"><value>在应用里，“检查更新”可运行安装目录下的“uninstall.exe /install-update /relaunch”（先弹出小窗口询问），后台检查用“uninstall.exe /check-update”（退出代码 18 = 有更新）。下载的文件必须与发布的 SHA-256 一致，且是本应用的更新版本；文件名中的 {Version} 代表发布的版本号。</value></data>
   <data name="NavShortcuts.Content" xml:space="preserve"><value>快捷方式与文件类型</value></data>
   <data name="NavSystem.Content" xml:space="preserve"><value>系统</value></data>
@@ -663,6 +665,9 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="Banner_Info" xml:space="preserve"><value>{0} × {1} 像素 · {2}</value></data>
   <data name="Banner_Unreadable" xml:space="preserve"><value>无法读取该图片。</value></data>
   <data name="SignUninstallerToggle.Header" xml:space="preserve"><value>同时为卸载程序（uninstall.exe）签名</value></data>
+  <data name="SignFilesBox.Header" xml:space="preserve"><value>同时为应用自己的程序签名（每行一个匹配模式）</value></data>
+  <data name="SignFilesBox.PlaceholderText" xml:space="preserve"><value>MyApp.exe
+MyApp*.dll</value></data>
   <data name="PrereqVcTitle.Text" xml:space="preserve"><value>Microsoft Visual C++ 可再发行组件</value></data>
   <data name="PrereqVcDescription.Text" xml:space="preserve"><value>适用于使用 Visual C++ 2015–2022（v14）共享运行时 DLL 的应用。</value></data>
   <data name="PrereqVcToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>需要 Visual C++ 可再发行组件</value></data>

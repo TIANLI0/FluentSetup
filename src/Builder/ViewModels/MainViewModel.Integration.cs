@@ -18,6 +18,7 @@ public sealed partial class FieldErrors
     public string InstallFilesInUse => Under("install.restartManager", "install.lockedFiles");
     public string UiBanner => Under("ui.banner");
     public string SignUninstaller => Get("signing.signUninstaller");
+    public string SigningFiles => Under("signing.files");
 
     // Prerequisites
     public string VcRedist => Under("requirements.vcRedist");
@@ -61,6 +62,8 @@ public sealed partial class MainViewModel
 
     // ---- Signing -------------------------------------------------------------------------------------------------
     [ObservableProperty] public partial bool SignUninstaller { get; set; } = true;
+    /// <summary>signing.files, one pattern per line.</summary>
+    [ObservableProperty] public partial string SigningFiles { get; set; } = "";
 
     // ---- Prerequisites -------------------------------------------------------------------------------------------
     [ObservableProperty] public partial bool VcRedistRequired { get; set; }
@@ -147,6 +150,7 @@ public sealed partial class MainViewModel
         LockedFilesIndex = TextForms.Find(LockedFilesModes, p.Install.LockedFiles);
         Banner = p.Ui.Banner ?? "";
         SignUninstaller = p.Signing.SignUninstaller;
+        SigningFiles = TextForms.Lines(p.Signing.Files);
 
         var r = p.Requirements ?? new RequirementSettings();
         var vc = r.VcRedist ?? new VcRedistRequirement();
@@ -178,6 +182,7 @@ public sealed partial class MainViewModel
         p.Install.LockedFiles = TextForms.Pick(LockedFilesModes, LockedFilesIndex, p.Install.LockedFiles);
         p.Ui.Banner = TextForms.Keep(Banner, p.Ui.Banner);
         p.Signing.SignUninstaller = SignUninstaller;
+        p.Signing.Files = TextForms.FromLines(SigningFiles, p.Signing.Files);
 
         var r = p.Requirements ??= new RequirementSettings();
         var vc = r.VcRedist ??= new VcRedistRequirement();
