@@ -8,7 +8,7 @@ branding:
 inputs:
   version:
     description: >-
-      FluentSetup version, e.g. 1.0.0. Default: the version of the action ref (uses: TIANLI0/FluentSetup@v1.4.1),
+      FluentSetup version, e.g. 1.0.0. Default: the version of the action ref (uses: TIANLI0/FluentSetup@v1.5.0),
       else (@latest, @v1, a branch) the latest release.
     required: false
     default: ''
@@ -20,7 +20,7 @@ inputs:
     default: ''
   defines:
     description: >-
-      Values for $(Name) in the project, one Name=Value per line (fsetup build -D), e.g. Version=1.4.1 (or the release tag from the workflow).
+      Values for $(Name) in the project, one Name=Value per line (fsetup build -D), e.g. Version=1.5.0 (or the release tag from the workflow).
     required: false
     default: ''
   args:
