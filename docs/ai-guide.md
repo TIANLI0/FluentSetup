@@ -171,6 +171,15 @@ content and breaks the hash.
 - The user picks on the first page (radio buttons, only when the package has ≥ 2 variants); `Setup.exe /variant id`
   in scripts. Updates keep the installed variant unless another is chosen; switching removes the other's files.
 - `output.variants` / `--variant` choose which variants go into a package (one → no choice shown).
+- `files.variantSelection: "auto"`: setup decides from the PC. A variant other than the default is pre-selected when
+  every requirement limited to it (`requirements.*.variants`) is already installed; otherwise the default, the
+  fallback. Only variants the PC can run are offered, so the choice appears only where there is one. A .NET app thus
+  ships one package that installs the small framework-dependent build where the runtimes are present (the user may
+  still take the self-contained one) and the self-contained build elsewhere, without installing any runtime: make the
+  self-contained variant the default and give the shared one requirements with `"variants": ["shared"]` (no `auto`
+  source needed). Updates keep a variant the user picked while the PC can run it and pick again otherwise (recorded
+  as `FluentSetupVariantChosen` in the uninstall key); a repair keeps the installed variant; `/variant` still wins.
+  FS1119 warns about a non-default variant with no requirement limited to it (it would always be pre-selected).
 - .NET publish commands: self-contained `dotnet publish -c Release -r win-x64 -o publish/sc` (with
   `SelfContained=true`, `WindowsAppSDKSelfContained=true`); shared `... -p:SelfContained=false
   -p:WindowsAppSDKSelfContained=false -o publish/fd`.

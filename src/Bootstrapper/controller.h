@@ -58,6 +58,11 @@ public:
     // Reply to a "checkInput" request: {t:"inputCheck", id, value, ok, message} (message localized, empty when ok).
     [[nodiscard]] json::Value CheckInput(const std::string& id, const std::wstring& value) const;
     [[nodiscard]] install::InstallOptions DefaultOptions() const;
+    // variantSelection "auto": the first variant other than the default whose requirements limited to it are all
+    // installed already, else the default (the fallback, typically the self-contained build).
+    [[nodiscard]] std::string AutoVariant() const;
+    // Whether every requirement limited to this variant is installed already (variantSelection "auto" offers only those).
+    [[nodiscard]] bool VariantRunnable(const std::string& id) const;
     // The web links the front ends show (app.website, app.links, app.releaseNotesUrl, app.supportUrl, in that order,
     // each address once), with the label in the UI language. Front ends refer to them by index ("openLink").
     struct Link {

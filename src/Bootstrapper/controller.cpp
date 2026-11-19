@@ -210,10 +210,51 @@ install::InstallOptions Controller::DefaultOptions() const {
     }
     o.removeUserData = mode_ == Mode::Uninstall && (args_.removeUserData || (!unattended && pkg_.ext.userData.removeByDefault));
     // Variant: /variant, else the one already installed (an update keeps the user's earlier choice), else the default.
+    // With variantSelection "auto" an install or update keeps a variant the user picked while this PC can still run
+    // it, and otherwise picks again from what this PC has (a repair or change keeps the installed one).
     o.variant = pkg_.DefaultVariant();
-    if (existing_.product && pkg_.FindVariant(existing_.product->variant)) o.variant = existing_.product->variant;
-    if (!args_.variant.empty() && pkg_.FindVariant(args_.variant)) o.variant = args_.variant;
+    if (pkg_.autoVariant && mode_ == Mode::Install) {
+        if (existing_.product && existing_.product->variantChosen && pkg_.FindVariant(existing_.product->variant) &&
+            VariantRunnable(existing_.product->variant)) {
+            o.variant = existing_.product->variant;
+            o.variantChosen = true;
+            log::Info(L"Variant %S kept: picked at an earlier install", o.variant.c_str());
+        } else {
+            o.variant = AutoVariant();
+        }
+    } else if (existing_.product && pkg_.FindVariant(existing_.product->variant)) {
+        o.variant = existing_.product->variant;
+        o.variantChosen = existing_.product->variantChosen;
+    }
+    if (!args_.variant.empty() && pkg_.FindVariant(args_.variant)) {
+        o.variant = args_.variant;
+        o.variantChosen = true;
+    }
     return o;
+}
+
+bool Controller::VariantRunnable(const std::string& id) const {
+    for (const auto& req : pkg_.ext.requirements) {
+        if (req.AppliesTo(id) && !req.variants.empty() && !install::RequirementSatisfied(req)) return false;
+    }
+    return true;
+}
+
+std::string Controller::AutoVariant() const {
+    const std::string fallback = pkg_.DefaultVariant();
+    for (const auto& v : pkg_.variants) {
+        if (v.id == fallback) continue;
+        // Only requirements limited to this variant tell it apart; one with none would always win (the builder warns).
+        const bool limited = std::any_of(pkg_.ext.requirements.begin(), pkg_.ext.requirements.end(),
+                                         [&](const auto& req) { return req.AppliesTo(v.id) && !req.variants.empty(); });
+        if (limited && VariantRunnable(v.id)) {
+            log::Info(L"Variant %S chosen: its requirements are installed", v.id.c_str());
+            return v.id;
+        }
+        log::Info(L"Variant %S not chosen: %s", v.id.c_str(), limited ? L"a requirement is missing" : L"no requirement limited to it");
+    }
+    log::Info(L"Variant %S chosen (default)", fallback.c_str());
+    return fallback;
 }
 
 bool Controller::SanitizeOptions(const json::Value& v, install::InstallOptions& out) const {
@@ -222,6 +263,11 @@ bool Controller::SanitizeOptions(const json::Value& v, install::InstallOptions& 
     if (!engine.ScopeAllowed(out.scope)) return false;
     if (existing_.product && out.scope != existing_.product->scope) return false;
     const install::InstallOptions defaults = DefaultOptions();
+    // The variant the user ended up with counts as theirs only when it differs from what setup picked; with "auto" the
+    // front end may only pick one this PC can run.
+    if (out.variant.empty() || out.variant == defaults.variant) out.variantChosen = defaults.variantChosen;
+    else if (pkg_.autoVariant && !VariantRunnable(out.variant)) return false;
+    else out.variantChosen = true;
     if (!pkg_.allowCustomDir || existing_.product) {
         if (!EqualsIgnoreCase(out.installDir, engine.DefaultInstallDir(out.scope))) return false;
     }
@@ -541,6 +587,8 @@ json::Value Controller::Hello(const std::wstring& iconPath, const std::wstring& 
     json::Value variants = json::Value::MakeArray();
     if (mode_ == Mode::Install) {
         for (const auto& v : pkg_.variants) {
+            // auto: only what this PC can run without installing anything (one left = no choice shown).
+            if (pkg_.autoVariant && !VariantRunnable(v.id)) continue;
             json::Value item;
             item.set("id", v.id);
             item.set("label", v.label.Get(strings_.Language(), Utf8ToWide(v.id)));

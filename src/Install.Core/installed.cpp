@@ -73,6 +73,7 @@ std::optional<InstalledProduct> QueryInstalled(const std::wstring& appId, Scope 
     p.installDir = ReadString(key.get(), L"InstallLocation");
     p.recordSha256 = ReadString(key.get(), L"FluentSetupRecordSha256");
     p.variant = WideToUtf8(ReadString(key.get(), L"FluentSetupVariant")).substr(0, 32);
+    p.variantChosen = ReadDword(key.get(), L"FluentSetupVariantChosen") == 1;
     std::wstring normalized;
     if (path::ValidateAbsoluteSyntax(p.installDir, normalized) == path::Problem::None) p.installDir = normalized;
     return p;
@@ -421,6 +422,8 @@ void WriteArp(const std::wstring& appId, Scope scope, const ArpEntry& e) {
     SetString(key.get(), L"FluentSetupRecordSha256", e.recordSha256);
     if (!e.variant.empty()) SetString(key.get(), L"FluentSetupVariant", e.variant);
     else ::RegDeleteValueW(key.get(), L"FluentSetupVariant");
+    if (e.variantChosen) SetDword(key.get(), L"FluentSetupVariantChosen", 1);
+    else ::RegDeleteValueW(key.get(), L"FluentSetupVariantChosen");
 }
 
 void UpdateArpRecordHash(const std::wstring& appId, Scope scope, const std::wstring& recordSha256) {

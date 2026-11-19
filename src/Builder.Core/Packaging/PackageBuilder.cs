@@ -762,6 +762,7 @@ public sealed class PackageBuilder
                     }
                 }
                 w.WriteEndArray();
+                if (variants.Count > 1 && p.Files.VariantSelection == "auto") w.WriteString("variantSelection", "auto");
 
                 w.WriteStartObject("ui");
                 w.WriteString("title", p.Ui.Title);

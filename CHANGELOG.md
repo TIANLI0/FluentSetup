@@ -7,6 +7,14 @@ release workflow publishes the section of the pushed tag as the release notes.
 
 ### Added
 
+- `files.variantSelection: "auto"`: setup chooses the variant from the PC. A variant other than the default is
+  pre-selected when every requirement limited to it (`requirements.*.variants`) is already on the PC, otherwise the
+  default; only variants the PC can run are offered, so the user sees a choice only when there is one. One package can
+  install a framework-dependent build where .NET and the Windows App Runtime are present and the self-contained build
+  elsewhere, without installing a runtime. Updates keep a variant the user picked while the PC can still run it and
+  choose again otherwise; a repair keeps the installed variant; `/variant` still overrides it. New checks: FS1117 (value
+  other than `user`/`auto`), FS1118 (fewer than two variants), FS1119 (a non-default variant with no requirement
+  limited to it would always be chosen).
 - Differential updates, opt-in (`update.differential: true`): the built-in updater keeps the downloaded Setup.exe on
   the user's PC (per user, the last one only) and rebuilds the next one from it, copying the streams it already has and
   fetching only the rest with HTTP range requests. The rebuilt file must match the published SHA-256 and signer like

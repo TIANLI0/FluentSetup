@@ -326,6 +326,9 @@ Package ParsePackage(const std::string& headerJson, const std::function<bool(uin
             if (shared.count(ToLower(f.path))) Bad(L"variant file shadows a shared file: " + f.path);
             owner->bytes += f.size;
         }
+        const auto& selection = root["variantSelection"];
+        if (!selection.isNull() && selection.asString() != "user" && selection.asString() != "auto") Bad(L"invalid variantSelection");
+        p.autoVariant = selection.asString() == "auto" && !p.variants.empty();
     }
     if (!p.IsUninstaller() && !p.mainExecutable.empty()) {
         const bool found = std::any_of(p.payload.files.begin(), p.payload.files.end(),
