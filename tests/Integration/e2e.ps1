@@ -383,6 +383,40 @@ Remove-Existing
 Check 'uninstall removed the startup entry' { $null -eq (Get-ItemProperty $runKey).'FluentSetupE2E-Startup' }
 Get-Process DemoApp -ErrorAction SilentlyContinue | Stop-Process -Force
 
+Write-Host '==> Automatic variant selection (variantSelection "auto")' -ForegroundColor Cyan
+Remove-Existing
+# b (the "shared" build) needs a runtime, simulated by an HKCU value; a (default, "self-contained") is the fallback.
+$runtimeKey = 'HKCU:\Software\FluentSetupE2E-Runtime'
+Remove-Item $runtimeKey -Recurse -Force -ErrorAction SilentlyContinue
+$vproject.files | Add-Member -Force -NotePropertyName variantSelection -NotePropertyValue 'auto'
+$vproject.requirements = @{ custom = @(@{ id = 'e2eRuntime'; name = 'E2E runtime'; variants = @('b')
+    detect = @{ registry = @{ hive = 'HKCU'; key = 'Software\FluentSetupE2E-Runtime'; value = 'Version'; version = '2.0' } } }) }
+$vproject.PSObject.Properties.Remove('options')
+[IO.File]::WriteAllText($vpath, ($vproject | ConvertTo-Json -Depth 10), [Text.UTF8Encoding]::new($false))
+& $cli build $vpath --arch $Arch | Out-Null
+$code = Run-Setup $vsetup @('/quiet') 'auto-missing'
+Check 'auto, runtime missing: the default (a) is installed, setup does not stop for b''s prerequisite' {
+    $code -eq 0 -and (Get-ItemProperty $arpKey).FluentSetupVariant -eq 'a' -and (Test-Path "$installDir\only-a.txt") }
+New-Item $runtimeKey -Force | Out-Null; Set-ItemProperty $runtimeKey Version '2.1.0'
+$code = Run-Setup $vsetup @('/quiet') 'auto-present'
+Check 'auto, runtime present: the update switches to b (a-only files removed)' {
+    $code -eq 0 -and (Get-ItemProperty $arpKey).FluentSetupVariant -eq 'b' -and (Test-Path "$installDir\only-b.dll") -and -not (Test-Path "$installDir\only-a.txt") }
+Set-ItemProperty $runtimeKey Version '1.9'
+$code = Run-Setup $vsetup @('/quiet') 'auto-too-old'
+Check 'auto, runtime too old: back to a' { $code -eq 0 -and (Get-ItemProperty $arpKey).FluentSetupVariant -eq 'a' }
+Set-ItemProperty $runtimeKey Version '2.1.0'
+$code = Run-Setup $vsetup @('/quiet', '/variant', 'a') 'auto-explicit'
+Check 'auto: /variant still wins, recorded as picked' { $code -eq 0 -and (Get-ItemProperty $arpKey).FluentSetupVariant -eq 'a' -and (Get-ItemProperty $arpKey).FluentSetupVariantChosen -eq 1 }
+$code = Run-Setup $vsetup @('/quiet') 'auto-keep-picked'
+Check 'auto: a plain update keeps the picked variant a although b could run' { $code -eq 0 -and (Get-ItemProperty $arpKey).FluentSetupVariant -eq 'a' }
+$code = Run-Setup $vsetup @('/quiet', '/variant', 'b') 'auto-pick-b'
+Set-ItemProperty $runtimeKey Version '1.0'
+$code = Run-Setup $vsetup @('/quiet') 'auto-picked-unrunnable'
+Check 'auto: picked b whose runtime went away -> a, no longer marked picked' {
+    $code -eq 0 -and (Get-ItemProperty $arpKey).FluentSetupVariant -eq 'a' -and $null -eq (Get-ItemProperty $arpKey).FluentSetupVariantChosen }
+Remove-Existing
+Remove-Item $runtimeKey -Recurse -Force -ErrorAction SilentlyContinue
+
 Write-Host '==> Inno/NSIS command lines, upgrade keeps earlier choices, user data, elevated cleanup' -ForegroundColor Cyan
 Remove-Existing
 $dataDir = Join-Path $env:LOCALAPPDATA 'FluentSetupE2E-Data'

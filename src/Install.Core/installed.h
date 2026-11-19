@@ -17,6 +17,7 @@ struct InstalledProduct {
     Scope scope = Scope::User;
     std::wstring appId, name, version, publisher, installDir, recordSha256;
     std::string variant;  // package variant that is installed ("" = none)
+    bool variantChosen = false;  // the user (or /variant) picked it; variantSelection "auto" then keeps it
     std::wstring innoTasks;  // adopted Inno Setup install: its "Inno Setup: Selected Tasks" (e.g. "desktopicon,autostart")
 };
 
@@ -98,6 +99,7 @@ void RestoreArp(const std::wstring& appId, Scope scope, const json::Value& snaps
 struct ArpEntry {
     std::wstring displayName, displayVersion, publisher, displayIcon, installLocation, uninstallString,
         quietUninstallString, urlInfoAbout, helpLink, urlUpdateInfo, comments, recordSha256, variant, modifyPath;
+    bool variantChosen = false;
     uint32_t estimatedSizeKb = 0;
     uint32_t versionMajor = 0, versionMinor = 0;
 };

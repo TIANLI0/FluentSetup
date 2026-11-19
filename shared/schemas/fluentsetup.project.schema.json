@@ -436,7 +436,13 @@
           "items": {
             "$ref": "#/$defs/variant"
           },
-          "description": "Alternative builds (e.g. shared runtimes vs self-contained). With variants, files.source is not used; the user picks a variant at install time."
+          "description": "Alternative builds (e.g. shared runtimes vs self-contained). With variants, files.source is not used; the user picks a variant at install time (or setup does, see variantSelection)."
+        },
+        "variantSelection": {
+          "type": "string",
+          "enum": ["user", "auto"],
+          "default": "user",
+          "description": "user: radio buttons, the default variant pre-selected. auto: setup pre-selects a variant other than the default when every requirement limited to it (requirements.*.variants) is already installed, else the default, so nothing extra is installed; only variants this PC can run are offered (one left = no choice shown). A variant the user picked is kept on updates while the PC can run it; one setup picked is picked again. /variant still wins."
         }
       },
       "anyOf": [

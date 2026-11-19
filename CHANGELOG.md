@@ -3,6 +3,19 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
+## [Unreleased]
+
+### Added
+
+- `files.variantSelection: "auto"`: setup chooses the variant from the PC. A variant other than the default is
+  pre-selected when every requirement limited to it (`requirements.*.variants`) is already on the PC, otherwise the
+  default; only variants the PC can run are offered, so the user sees a choice only when there is one. One package can
+  install a framework-dependent build where .NET and the Windows App Runtime are present and the self-contained build
+  elsewhere, without installing a runtime. Updates keep a variant the user picked while the PC can still run it and
+  choose again otherwise; a repair keeps the installed variant; `/variant` still overrides it. New checks: FS1117 (value
+  other than `user`/`auto`), FS1118 (fewer than two variants), FS1119 (a non-default variant with no requirement
+  limited to it would always be chosen).
+
 ## [1.4.1] - 2026-11-18
 
 ### Changed

@@ -100,6 +100,9 @@ struct Package {
 
     FileSet payload;
     std::vector<Variant> variants;  // empty = a single build
+    // variantSelection "auto": setup picks the variant from what is installed (no choice shown), see
+    // Controller::AutoVariant; otherwise the user picks, the default pre-selected.
+    bool autoVariant = false;
     FileSet frontend;
     std::wstring frontendEntry;
     std::wstring iconFile;    // inside the frontend set

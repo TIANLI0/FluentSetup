@@ -107,6 +107,13 @@ public sealed class FileSettings
     /// folder; files that are identical in every variant are stored once. The user picks one at install time.
     /// </summary>
     public List<VariantSettings> Variants { get; set; } = [];
+    /// <summary>
+    /// How the variant is chosen: <c>user</c> (radio buttons, the default variant pre-selected) or <c>auto</c>: setup
+    /// pre-selects a variant other than the default when every requirement limited to it (<c>requirements.*.variants</c>)
+    /// is already installed, else the default, and offers only the variants this PC can run, so nothing extra gets
+    /// installed. A variant the user picked is kept on updates while it can run; /variant still wins.
+    /// </summary>
+    public string VariantSelection { get; set; } = "user";
     [JsonExtensionData] public Dictionary<string, object>? ExtraProperties { get; set; }
 }
 

@@ -75,6 +75,7 @@ json::Value OptionsToJson(const InstallOptions& o) {
     for (const auto& [id, on] : o.choices) choices.set(id, on);
     v.set("choices", choices);
     v.set("variant", o.variant);
+    v.set("variantChosen", o.variantChosen);
     v.set("removeUserData", o.removeUserData);
     json::Value inputs = json::Value::MakeObject();
     for (const auto& [id, value] : o.inputs) inputs.set(id, value);
@@ -97,6 +98,7 @@ bool OptionsFromJson(const json::Value& v, InstallOptions& o) {
         o.choices[id] = on.asBool();
     }
     o.variant = v["variant"].asString();
+    o.variantChosen = v["variantChosen"].asBool(false);
     o.removeUserData = v["removeUserData"].asBool(false);
     if (o.variant.size() > 32) return false;
     if (v["inputs"].object().size() > 8) return false;
@@ -1590,6 +1592,7 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         arp.urlUpdateInfo = pkg_.releaseNotesUrl;
         arp.comments = pkg_.description;
         arp.variant = Utf8ToWide(variant_);
+        arp.variantChosen = options.variantChosen && !variant_.empty();
         arp.recordSha256 = Utf8ToWide(ToHex(Sha256::Of({reinterpret_cast<const uint8_t*>(recordJson.data()), recordJson.size()})));
         uint64_t installedBytes = 0;
         for (const auto& f : pkg_.payload.files) installedBytes += Selected(f) ? f.size : 0;

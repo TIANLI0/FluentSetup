@@ -64,6 +64,7 @@ struct InstallOptions {
     bool startMenuShortcut = true;
     std::map<std::string, bool> choices;  // package-defined options (id -> selected); missing ids use the default
     std::string variant;                  // package variant to install ("" = the package default)
+    bool variantChosen = false;           // picked by the user or /variant, not by variantSelection "auto" (kept on updates)
     bool removeUserData = false;          // uninstall: also delete uninstall.userData
     std::map<std::string, std::wstring> inputs;  // values of the package's inputs (id -> value), see Package::inputs
 };

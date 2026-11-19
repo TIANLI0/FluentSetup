@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using FluentSetup.Builder.Core.Model;
 using FluentSetup.Builder.Core.Packaging;
+using FluentSetup.Builder.Core.Prerequisites;
 
 namespace FluentSetup.Builder.Core.Validation;
 
@@ -98,6 +99,22 @@ public static partial class ProjectValidator
             if (p.Files.Variants.Count > 8) d.Error("FS1113", "files.variants", "At most 8 variants.");
             if (p.Files.Variants.Count(v => v.Default) > 1) d.Error("FS1114", "files.variants", "Only one variant can be the default.");
             if (!string.IsNullOrWhiteSpace(p.Files.Source)) d.Warning("FS1115", "files.source", "Ignored: with files.variants each variant has its own source.");
+            if (p.Files.VariantSelection is not ("user" or "auto"))
+                d.Error("FS1117", "files.variantSelection", "Use \"user\" (the user picks) or \"auto\" (setup picks from what is installed).");
+            else if (p.Files.VariantSelection == "auto")
+            {
+                if (p.Files.Variants.Count < 2) d.Warning("FS1118", "files.variantSelection", "Has no effect with fewer than two variants.");
+                // Auto picks a non-default variant when the requirements limited to it are present: one without any
+                // would always be picked, and the default (the fallback) would never be.
+                var defaultId = (p.Files.Variants.FirstOrDefault(v => v.Default) ?? p.Files.Variants[0]).Id;
+                var limited = OfficialInstallers.Sources(p).Select(x => x.Source).Concat(p.Requirements.Custom)
+                    .SelectMany(s => s.Variants).ToHashSet(StringComparer.Ordinal);
+                foreach (var (v, i) in p.Files.Variants.Select((v, i) => (v, i)))
+                {
+                    if (v.Id != defaultId && !limited.Contains(v.Id))
+                        d.Warning("FS1119", $"files.variants[{i}]", $"With variantSelection \"auto\" variant '{v.Id}' has no requirement limited to it (requirements.*.variants), so it is always chosen over the default '{defaultId}'.");
+                }
+            }
             foreach (var id in p.Output.Variants.Where(id => !variantIds.Contains(id))) d.Error("FS1662", "output.variants", $"No variant '{id}' in files.variants.");
         }
         else if (string.IsNullOrWhiteSpace(p.Files.Source)) d.Error("FS1101", "files.source", "Choose the folder that contains the app's files.");
