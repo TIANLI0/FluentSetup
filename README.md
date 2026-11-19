@@ -43,17 +43,18 @@ with a Fluent WinUI 3 interface and no .NET, VC++ redistributable, WebView2 or n
   writes is signed too, and setup shows the verified publisher.
 - **Built-in updates.** Point the project at GitHub releases or a JSON feed and the installed app can update itself:
   `uninstall.exe /install-update` checks, asks, downloads, verifies (SHA-256, same app, newer version, optional
-  signer) and installs; `/check-update` only reports. No updater code in the app.
+  signer) and installs; `/check-update` only reports. Updates leave unchanged files alone and, with
+  `update.differential`, download only what changed. No updater code in the app.
 - **Variants.** One package can carry a self-contained and a framework-dependent build of the same app (shared files
   stored once); the user picks at install time, or `--variant` builds a single-variant package.
 - **Accessible and localized.** English, Simplified and Traditional Chinese, Japanese, Korean, German, French, Spanish,
   Brazilian Portuguese, Russian and Italian built in, following the Windows display language; any other language can be
   added by a package (`fsetup locale add nl-NL`). UI Automation names, keyboard navigation,
   light/dark/high-contrast themes, and per-monitor DPI.
-- **Three ways to build:** the Builder app, the `fluentsetup` CLI (also as a GitHub Action), or the `Builder.Core`
-  library.
-- **Made for AI-assisted authoring.** `fluentsetup guide` prints a complete authoring guide, `fluentsetup schema` the
-  JSON Schema, and `fluentsetup validate --json` machine-readable diagnostics with codes and field paths.
+- **Three ways to build:** the Builder app, the `fsetup` CLI (`fluentsetup` works too; also as a GitHub Action),
+  or the `Builder.Core` library.
+- **Made for AI-assisted authoring.** `fsetup guide` prints a complete authoring guide, `fsetup schema` the
+  JSON Schema, and `fsetup validate --json` machine-readable diagnostics with codes and field paths.
 
 ## Quick start
 
@@ -189,7 +190,7 @@ cd FluentSetup
 .\scripts\package-release.ps1             # the release files, in out\release
 ```
 
-The CLI built from source is `src\CLI\bin\Release\net10.0\fluentsetup.exe`.
+The CLI built from source is `src\CLI\bin\Release\net10.0\fsetup.exe`.
 [samples/DemoApp](samples/DemoApp) is the app the tests package.
 
 | Path | What |

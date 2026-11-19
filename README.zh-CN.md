@@ -18,11 +18,11 @@
 - **修改与修复**：在“应用和功能”中点“修改”即可更改快捷方式和选项，或修复损坏的安装（使用原安装包或更新来源）。通过 Windows 重启管理器关闭并重新打开占用应用文件的程序；仍被占用的文件可在重启后替换。
 - **全程签名**：支持证书、Azure 可信签名或任意签名命令；安装时写入的卸载程序同样带签名，安装界面会显示已验证的发布者。
 - **声明式扩展**：关闭正在运行的进程；必需（锁定）组件与可选组件；安装后或卸载前运行安装包内的程序（支持失败后的备用方式）；NGen；PATH；清理旧版本的计划任务、Run 启动项、快捷方式、文件、注册表项和卸载项。
-- **内置更新**：在项目里指定 GitHub Releases 或 JSON 源，已安装的应用即可自行更新：`uninstall.exe /install-update` 负责检查、询问、下载、校验（SHA-256、同一应用、更高版本、可选的签名者）并安装；`/check-update` 只检查。应用里无需编写更新代码。
+- **内置更新**：在项目里指定 GitHub Releases 或 JSON 源，已安装的应用即可自行更新：`uninstall.exe /install-update` 负责检查、询问、下载、校验（SHA-256、同一应用、更高版本、可选的签名者）并安装；`/check-update` 只检查。更新不会改动没变的文件；开启 `update.differential` 后只下载有变化的部分。应用里无需编写更新代码。
 - **多变体**：一个安装包可同时带自包含版和依赖共享运行时的版本（相同文件只存一份），安装时由用户选择，或用 `--variant` 只打其中一种。
-- **无障碍与本地化**：内置英文、简体中文、繁体中文、日文、韩文、德文、法文、西班牙文、巴西葡萄牙文、俄文、意大利文，跟随 Windows 显示语言；其他语言可由安装包自行补齐（`fluentsetup locale add nl-NL`）；UI 自动化名称、键盘导航、浅色/深色/高对比度主题、按显示器 DPI 缩放。
-- **三种制作方式**：图形化 Builder 应用、`fluentsetup` 命令行（也提供 GitHub Action），或直接调用 `Builder.Core` 库。
-- **便于 AI 编写**：`fluentsetup guide` 输出完整的编写指南，`fluentsetup schema` 输出 JSON Schema，`fluentsetup validate --json` 给出带代码和字段路径的诊断。
+- **无障碍与本地化**：内置英文、简体中文、繁体中文、日文、韩文、德文、法文、西班牙文、巴西葡萄牙文、俄文、意大利文，跟随 Windows 显示语言；其他语言可由安装包自行补齐（`fsetup locale add nl-NL`）；UI 自动化名称、键盘导航、浅色/深色/高对比度主题、按显示器 DPI 缩放。
+- **三种制作方式**：图形化 Builder 应用、`fsetup` 命令行（原名 `fluentsetup` 仍可用；也提供 GitHub Action），或直接调用 `Builder.Core` 库。
+- **便于 AI 编写**：`fsetup guide` 输出完整的编写指南，`fsetup schema` 输出 JSON Schema，`fsetup validate --json` 给出带代码和字段路径的诊断。
 
 ## 快速开始
 
@@ -144,7 +144,7 @@ cd FluentSetup
 .\scripts\package-release.ps1             # 生成发布文件，输出到 out\release
 ```
 
-源码构建的命令行位于 `src\CLI\bin\Release\net10.0\fluentsetup.exe`。测试打包使用的示例应用是 [samples/DemoApp](samples/DemoApp)。
+源码构建的命令行位于 `src\CLI\bin\Release\net10.0\fsetup.exe`。测试打包使用的示例应用是 [samples/DemoApp](samples/DemoApp)。
 
 ### 测试
 

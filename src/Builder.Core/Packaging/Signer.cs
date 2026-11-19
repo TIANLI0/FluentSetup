@@ -62,29 +62,74 @@ public static partial class Signer
     /// Signs <paramref name="file"/> in place with the configured provider and checks that it then carries an
     /// Authenticode signature. <paramref name="description"/> is the signature's description (signtool /d).
     /// </summary>
-    public static void Sign(SigningSettings settings, string projectDir, string file, string description, Action<string> log)
+    public static void Sign(SigningSettings settings, string projectDir, string file, string description, Action<string> log) =>
+        Sign(settings, projectDir, [file], description, log);
+
+    /// <summary>
+    /// Signs several files in place. signtool and Artifact Signing take them in a few calls with many files each (one
+    /// signing session, one round trip per call); the command provider runs once per file.
+    /// </summary>
+    public static void Sign(SigningSettings settings, string projectDir, IReadOnlyList<string> files, string description, Action<string> log)
     {
+        if (files.Count == 0) return;
         var provider = EffectiveProvider(settings);
         if (provider == ProviderCommand)
         {
-            SignWithCommand(settings, projectDir, file, description, log);
+            foreach (var file in files) SignWithCommand(settings, projectDir, file, description, log);
         }
         else if (provider is ProviderSignTool or ProviderTrustedSigning)
         {
             if (!OperatingSystem.IsWindows())
                 throw new BuildFailedException($"The {provider} signing provider uses signtool.exe, which runs only on Windows. " +
                                                "On Linux and macOS use the command provider (see docs/cross-platform.md).");
-            if (provider == ProviderSignTool) SignWithSignTool(settings, projectDir, file, description, log);
-            else SignWithTrustedSigning(settings, projectDir, file, description, log);
+            foreach (var batch in Batches(files))
+            {
+                if (provider == ProviderSignTool) SignWithSignTool(settings, projectDir, batch, description, log);
+                else SignWithTrustedSigning(settings, projectDir, batch, description, log);
+            }
         }
         else
         {
             throw new BuildFailedException($"'{settings.Provider}' is not a signing provider (signtool, trustedSigning or command).");
         }
-        using var fs = File.OpenRead(file);
-        var (offset, size) = PackageFormat.ReadSecurityDirectory(fs);
-        if (offset == 0 || size < 8 || offset + size > fs.Length)
-            throw new BuildFailedException($"Signing finished, but {Path.GetFileName(file)} has no Authenticode signature.");
+        foreach (var file in files)
+        {
+            if (!IsSigned(file)) throw new BuildFailedException($"Signing finished, but {Path.GetFileName(file)} has no Authenticode signature.");
+        }
+    }
+
+    /// <summary>The file carries an Authenticode certificate table (whether it verifies is not checked).</summary>
+    public static bool IsSigned(string file)
+    {
+        try
+        {
+            using var fs = File.OpenRead(file);
+            var (offset, size) = PackageFormat.ReadSecurityDirectory(fs);
+            return offset != 0 && size >= 8 && offset + size <= fs.Length;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Command lines stay well below Windows' 32,767 characters.</summary>
+    private static IEnumerable<List<string>> Batches(IReadOnlyList<string> files)
+    {
+        var batch = new List<string>();
+        var length = 0;
+        foreach (var f in files)
+        {
+            if (batch.Count > 0 && (length + f.Length + 3 > 24_000 || batch.Count >= 200))
+            {
+                yield return batch;
+                batch = [];
+                length = 0;
+            }
+            batch.Add(f);
+            length += f.Length + 3;
+        }
+        if (batch.Count > 0) yield return batch;
     }
 
     public static (int ExitCode, string Output) Verify(string file, string? signTool = null)
@@ -96,7 +141,7 @@ public static partial class Signer
     // ---- signtool -------------------------------------------------------------------------------------------------
 
     [SupportedOSPlatform("windows")]
-    private static void SignWithSignTool(SigningSettings s, string projectDir, string file, string description, Action<string> log)
+    private static void SignWithSignTool(SigningSettings s, string projectDir, IReadOnlyList<string> file, string description, Action<string> log)
     {
         var tool = RequireSignTool(s, projectDir);
         var args = SignToolArguments(s, description);
@@ -123,7 +168,7 @@ public static partial class Signer
     }
 
     [SupportedOSPlatform("windows")]
-    private static void SignWithTrustedSigning(SigningSettings s, string projectDir, string file, string description, Action<string> log)
+    private static void SignWithTrustedSigning(SigningSettings s, string projectDir, IReadOnlyList<string> file, string description, Action<string> log)
     {
         var t = s.TrustedSigning ?? throw new BuildFailedException("signing.trustedSigning is missing.");
         var tool = RequireSignTool(s, projectDir);
@@ -170,9 +215,9 @@ public static partial class Signer
         return args;
     }
 
-    private static void RunSignTool(string tool, List<string> args, string file, Action<string> log)
+    private static void RunSignTool(string tool, List<string> args, IReadOnlyList<string> files, Action<string> log)
     {
-        args.Add(file);
+        args.AddRange(files);
         log("signtool " + string.Join(' ', args));
         var (code, output) = Run(new ProcessStartInfo(tool), args, TimeSpan.FromMinutes(10), "signtool");
         if (code != 0) throw new BuildFailedException($"Signing failed (signtool exit code {code}): {output.Trim()}");

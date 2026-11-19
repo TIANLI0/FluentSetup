@@ -4,7 +4,7 @@ using FluentSetup.Builder.Core.Packaging;
 
 namespace FluentSetup.Builder.Core.Validation;
 
-/// <summary>Checks of the <c>signing</c> section (FS1501–FS1519).</summary>
+/// <summary>Checks of the <c>signing</c> section (FS1501–FS1520).</summary>
 public static partial class SigningValidator
 {
     /// <summary>DefaultAzureCredential sources that Artifact Signing's metadata.json can exclude.</summary>
@@ -22,7 +22,7 @@ public static partial class SigningValidator
     private static partial Regex PlaceholderRegex();
 
     public static bool IsSigningCode(string code) =>
-        code.Length == 6 && code.StartsWith("FS15", StringComparison.Ordinal) && int.TryParse(code.AsSpan(2), out var n) && n is >= 1501 and <= 1519;
+        code.Length == 6 && code.StartsWith("FS15", StringComparison.Ordinal) && int.TryParse(code.AsSpan(2), out var n) && n is >= 1501 and <= 1520;
 
     /// <summary>
     /// The diagnostics a build uses: the project's, minus the signing checks when this build does not sign
@@ -55,6 +55,11 @@ public static partial class SigningValidator
                           "(e.g. osslsigncode or jsign; see docs/cross-platform.md), or build with --no-sign.";
             if (signsHere) d.Error("FS1519", "signing.provider", message);
             else d.Warning("FS1519", "signing.provider", message);
+        }
+
+        for (var i = 0; i < s.Files.Count; i++)
+        {
+            if (string.IsNullOrWhiteSpace(s.Files[i])) d.Error("FS1520", $"signing.files[{i}]", "Empty pattern: name the app's programs to sign, e.g. \"MyApp.exe\" or \"MyApp*.dll\".");
         }
 
         var signtoolSettings = !string.IsNullOrEmpty(s.CertificateThumbprint) || !string.IsNullOrEmpty(s.CertificateFile) || !string.IsNullOrEmpty(s.PasswordEnvironmentVariable);

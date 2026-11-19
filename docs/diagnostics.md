@@ -48,7 +48,7 @@ Notes:
   refuses to run (see `shared/protocols/ui-protocol.md`, section 3.2).
 * `FluentSetup.UI.exe` has its own exit codes (`0x20`–`0x26`); they only appear in the log, never as Setup.exe exit
   codes (protocol document, section 2.5).
-* Builder diagnostics (`FS1001` … `FS2002`, reported by `fluentsetup validate` / `build`) are a separate set of codes
+* Builder diagnostics (`FS1001` … `FS2006`, reported by `fsetup validate` / `build`) are a separate set of codes
   and are not covered here.
 
 ## 2. Logs

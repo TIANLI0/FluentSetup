@@ -1349,6 +1349,55 @@ bool DownloadFile(const std::string& url, const std::wstring& dest, const Sha256
     return true;
 }
 
+bool HttpGetRange(const std::string& url, uint64_t first, uint64_t last, uint64_t& total,
+                  const std::function<bool(const uint8_t*, size_t)>& sink, const std::atomic<bool>& cancel, std::wstring& error) {
+    total = 0;
+    if (last < first) {
+        error = L"Empty range";
+        return false;
+    }
+    const std::wstring headers = Printf(L"Range: bytes=%llu-%llu\r\n", static_cast<unsigned long long>(first), static_cast<unsigned long long>(last));
+    HttpsGet r;
+    if (!StartHttpsGet(url, headers.c_str(), r, error)) return false;
+    if (r.status != 206) {
+        error = Printf(L"The server answered HTTP %lu to a range request", r.status);
+        return false;
+    }
+    // "bytes <first>-<last>/<total>": the range must be exactly the one asked for.
+    wchar_t range[128] = {};
+    DWORD size = sizeof(range);
+    unsigned long long a = 0, b = 0, t = 0;
+    if (!::WinHttpQueryHeaders(r.request.h, WINHTTP_QUERY_CONTENT_RANGE, WINHTTP_HEADER_NAME_BY_INDEX, range, &size, WINHTTP_NO_HEADER_INDEX) ||
+        swscanf_s(range, L"bytes %llu-%llu/%llu", &a, &b, &t) != 3 || a != first || b != last || t <= last) {
+        error = L"The server answered with another range";
+        return false;
+    }
+    total = t;
+    std::vector<uint8_t> buffer(256 * 1024);
+    uint64_t want = last - first + 1;
+    while (want > 0) {
+        if (cancel) {
+            error = L"Cancelled";
+            return false;
+        }
+        DWORD got = 0;
+        if (!::WinHttpReadData(r.request.h, buffer.data(), static_cast<DWORD>(std::min<uint64_t>(buffer.size(), want)), &got)) {
+            error = L"Download interrupted: " + Win32Message(::GetLastError());
+            return false;
+        }
+        if (got == 0) {
+            error = L"The range ended early";
+            return false;
+        }
+        if (!sink(buffer.data(), got)) {
+            if (error.empty()) error = L"Cannot store the download";
+            return false;
+        }
+        want -= got;
+    }
+    return true;
+}
+
 bool HttpGetText(const std::string& url, const wchar_t* headers, size_t maxBytes, std::string& body, unsigned long& status,
                  std::wstring& error) {
     body.clear();

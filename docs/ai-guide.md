@@ -59,6 +59,7 @@ paths work but make the project machine-specific.
 | Write settings into a config file | `configFiles[]`: JSON (dotted keys) or INI (section/key), existing files keep their other settings. |
 | Files the app keeps open during updates | `install.restartManager: "auto"` (default) closes and restarts the programs holding them; `install.lockedFiles: "reboot"` (per-machine) replaces what is still locked at the next restart (exit code 3010). |
 | Signed uninstaller | `signing.signUninstaller: true` (default when signing): uninstall.exe shows the publisher in UAC. |
+| Sign the app's own programs | `signing.files: ["MyApp.exe", "MyApp*.dll"]`: signed copies go into the package (already signed files are skipped). |
 | Languages | Built in: en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT (regional tags such as zh-HK, de-CH, pt-PT use the table of their language). Any other language: a localization file with a `strings` table (§10). |
 
 ## 4. Project file at a glance
@@ -233,8 +234,12 @@ Built-in updates (instead of writing an updater in the app):
   stdout).
 - GitHub: the release's Setup.exe is found by `update.asset` (default `output.fileName`; write `{Version}`, never the
   literal version). A SHA-256 is required: GitHub's asset digest and/or the `checksums` file.
-- Feed: `{ "version", "url", "sha256", "size"?, "notes"? }` over https.
+- Feed: `{ "version", "url", "sha256", "size"?, "notes"? }` over https; `fsetup build --feed latest.json --feed-url
+  https://…/{FileName}` writes it with the package.
 - The download must be the same `app.id`, the advertised (newer) version, and signed by `update.signer` if set.
+- `update.differential: true` (opt-in) makes updates download only what changed: the last Setup.exe is kept on the
+  user's PC (one Setup.exe of disk) and unchanged streams are copied from it; the server must answer HTTP range
+  requests (GitHub does), else the whole file is downloaded. Leave it off unless the app is large.
 - Do not add `update` for apps that keep their own updater; their `Setup.exe /SILENT` or `/S /UPDATE` calls keep working.
 
 ## 8a. Desktop integration (1.2)

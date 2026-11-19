@@ -3,6 +3,48 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
+## [Unreleased]
+
+### Added
+
+- Differential updates, opt-in (`update.differential: true`): the built-in updater keeps the downloaded Setup.exe on
+  the user's PC (per user, the last one only) and rebuilds the next one from it, copying the streams it already has and
+  fetching only the rest with HTTP range requests. The rebuilt file must match the published SHA-256 and signer like
+  any download; without range support, or with little in common, the whole file is downloaded. The kept Setup.exe is
+  also the repair source. Off by default: nothing is stored on the user's PC.
+- `signing.files`: the app's own programs and DLLs are signed too (copies in the package, one signtool call for many
+  files; already signed files are skipped). New checks FS1520, FS2005, FS2006.
+- Branch filter for machine code (`output.codeFilter`, on by default): x86/x64 and Arm64 programs and DLLs are
+  filtered before compression (relative call targets made absolute) and restored by setup. Native code comes out
+  about 4–8 % smaller (MSVC's compiler binaries: 31.3 → 28.9 MB), .NET assemblies about 1 %, at the same build time.
+- `fsetup inspect new.exe --diff old.exe`: files added, changed and removed between two packages, and about how much a
+  differential update downloads.
+- `fsetup build --feed latest.json --feed-url https://…/{FileName}`: writes the update feed (version, url, SHA-256,
+  size) for `update.feed` together with the package.
+- The Builder app has the new settings: the app's programs to sign (Build › Signing) and differential updates (Upgrade).
+- Builds reuse the compressed streams of earlier builds whose files are unchanged
+  (`%LocalAppData%\FluentSetup\cache\streams`), the WinUI front end included; `fsetup build --no-cache` compresses
+  everything again. Packages are byte-identical either way.
+
+### Changed
+
+- Updates leave files that did not change alone: a file the installed version recorded with the same size and SHA-256,
+  and that is still so on disk, is neither backed up nor written again, and a stream with nothing to write is not
+  decoded at all. Patch releases install much faster and no longer ask for a restart because of an unchanged file in
+  use.
+- Setup decodes the payload on up to four threads when it has several streams to write.
+- Block ends depend on the files: past 16 MiB a block ends after a file whose path hashes to a boundary, at 32 MiB in
+  any case, so a changed file no longer shifts every later block (stream cache, differential updates).
+- `output.compression: "normal"` uses long-distance matching over each 32 MiB block (`windowLog` 25): smaller packages
+  at about the same build time.
+- The command is now `fsetup` (`fsetup.exe`, `fsetup.dll`). `fluentsetup` keeps working as another name: FluentSetup's
+  installer puts both on `PATH`, the Linux and macOS archives carry a `fluentsetup` link and the GitHub Action adds
+  the alias on every system. The Windows zip holds only `fsetup.exe` (a second copy of the single-file program would
+  double the download), and the .NET tool `FluentSetup.Cli` gives only `fsetup` (a .NET tool has one command name).
+  The CLI inside FluentSetup.MSBuild is now `tools\cli\fsetup.dll` (the default of `FluentSetupCliPath`).
+- `build`, `validate` and `locale add` take the project as optional: a folder means its `fluentsetup.json`, and
+  without one they use `fluentsetup.json` in the current folder (`fsetup build -D Version=1.2.3`).
+
 ## [1.4.1] - 2026-11-18
 
 ### Changed

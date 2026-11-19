@@ -124,6 +124,13 @@ FileSet ParseFileSet(const json::Value& v, const wchar_t* what, const std::funct
         if (!ParseDigest(f["sha256"], info.sha256)) Bad(L"bad sha256 for " + info.path);
         info.attributes = static_cast<uint32_t>(f["attributes"].asUint(0)) & (FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN);
         info.preserve = f["preserve"].asBool(false);
+        if (const std::string& filter = f["filter"].asString(); !filter.empty()) {
+            // Only the payload is decoded with filters; the front end and bundled installers are stored as they are.
+            if (!checkReserved) Bad(L"a filter is only allowed for payload files: " + info.path);
+            if (filter == "x86") info.filter = archive::BranchFilter::X86;
+            else if (filter == "arm64") info.filter = archive::BranchFilter::Arm64;
+            else Bad(L"unknown filter for " + info.path);
+        }
         set.totalRaw += info.size;
         if (set.totalRaw > kMaxTotalRaw) Bad(L"payload too large");
         set.files.push_back(std::move(info));

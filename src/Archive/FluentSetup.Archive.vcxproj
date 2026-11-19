@@ -15,6 +15,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="container.h" />
+    <ClInclude Include="pefilter.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="container.cpp" />

@@ -207,6 +207,49 @@ public class SignerTests
     }
 
     [Fact]
+    public async Task AppFilesAreSignedInThePackageOnly()
+    {
+        var shell = PowerShell();
+        var runtime = Path.Combine(AppContext.BaseDirectory, "runtime");
+        if (shell is null || !File.Exists(Path.Combine(runtime, "x64", "FluentSetup.Stub.exe"))) return;
+        using var dir = new TempDir();
+        var app = Path.Combine(dir.Path, "app");
+        Directory.CreateDirectory(app);
+        var pe = typeof(PeResources).Assembly.Location;
+        File.Copy(pe, Path.Combine(app, "App.exe"));
+        File.Copy(pe, Path.Combine(app, "App.Core.dll"));
+        File.Copy(pe, Path.Combine(app, "Vendor.dll"));
+        dir.File("app/App.config", "<configuration />");
+        var signing = Command(dir, shell, false);
+        signing.SignUninstaller = false;
+        signing.Files = ["App.exe", "App*.dll", "App.config"];
+        Signer.Sign(signing, dir.Path, Path.Combine(app, "Vendor.dll"), "Vendor", _ => { });  // already signed: left alone
+        var originals = Directory.GetFiles(app).ToDictionary(f => Path.GetFileName(f)!, f => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(f))));
+        var project = new SetupProject
+        {
+            App = new AppInfo { Id = "Test.SignFiles", Name = "Sign Files", Publisher = "P", Version = "1.0.0", MainExecutable = "App.exe" },
+            Files = new FileSettings { Source = "app" },
+            Output = new OutputSettings { Directory = "out", Compression = "fast" },
+            Signing = signing,
+        };
+        var projectPath = Path.Combine(dir.Path, "fluentsetup.json");
+        ProjectSerializer.Save(project, projectPath);
+        var report = await new PackageBuilder().BuildAsync(project, projectPath, new BuildOptions { RuntimeRoot = runtime });
+        Assert.True(report.Success, report.Error);
+        Assert.Equal(2, report.SignedFiles);  // App.exe and App.Core.dll
+        Assert.Contains(report.Diagnostics, d => d.Code == "FS2005");  // App.config is no program
+
+        // The build output folder is unchanged; the package holds the signed copies.
+        Assert.Equal(originals, Directory.GetFiles(app).ToDictionary(f => Path.GetFileName(f)!, f => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(f)))));
+        var files = PackageInspector.Inspect(report.OutputPath!, verifyStreams: false).Header!.RootElement.GetProperty("payload").GetProperty("files").EnumerateArray()
+            .ToDictionary(f => f.GetProperty("path").GetString()!, f => f.GetProperty("sha256").GetString()!);
+        Assert.NotEqual(originals["App.exe"], files["App.exe"]);
+        Assert.NotEqual(originals["App.Core.dll"], files["App.Core.dll"]);
+        Assert.Equal(originals["Vendor.dll"], files["Vendor.dll"]);
+        Assert.Equal(originals["App.config"], files["App.config"]);
+    }
+
+    [Fact]
     public void SigntoolNeverSeesThePfxPassword()
     {
         if (!OperatingSystem.IsWindows() || Signer.FindSignTool(null) is null) return;

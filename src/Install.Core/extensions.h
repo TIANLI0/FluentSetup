@@ -340,6 +340,11 @@ bool Download(const std::string& url, const std::wstring& dest, const Sha256Dige
 bool DownloadFile(const std::string& url, const std::wstring& dest, const Sha256Digest* sha256, uint64_t expectedSize,
                   const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress, std::wstring& error);
 
+// GETs bytes [first, last] of an https URL. True only when the server answers 206 with exactly that range; `total` is
+// the whole file's size from Content-Range. Every byte goes to `sink` in order (false from `sink` stops with an error).
+bool HttpGetRange(const std::string& url, uint64_t first, uint64_t last, uint64_t& total,
+                  const std::function<bool(const uint8_t*, size_t)>& sink, const std::atomic<bool>& cancel, std::wstring& error);
+
 // GETs an https URL into memory (at most maxBytes). `headers`: extra request headers ("Name: value\r\n...") or null.
 // False with `error` on a transport failure or any status but 200 (`status` keeps the code, 0 if none came).
 bool HttpGetText(const std::string& url, const wchar_t* headers, size_t maxBytes, std::string& body, unsigned long& status,

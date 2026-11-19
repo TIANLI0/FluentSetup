@@ -16,6 +16,9 @@
 #include <algorithm>
 #include <system_error>
 #include <thread>
+#include <mutex>
+#include <optional>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace fsetup::install {
@@ -425,6 +428,43 @@ void MoveOwnedSubtrees(const std::wstring& root, const std::wstring& to, const s
     log::Info(L"Moved %zu of %zu folders as a whole", moved, dirs.size());
 }
 
+// Creates a payload file that must not exist yet (it was journaled as "place"); large files get their space reserved up
+// front. INVALID_HANDLE_VALUE with the error in GetLastError().
+HANDLE CreatePayloadFile(const std::wstring& path, uint64_t size) {
+    const HANDLE h = ::CreateFileW(path::Long(path).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                                   FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (h != INVALID_HANDLE_VALUE && size > (8u << 20)) {
+        FILE_ALLOCATION_INFO alloc{};
+        alloc.AllocationSize.QuadPart = static_cast<LONGLONG>(size);
+        ::SetFileInformationByHandle(h, FileAllocationInfo, &alloc, sizeof(alloc));
+    }
+    return h;
+}
+
+// The installed file still has exactly this size and content (read back and hashed).
+bool FileHasContent(const std::wstring& path, uint64_t size, const Sha256Digest& sha256) {
+    UniqueHandle h(::CreateFileW(path::Long(path).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                 FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    LARGE_INTEGER actual{};
+    if (!h || !::GetFileSizeEx(h.get(), &actual) || static_cast<uint64_t>(actual.QuadPart) != size) return false;
+    Sha256 hash;
+    std::vector<uint8_t> buffer(1u << 20);
+    for (uint64_t left = size; left > 0;) {
+        DWORD got = 0;
+        if (!::ReadFile(h.get(), buffer.data(), static_cast<DWORD>(std::min<uint64_t>(left, buffer.size())), &got, nullptr) || got == 0) return false;
+        hash.Update(buffer.data(), got);
+        left -= got;
+    }
+    return hash.Finish() == sha256;
+}
+
+// Decoder threads for the payload: streams are independent, so up to four are decoded, hashed and written at once on
+// machines with the cores for it (a stream's window can take up to 128 MiB, which caps the count).
+unsigned DecodeThreads(size_t streams) noexcept {
+    const unsigned hw = std::max(1u, std::thread::hardware_concurrency());
+    return static_cast<unsigned>(std::min<size_t>({streams, 4u, std::max(1u, hw / 2)}));
+}
+
 // Creates the payload's files a little ahead of the decoder, on a few threads, so the time the file system takes to
 // create each file overlaps with decoding and writing the previous ones. Paths are taken in order; at most kAhead
 // handles are open but not yet taken. Every path must have been journaled ("place") before the opener is created.
@@ -481,15 +521,8 @@ private:
 
     void Open(size_t i) {
         Slot& s = slots_[i];
-        s.handle = ::CreateFileW(path::Long(*requests_[i].path).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-                                 FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-        if (s.handle == INVALID_HANDLE_VALUE) {
-            s.error = ::GetLastError();
-        } else if (requests_[i].size > (8u << 20)) {
-            FILE_ALLOCATION_INFO alloc{};
-            alloc.AllocationSize.QuadPart = static_cast<LONGLONG>(requests_[i].size);
-            ::SetFileInformationByHandle(s.handle, FileAllocationInfo, &alloc, sizeof(alloc));
-        }
+        s.handle = CreatePayloadFile(*requests_[i].path, requests_[i].size);
+        if (s.handle == INVALID_HANDLE_VALUE) s.error = ::GetLastError();
     }
 
     void Run() {
@@ -671,13 +704,14 @@ void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup,
     // crash at any point rolls back to exactly the previous state.
     //
     // The per-file file-system work is done in bulk and from several threads (see AheadOpener), in an order that keeps
-    // the journal ahead of every change: (0) on an update, folders that hold nothing but the app's files go to the
-    // backup folder with one rename each; (1) directories, journaled once created; (2) existing targets inspected;
-    // (3) every replaced file journaled ("backup"), then all of them moved to the backup folder; (4) every new file
-    // journaled ("place") - none of these paths holds a previous file any more, so rolling back a "place" never deletes
-    // anything but our own bytes; (5) the streams decoded in order into files created ahead of the decoder.
+    // the journal ahead of every change: (u) on an update, files the installed version already has with the same
+    // content are left where they are; (0) folders that hold nothing but the app's other files go to the backup folder
+    // with one rename each; (1) directories, journaled once created; (2) existing targets inspected; (3) every replaced
+    // file journaled ("backup"), then all of them moved to the backup folder; (4) every new file journaled ("place") -
+    // none of these paths holds a previous file any more, so rolling back a "place" never deletes anything but our own
+    // bytes; (5) the streams that hold a file to write decoded, on several threads when there are several such streams.
     // Rolled back in reverse, this deletes the new files, removes the folders created in (1), moves the replaced files
-    // back and finally the folders of (0) - into places that are empty again by then.
+    // back and finally the folders of (0) - into places that are empty again by then. Unchanged files are never touched.
     const auto& files = pkg_.payload.files;
     struct Placement {
         const FileInfo* file = nullptr;
@@ -686,27 +720,56 @@ void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup,
         std::wstring saved;      // backup location of the file it replaces, if there is one
         DWORD attrs = INVALID_FILE_ATTRIBUTES;  // of the existing target
         DWORD moveError = 0;
-        bool discard = false;  // preserved user data that already exists: decode (to verify) but keep the user's copy
+        bool discard = false;  // preserved user data that already exists: keep the user's copy
+        bool keep = false;     // the installed version has this exact file and it is unchanged on disk
+        [[nodiscard]] bool writes() const noexcept { return !discard && !keep; }
     };
     std::vector<Placement> plan;
-    for (const auto& f : files) {
-        if (Selected(f)) plan.push_back({&f, path::Join(dir, f.path)});
+    std::vector<size_t> planOf(files.size(), SIZE_MAX);  // file index -> plan index
+    for (size_t i = 0; i < files.size(); ++i) {
+        if (!Selected(files[i])) continue;
+        planOf[i] = plan.size();
+        plan.push_back({&files[i], path::Join(dir, files[i].path)});
     }
     std::vector<const std::wstring*> rels;
     rels.reserve(plan.size());
     for (const auto& p : plan) rels.push_back(&p.file->path);
     const auto dirLevels = ParentDirsByDepth(rels);
 
+    // (u) Unchanged files: recorded by the installed version with the same size and SHA-256, and still so on disk (read
+    // back: a damaged or edited file is replaced as usual). Attributes must match too, so nothing needs changing.
+    if (oldRecord) {
+        std::unordered_map<std::wstring, const RecordFile*> recorded;
+        for (const auto& f : oldRecord->files) recorded.emplace(ToLower(f.path), &f);
+        std::atomic<size_t> kept{0};
+        ParallelFor(plan.size(), [&](size_t i) {
+            Placement& p = plan[i];
+            const FileInfo& f = *p.file;
+            if (f.preserve) return;
+            const auto it = recorded.find(ToLower(f.path));
+            if (it == recorded.end() || it->second->size != f.size || it->second->sha256 != f.sha256) return;
+            const DWORD attrs = fs::Attributes(p.target);
+            constexpr DWORD kKept = FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN;
+            if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY) || fs::IsLinkLike(p.target)) return;
+            if ((attrs & kKept) != (f.attributes & kKept)) return;
+            if (!FileHasContent(p.target, f.size, f.sha256)) return;
+            p.keep = true;
+            kept.fetch_add(1, std::memory_order_relaxed);
+        }, plan.size() >= 16 ? IoThreads() : 1);
+        log::Info(L"%zu of %zu files are unchanged and stay in place", kept.load(), plan.size());
+    }
+    ThrowIfCancelled(cancel);
+
     // (0) Folders of the installed version that contain only files this update replaces or drops (never preserved
-    // files, files of other programs or the user's own).
+    // files, unchanged files, files of other programs or the user's own).
     {
         std::unordered_set<std::wstring> owned, keep;
         std::vector<std::wstring> allFiles;
-        const auto add = [&](const std::wstring& rel, bool preserve) {
+        const auto add = [&](const std::wstring& rel, bool stays) {
             allFiles.push_back(rel);
-            (preserve ? keep : owned).insert(ToLower(rel));
+            (stays ? keep : owned).insert(ToLower(rel));
         };
-        for (const auto& p : plan) add(p.file->path, p.file->preserve);
+        for (const auto& p : plan) add(p.file->path, p.file->preserve || p.keep);
         std::vector<std::wstring> extraDirs = pkg_.payload.directories;
         if (oldRecord) {
             for (const auto& f : oldRecord->files) add(f.path, f.preserve);
@@ -726,6 +789,7 @@ void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup,
     // (2) What is already there.
     ParallelFor(plan.size(), [&](size_t i) {
         Placement& p = plan[i];
+        if (p.keep) return;
         p.attrs = fs::Attributes(p.target);
         if (p.attrs == INVALID_FILE_ATTRIBUTES) return;
         if (p.file->preserve) {
@@ -766,85 +830,141 @@ void Engine::InstallPayload(const std::wstring& dir, const std::wstring& backup,
     ThrowIfCancelled(cancel);
 
     // (4) Every file about to be created, journaled before any of them is.
-    std::vector<AheadOpener::Request> requests;
     for (auto& p : plan) {
-        if (p.discard) continue;
+        if (!p.writes()) continue;
         if (p.writePath.empty()) p.writePath = p.target;
         journal.Place(p.writePath);
-        requests.push_back({&p.writePath, p.file->size});
     }
     journal.Flush();
 
-    // (5) Decode, verify and write.
-    AheadOpener opener(std::move(requests));
-    size_t nextPlan = 0, nextRequest = 0;
-    const uint64_t total = std::max<uint64_t>(pkg_.payload.totalRaw, 1);
-    uint64_t done = 0;
-    unsigned placed = 0;
-    constexpr size_t kChunk = 1u << 20;
-    auto buffer = std::make_unique<uint8_t[]>(kChunk);
-
-    size_t index = 0;
-    for (uint32_t s = 0; s < pkg_.payload.streams.size(); ++s) {
-        const StreamInfo& si = pkg_.payload.streams[s];
-        // A stream holding only another variant's files is not decoded at all.
+    // (5) Decode, verify and write the streams that hold a file to write. A stream whose files are all unchanged,
+    // preserved or another variant's is not read at all; in a stream that is read, every file's hash is checked, also
+    // of the ones that are not written, and the stream's own hash at its end.
+    struct Job {
+        uint32_t stream;
+        size_t begin, end;  // file index range
+    };
+    std::vector<Job> jobs;
+    uint64_t skippedBytes = 0;
+    for (size_t index = 0; index < files.size();) {
+        const uint32_t s = files[index].stream;
         size_t end = index;
         bool needed = false;
-        for (; end < files.size() && files[end].stream == s; ++end) needed = needed || Selected(files[end]);
-        if (!needed) {
-            index = end;
-            continue;
+        uint64_t bytes = 0;
+        for (; end < files.size() && files[end].stream == s; ++end) {
+            if (planOf[end] == SIZE_MAX) continue;
+            needed = needed || plan[planOf[end]].writes();
+            bytes += files[end].size;
         }
-        archive::StreamReader reader(container_, si.offset, si.size, si.rawSize, si.sha256);
-        for (; index < files.size() && files[index].stream == s; ++index) {
-            ThrowIfCancelled(cancel);
-            const FileInfo& f = files[index];
-            if (!Selected(f)) {
-                // Another variant's file in a shared stream: decode (the stream hash covers it) and drop it.
-                for (uint64_t left = f.size; left > 0;) {
-                    const size_t n = reader.Read(buffer.get(), static_cast<size_t>(std::min<uint64_t>(left, kChunk)));
-                    if (n == 0) throw Failure(ErrorCode::PackageCorrupt, L"Stream ended early in " + f.path);
-                    left -= n;
-                }
-                continue;
+        if (needed) jobs.push_back({s, index, end});
+        else skippedBytes += bytes;
+        index = end;
+    }
+    const unsigned threads = DecodeThreads(jobs.size());
+    if (jobs.size() > 0) log::Info(L"Decoding %zu of %zu streams on %u thread(s)", jobs.size(), pkg_.payload.streams.size(), threads);
+
+    // One decoder per thread; with a single thread the files are created ahead of it (AheadOpener), in order.
+    std::optional<AheadOpener> opener;
+    if (threads <= 1) {
+        std::vector<AheadOpener::Request> requests;
+        for (const auto& job : jobs) {
+            for (size_t i = job.begin; i < job.end; ++i) {
+                if (planOf[i] != SIZE_MAX && plan[planOf[i]].writes()) requests.push_back({&plan[planOf[i]].writePath, files[i].size});
             }
-            const Placement& p = plan[nextPlan++];
-            const std::wstring& target = p.target;
-            const bool discard = p.discard;
-            const std::wstring& writePath = p.writePath;
+        }
+        opener.emplace(std::move(requests));
+    }
+    size_t nextRequest = 0;
+
+    const uint64_t total = std::max<uint64_t>(pkg_.payload.totalRaw, 1);
+    std::atomic<uint64_t> done{skippedBytes};
+    std::atomic<unsigned> placed{0};
+    std::atomic<bool> abort{false};
+    std::mutex progressLock;
+    std::exception_ptr firstError;
+    std::mutex errorLock;
+    const auto progressed = [&](uint64_t n, const std::wstring& path) {
+        const uint64_t now = done.fetch_add(n, std::memory_order_relaxed) + n;
+        if (progressLock.try_lock()) {
+            rep.Update(0.02 + 0.93 * (static_cast<double>(now) / static_cast<double>(total)), path);
+            progressLock.unlock();
+        }
+    };
+    const auto decode = [&](const Job& job) {
+        constexpr size_t kChunk = 1u << 20;
+        auto buffer = std::make_unique<uint8_t[]>(kChunk);
+        const StreamInfo& si = pkg_.payload.streams[job.stream];
+        archive::StreamReader reader(container_, si.offset, si.size, si.rawSize, si.sha256);
+        for (size_t i = job.begin; i < job.end; ++i) {
+            ThrowIfCancelled(cancel);
+            if (abort.load(std::memory_order_relaxed)) throw Failure(ErrorCode::Cancelled, L"Stopped after an error in another stream");
+            const FileInfo& f = files[i];
+            const Placement* p = planOf[i] == SIZE_MAX ? nullptr : &plan[planOf[i]];
             UniqueHandle h;
-            if (!discard) h = opener.Take(nextRequest++);
+            if (p && p->writes()) {
+                if (opener) {
+                    h = opener->Take(nextRequest++);
+                } else {
+                    h.reset(CreatePayloadFile(p->writePath, f.size));
+                    if (!h) ThrowWin32(L"Cannot create " + p->writePath);
+                }
+            }
+            // Another variant's file in a shared stream is decoded (the stream hash covers it) and dropped; so are the
+            // unchanged and preserved files in a stream that is read anyway, after their hash is checked. A filtered
+            // file is unfiltered on the way (Archive/pefilter.h); the filter may hold back up to 4 bytes per chunk.
             Sha256 hash;
-            uint64_t remaining = f.size;
-            while (remaining > 0) {
+            archive::BranchFilterState filter(p ? f.filter : archive::BranchFilter::None, false);
+            size_t carry = 0;
+            for (uint64_t remaining = f.size; remaining > 0 || carry > 0;) {
                 ThrowIfCancelled(cancel);
-                const size_t want = static_cast<size_t>(std::min<uint64_t>(remaining, kChunk));
+                const size_t want = static_cast<size_t>(std::min<uint64_t>(remaining, kChunk - carry));
                 size_t got = 0;
                 while (got < want) {
-                    const size_t n = reader.Read(buffer.get() + got, want - got);
+                    const size_t n = reader.Read(buffer.get() + carry + got, want - got);
                     if (n == 0) throw Failure(ErrorCode::PackageCorrupt, L"Stream ended early in " + f.path);
                     got += n;
                 }
-                hash.Update(buffer.get(), got);
-                if (h) {
+                remaining -= got;
+                const size_t avail = carry + got;
+                const size_t ready = filter.Process(buffer.get(), avail, remaining == 0);
+                if (p) hash.Update(buffer.get(), ready);
+                if (h && ready > 0) {
                     DWORD written = 0;
-                    if (!::WriteFile(h.get(), buffer.get(), static_cast<DWORD>(got), &written, nullptr) || written != got) {
-                        ThrowWin32(L"Write failed for " + target);
+                    if (!::WriteFile(h.get(), buffer.get(), static_cast<DWORD>(ready), &written, nullptr) || written != ready) {
+                        ThrowWin32(L"Write failed for " + p->target);
                     }
                 }
-                remaining -= got;
-                done += got;
-                rep.Update(0.02 + 0.93 * (static_cast<double>(done) / static_cast<double>(total)), f.path);
+                memmove(buffer.get(), buffer.get() + ready, avail - ready);
+                carry = avail - ready;
+                if (p) progressed(got, f.path);
             }
             h.reset();
+            if (!p) continue;
             if (hash.Finish() != f.sha256) throw Failure(ErrorCode::PackageCorrupt, L"Checksum mismatch for " + f.path);
-            if (!discard && f.attributes) ::SetFileAttributesW(path::Long(writePath).c_str(), f.attributes);
-            recordFiles.push_back({f.path, f.size, f.sha256, f.preserve});
-            if (!discard && faultAfter_ != 0 && ++placed >= faultAfter_) throw Failure(ErrorCode::IoError, L"Injected fault (test hook)");
+            if (p->writes() && f.attributes) ::SetFileAttributesW(path::Long(p->writePath).c_str(), f.attributes);
+            if (p->writes() && faultAfter_ != 0 && placed.fetch_add(1) + 1 >= faultAfter_) throw Failure(ErrorCode::IoError, L"Injected fault (test hook)");
         }
         uint8_t extra = 0;
         if (reader.Read(&extra, 1) != 0) throw Failure(ErrorCode::PackageCorrupt, L"Stream carries unexpected data");
+    };
+    try {
+        ParallelFor(jobs.size(), [&](size_t k) {
+            try {
+                decode(jobs[k]);
+            } catch (...) {
+                {
+                    std::lock_guard lock(errorLock);
+                    if (!firstError) firstError = std::current_exception();
+                }
+                abort = true;
+                throw;
+            }
+        }, threads);
+    } catch (...) {
+        if (firstError) std::rethrow_exception(firstError);
+        throw;
     }
+    for (const auto& p : plan) recordFiles.push_back({p.file->path, p.file->size, p.file->sha256, p.file->preserve});
 }
 void Engine::WriteUninstaller(const std::wstring& dest) const {
     if (!pkg_.uninstallerImage.header.empty()) {

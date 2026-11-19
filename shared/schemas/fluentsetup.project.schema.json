@@ -1372,6 +1372,11 @@
           "default": "",
           "maxLength": 256,
           "description": "If set, an update is only run when its Authenticode signature is valid and the signing certificate is issued to this name (subject common name, e.g. \"Contoso Ltd\")."
+        },
+        "differential": {
+          "type": "boolean",
+          "default": false,
+          "description": "Opt-in differential updates: keep the downloaded Setup.exe on the user's PC (per user, %LocalAppData%\\FluentSetup\\updates\\<app id>, the last one only) and download only what changed next time: streams the kept file already has are copied, the rest comes with range requests. The rebuilt file must match the published SHA-256 like any download. Costs the size of one Setup.exe on the user's disk. false (default): the whole file into a temporary folder, removed after use."
         }
       },
       "not": {
@@ -1605,6 +1610,11 @@
           "default": true,
           "description": "Embed the WinUI 3 front end. Setup.exe falls back to the built-in Win32 interface where WinUI cannot run; false = Win32 interface only (smaller)."
         },
+        "codeFilter": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run x86/x64 and Arm64 programs and DLLs through a branch filter before compression (relative call targets made absolute; setup undoes it): native code compresses about 4-8 % smaller, .NET assemblies about 1 %. false stores them as they are."
+        },
         "variants": {
           "type": "array",
           "default": [],
@@ -1664,6 +1674,12 @@
           "type": "boolean",
           "default": true,
           "description": "Also sign the uninstall.exe that setup writes into the install folder (UAC and SmartScreen show the publisher when uninstalling)."
+        },
+        "files": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": [],
+          "description": "The app's own programs and DLLs to sign as well, as patterns over the installed paths (e.g. \"MyApp.exe\", \"MyApp*.dll\"). Signed copies go into the package; the build output is not changed. Files that already carry a signature are skipped; files that are no Windows program get warning FS2005."
         },
         "trustedSigning": {
           "type": [

@@ -631,6 +631,7 @@ published, shows "A newer version (1.1.0) is available" with an **Update** butto
 | `prerelease` | bool | `false` | `github`: also offer pre-releases. |
 | `checksums` | string | `""` | `github`: a release file with `<sha256>  <file name>` lines (`sha256sum` format), e.g. `SHA256SUMS.txt`. Empty = GitHub's own SHA-256 digest of the asset. When both exist they must agree. |
 | `signer` | string | `""` | If set, an update only runs when its Authenticode signature is valid with a trusted chain and the certificate is issued to this name (subject common name, e.g. `"Contoso Ltd"`). Use it when you sign (`signing.enabled`); FS1710 warns otherwise. |
+| `differential` | bool | `false` | Opt-in: download only what changed. The downloaded Setup.exe is kept **on the user's PC**, per user (`%LocalAppData%\FluentSetup\updates\<app id>`, the last one only), which costs the size of one Setup.exe on their disk; the next update rebuilds the new Setup.exe from it (or from the Setup.exe that installed the app, if it is still there): streams it already has are copied, everything else comes with HTTP range requests. The rebuilt file must match the published SHA-256 and `signer` like any download; when the server ignores range requests or little is in common, the whole file is downloaded. The kept file is also the repair source. `false` (default): the whole file into a temporary folder, removed after use. |
 
 Before anything runs, the download must: come over https (redirects only to https); match the published SHA-256
 (checked while downloading and once more through a handle that keeps the file from changing); be a valid FluentSetup
@@ -708,8 +709,9 @@ ignored; unknown ids give warnings (FS1323, FS1324).
 | `directory` | string | `"dist"` | Output folder. `build -o` overrides it. |
 | `fileName` | string | `"{AppName}-{Version}-Setup.exe"` | Must expand to a valid file name ending in `.exe`. Placeholders: `{AppName}`, `{AppId}`, `{Version}`, `{Architecture}`. |
 | `architecture` | `x64` \| `arm64` | `"x64"` | Target architecture. `build --arch` overrides it. |
-| `compression` | `fast` \| `normal` \| `max` | `"normal"` | Zstandard level: `fast` is 3, `normal` is 12, `max` is 19 with long-distance matching. |
+| `compression` | `fast` \| `normal` \| `max` | `"normal"` | Zstandard level: `fast` is 3, `normal` is 12 with long-distance matching over each 32 MiB block, `max` is 19 with long-distance matching over 128 MiB. Rebuilds reuse the compressed blocks of earlier builds whose files are unchanged (`%LocalAppData%\FluentSetup\cache\streams`, `FLUENTSETUP_CACHE` moves it; `build --no-cache` compresses everything again). |
 | `includeWinUI` | bool | `true` | Embeds the WinUI 3 front end. Setup.exe falls back to the built-in Win32 UI where WinUI cannot run. `false` gives a smaller Win32-only installer. |
+| `codeFilter` | bool | `true` | Runs x86/x64 and Arm64 programs and DLLs through a branch filter before compression: relative call and jump targets become absolute, so calls of the same function repeat. Setup undoes it while installing (and still checks every file's SHA-256). Native code comes out about 4–8 % smaller, .NET assemblies about 1 %; build time does not change noticeably. `false` stores them as they are. |
 
 ## signing
 
@@ -731,6 +733,7 @@ signature afterwards. `provider` picks the tool:
 | `passwordEnvironmentVariable` | string | `""` | signtool: name of an environment variable that holds the PFX password (see [Secrets](#secrets)). |
 | `timestampUrl` | string | `"http://timestamp.digicert.com"` | RFC 3161 timestamp server. Empty means no timestamp. For Artifact Signing use `http://timestamp.acs.microsoft.com`. The command provider gets it as `{timestampUrl}`. |
 | `signToolPath` | string | `""` | signtool, trustedSigning: path of `signtool.exe`. Empty means the Windows 10/11 SDK and `PATH` are searched. |
+| `files` | string[] | `[]` | The app's own programs and DLLs to sign too, as patterns over the installed paths (`"MyApp.exe"`, `"MyApp*.dll"`, `"bin/**/*.dll"`). The builder signs copies in one batch (one signtool call for many files) and puts them into the package; the build output folder is not changed. Files that already carry a signature (other vendors' DLLs, the .NET runtime) are skipped; a file that is no Windows program gets warning FS2005, patterns that match nothing to sign FS2006. A rebuild signs again, so blocks with signed files are compressed again too. |
 | `signUninstaller` | bool | `true` | Also sign the `uninstall.exe` that setup writes into the install folder, with the same provider, so UAC and SmartScreen show the publisher when the app is removed. The builder produces the exact uninstaller setup will write, signs it, and stores its certificate table in the package (a few KB); setup appends it and checks the result against the recorded SHA-256 (else it writes an unsigned uninstaller and logs why). The signing tool must only append the certificate table (signtool, osslsigncode and jsign do). |
 | `trustedSigning` | object | `null` | Settings of the trustedSigning provider ([below](#trustedsigning)). |
 | `command` | object | `null` | Settings of the command provider ([below](#command)). |
@@ -837,16 +840,19 @@ More examples (osslsigncode, jsign with Artifact Signing or a cloud key, AzureSi
 | FS1517 | Settings of another provider are ignored (info) |
 | FS1518 | signtool: the thumbprint is not 40 hex digits |
 | FS1519 | signtool or trustedSigning on Linux or macOS: a warning from `validate`, an error when the build signs |
+| FS1520 | an empty pattern in `signing.files` |
 
 ## CLI: `fsetup`
 
 The CLI runs on Windows, Linux and macOS; the result is the same Windows `Setup.exe` on each. Release downloads:
 `fluentsetup-<version>-win-x64.zip`, `-linux-x64.tar.gz` and `-osx-arm64.tar.gz` (self-contained, with the installer
-runtime in `runtime/`). On Linux and macOS, sign with the `command` provider; `update` (installing a newer FluentSetup)
+runtime in `runtime/`). `fluentsetup`, the command's original name, works too: FluentSetup's installer puts both on
+`PATH`, the `.tar.gz` archives carry a `fluentsetup` link, and the GitHub Action adds it on every system; the Windows
+zip holds only `fsetup.exe` and the .NET tool (`FluentSetup.Cli`) only gives `fsetup`. On Linux and macOS, sign with the `command` provider; `update` (installing a newer FluentSetup)
 works on Windows only. See [Building on Linux and macOS](cross-platform.md).
 
 ```
-fluentsetup build <project.json> [options]
+fsetup build [project] [options]      project: a fluentsetup.json or a folder with one (default: .)
     -o, --output <dir>      Output folder (default: output.directory)
     --arch x64|arm64        Target architecture (default: output.architecture)
     --sign | --no-sign      Override signing.enabled (--no-sign also skips the signing checks)
@@ -857,10 +863,16 @@ fluentsetup build <project.json> [options]
     --json                  Print the build report as JSON instead of text
     --non-interactive       Accepted for CI scripts (the CLI never prompts)
     --refresh-installers    Download official prerequisite installers ("auto": "bundle") again
+    --no-cache              Compress every stream again instead of reusing unchanged ones of earlier builds
+    --feed <file.json> --feed-url <https URL> [--feed-notes <https URL>]
+                            Also write the update feed for update.feed ({ version, url, sha256, size, notes });
+                            {Version} and {FileName} in the URLs are filled in
     --msbuild               Diagnostics in MSBuild's format (used by the FluentSetup.MSBuild targets)
-fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
-fluentsetup inspect <Setup.exe> [--verify] [--json]
-fluentsetup init [folder] --source <files folder> [--name <name>] [--id <app.id>] [--publisher <name>]
+fsetup validate <project.json> [--json] [-D <name>=<value> ...]
+fsetup inspect <Setup.exe> [--verify] [--json] [--diff <older Setup.exe>]
+                            --diff: files added, changed and removed since the older package, and about how much
+                            a differential update (update.differential) downloads
+fsetup init [folder] --source <files folder> [--name <name>] [--id <app.id>] [--publisher <name>]
                  [--version <version>] [--main-exe <file.exe>]
 fsetup winget <Setup.exe> --url <https URL> | --github <owner/repo> [-o <dir>] [--identifier <Publisher.App>]
                    [--license <name>] [--license-url <url>] [--short-description <text>] [--publisher-url <url>]

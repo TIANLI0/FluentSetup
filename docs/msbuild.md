@@ -49,7 +49,7 @@ dotnet publish -c Release -r win-x64        # also writes installer\dist\My App-
 After the `Publish` target, the package runs its bundled CLI with the `dotnet` that runs the build:
 
 ```
-dotnet <package>\tools\cli\fluentsetup.dll build <FluentSetupProject> --msbuild
+dotnet <package>\tools\cli\fsetup.dll build <FluentSetupProject> --msbuild
        -D Version=$(Version) -D PublishDir=<publish folder, absolute, without a trailing separator>
        [--arch x64|arm64] [-o <FluentSetupOutputDirectory>] [-D <FluentSetupDefines> ...] [FluentSetupArguments]
 ```

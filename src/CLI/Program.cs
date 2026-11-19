@@ -15,10 +15,10 @@ namespace FluentSetup.Cli;
 public static class Program
 {
     private const string Usage = """
-        FluentSetup - build Windows installers.
+        FluentSetup - build Windows installers. (fluentsetup is another name for fsetup.)
 
         Usage:
-          fluentsetup build <project.json> [options]   Build Setup.exe
+          fsetup build [project] [options]         Build Setup.exe
               -o, --output <dir>        Output folder (default: project output.directory)
               --arch x64|arm64          Target architecture (default: project output.architecture)
               --variant <id>[,<id>]     Variants to include (default: project output.variants, else all)
@@ -32,10 +32,16 @@ public static class Program
               --json                    Print the build report as JSON instead of text
               --non-interactive         Never prompt (the default; accepted for CI scripts)
               --refresh-installers      Download official prerequisite installers ("auto": "bundle") again
+              --no-cache                Compress every stream again instead of reusing unchanged ones of earlier builds
+              --feed <file.json> --feed-url <https URL> [--feed-notes <https URL>]
+                                        Also write the update feed for update.feed: version, url, sha256, size
+                                        ({Version} and {FileName} in the URLs are filled in)
               --msbuild                 Diagnostics as "<project> : error FS1234: ..." (for the MSBuild targets)
-          fluentsetup validate <project.json> [--json] [-D <name>=<value> ...]
-          fluentsetup inspect <Setup.exe> [--verify] [--json]
-          fluentsetup init [folder] --source <files folder> [--name <name>] [--id <app.id>] [--publisher <name>]
+          fsetup validate [project] [--json] [-D <name>=<value> ...]
+          fsetup inspect <Setup.exe> [--verify] [--json] [--diff <older Setup.exe>]
+                                        --diff: files added, changed and removed since the older package, and what
+                                        a differential update (update.differential) would download
+          fsetup init [folder] --source <files folder> [--name <name>] [--id <app.id>] [--publisher <name>]
                                         [--version <version>] [--main-exe <file.exe>]
                                         Create fluentsetup.json; name, publisher, version and main program
                                         default to the main program's version resource
@@ -50,7 +56,7 @@ public static class Program
                                         Convert an Inno Setup or NSIS script into <folder>\fluentsetup.json
                                         (default folder: the script's) plus import-report.md, a checklist of
                                         what was mapped and what needs manual work
-          fluentsetup locale add <language> <project.json> [--force]
+          fsetup locale add <language> [project] [--force]
                                         Create <ui.localization>/<language>.json with every text to translate
                                         (option/action/variant ids, and the installer strings for a language it
                                         does not ship); any BCP-47 tag, e.g. nl-NL or pt-PT
@@ -61,9 +67,11 @@ public static class Program
           fsetup versions <webview2|windowsappruntime|dotnet|vcredist> [--json]
                                         Versions to use as a prerequisite's minimum (from Microsoft's
                                         update feeds, cached for a day; vcredist: common minimums)
-          fluentsetup guide                     Print the complete project-authoring guide (for people and AI tools)
-          fluentsetup schema                    Print the JSON Schema of fluentsetup.json
-          fluentsetup --version | --help
+          fsetup guide                          Print the complete project-authoring guide (for people and AI tools)
+          fsetup schema                         Print the JSON Schema of fluentsetup.json
+          fsetup --version | --help
+
+        [project] is a fluentsetup.json or a folder with one; default: fluentsetup.json in the current folder.
 
         Exit codes: 0 success, 1 validation/build failure, 2 usage error, 3 unexpected error, 4 cancelled.
         """;
@@ -247,6 +255,23 @@ public static class Program
         return 2;
     }
 
+    /// <summary>
+    /// The project of build, validate and locale add: the given file, the fluentsetup.json in a given folder, or the
+    /// fluentsetup.json in the current folder when none is given.
+    /// </summary>
+    private static string ProjectPath(string? arg)
+    {
+        var path = Path.GetFullPath(arg ?? ".");
+        if (!Directory.Exists(path)) return path;
+        var inFolder = Path.Combine(path, ProjectFileName);
+        if (File.Exists(inFolder)) return inFolder;
+        throw new UsageException(arg is null
+            ? $"No project given and no {ProjectFileName} in the current folder ({path})."
+            : $"No {ProjectFileName} in {path}.");
+    }
+
+    private const string ProjectFileName = "fluentsetup.json";
+
     private static SetupProject LoadProject(string path)
     {
         if (!File.Exists(path)) throw new UsageException($"Project file not found: {path}");
@@ -255,7 +280,7 @@ public static class Program
 
     private static async Task<int> BuildAsync(ParsedArgs a, CancellationToken ct)
     {
-        var projectPath = Path.GetFullPath(a.Positional(0, "project file"));
+        var projectPath = ProjectPath(a.PositionalOrDefault(0));
         var project = LoadProject(projectPath);
         var verbose = a.Flag("verbose", "v");
         var json = a.Flag("json");
@@ -270,12 +295,17 @@ public static class Program
             Log = verbose && !json ? m => Console.WriteLine($"  {m}") : null,
             Defines = a.Defines(),
             RefreshInstallers = a.Flag("refresh-installers"),
+            UseCache = !a.Flag("no-cache"),
             TestHooks = a.Flag("test-hooks"),  // undocumented: packages for FluentSetup's own tests
         };
         a.Flag("non-interactive");
         var reportPath = a.Value("report");
+        var feedPath = a.Value("feed");
+        var feedUrl = a.Value("feed-url");
+        var feedNotes = a.Value("feed-notes");
         a.EnsureAllUsed();
         if (options.Architecture is not null and not ("x64" or "arm64")) throw new UsageException("--arch must be x64 or arm64.");
+        if ((feedPath is null) != (feedUrl is null)) throw new UsageException("--feed and --feed-url go together: the feed file to write and where Setup.exe will be downloaded from.");
 
         var lastStage = (BuildStage)(-1);
         var progress = new SyncProgress<BuildProgress>(p =>
@@ -291,6 +321,21 @@ public static class Program
         {
             File.WriteAllText(Path.GetFullPath(reportPath), JsonSerializer.Serialize(report, ReportJson));
         }
+        if (report.Success && feedPath is not null)
+        {
+            var fileName = Path.GetFileName(report.OutputPath!);
+            string Fill(string url) => url.Replace("{Version}", Uri.EscapeDataString(report.Version), StringComparison.Ordinal)
+                                          .Replace("{FileName}", Uri.EscapeDataString(fileName), StringComparison.Ordinal);
+            var url = Fill(feedUrl!);
+            var notes = feedNotes is null ? null : Fill(feedNotes);
+            if (!IsHttpsUrl(url) || (notes is not null && !IsHttpsUrl(notes))) throw new UsageException("--feed-url and --feed-notes must be https URLs.");
+            var feed = new Dictionary<string, object> { ["version"] = report.Version, ["url"] = url, ["sha256"] = report.Sha256!.ToLowerInvariant(), ["size"] = report.Sizes.Total };
+            if (notes is not null) feed["notes"] = notes;
+            var feedFull = Path.GetFullPath(feedPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(feedFull)!);
+            File.WriteAllText(feedFull, JsonSerializer.Serialize(feed, ReportJson) + Environment.NewLine);
+            if (!json) Console.WriteLine($"Wrote the update feed {feedFull}");
+        }
         if (json)
         {
             Console.WriteLine(JsonSerializer.Serialize(report, ReportJson));
@@ -303,14 +348,15 @@ public static class Program
                 var s = report.Sizes;
                 Console.WriteLine();
                 Console.WriteLine($"Built {report.OutputPath}");
-                Console.WriteLine($"  {report.FileCount:N0} files, {PackageBuilder.Format(s.PayloadRaw)} -> {PackageBuilder.Format(s.PayloadCompressed)} compressed");
+                Console.WriteLine($"  {report.FileCount:N0} files, {PackageBuilder.Format(s.PayloadRaw)} -> {PackageBuilder.Format(s.PayloadCompressed)} compressed" +
+                                  (report.CachedStreams > 0 ? $" ({report.CachedStreams} unchanged streams from the cache)" : ""));
                 Console.WriteLine($"  Setup.exe {PackageBuilder.Format(s.Total)} (installer overhead {PackageBuilder.Format(s.InstallerOverhead)}: " +
                                   $"stub {PackageBuilder.Format(s.Stub)}, WinUI {PackageBuilder.Format(s.WinUiFrontEnd)}, header {PackageBuilder.Format(s.Header)}" +
                                   (s.Signature > 0 ? $", signature {PackageBuilder.Format(s.Signature)}" : "") + ")");
                 Console.WriteLine($"  SHA-256 {report.Sha256}");
                 foreach (var b in report.BundledInstallers)
                     Console.WriteLine($"  Bundled {b.FileName} ({PackageBuilder.Format(b.Size)}, {b.Url}, downloaded {b.Downloaded.LocalDateTime:g}{(b.SignatureChecked ? ", signature checked" : "")})");
-                Console.WriteLine($"  {report.DurationSeconds:F1} s{(report.Signed ? ", signed" : "")}{(report.UninstallerSigned ? " (also uninstall.exe)" : "")}{(report.IncludesWinUI ? "" : ", Win32 interface only")}");
+                Console.WriteLine($"  {report.DurationSeconds:F1} s{(report.Signed ? ", signed" : "")}{(report.UninstallerSigned ? " (also uninstall.exe)" : "")}{(report.SignedFiles > 0 ? $", {report.SignedFiles} app files signed" : "")}{(report.IncludesWinUI ? "" : ", Win32 interface only")}");
             }
             else if (msbuild && !report.Diagnostics.Any(d => d.Severity == Severity.Error))
             {
@@ -340,9 +386,9 @@ public static class Program
     /// </summary>
     private static int Locale(ParsedArgs a)
     {
-        if (a.PositionalOrDefault(0) != "add") throw new UsageException("Use: fluentsetup locale add <language> <project.json>");
+        if (a.PositionalOrDefault(0) != "add") throw new UsageException("Use: fsetup locale add <language> [project]");
         var lang = a.PositionalOrDefault(1) ?? throw new UsageException("Give a language tag, e.g. fr-FR.");
-        var projectPath = a.PositionalOrDefault(2) ?? throw new UsageException("Give the project file.");
+        var projectPath = ProjectPath(a.PositionalOrDefault(2));
         if (!Localization.IsLanguageTag(lang)) throw new UsageException($"'{lang}' is not a language tag (e.g. fr-FR, de, pt-BR).");
         var project = ProjectSerializer.Load(projectPath);
         var dir = Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
@@ -392,7 +438,7 @@ public static class Program
     }
     private static int Validate(ParsedArgs a)
     {
-        var projectPath = Path.GetFullPath(a.Positional(0, "project file"));
+        var projectPath = ProjectPath(a.PositionalOrDefault(0));
         var json = a.Flag("json");
         var defines = a.Defines();
         a.EnsureAllUsed();
@@ -433,9 +479,11 @@ public static class Program
         var path = Path.GetFullPath(a.Positional(0, "Setup.exe"));
         var verify = a.Flag("verify");
         var json = a.Flag("json");
+        var diffWith = a.Value("diff");
         a.EnsureAllUsed();
         if (!File.Exists(path)) throw new UsageException($"File not found: {path}");
         var info = PackageInspector.Inspect(path, verify);
+        if (diffWith is not null) return Diff(PackageInspector.Inspect(Path.GetFullPath(diffWith), verify), info, json);
         if (json)
         {
             Console.WriteLine(JsonSerializer.Serialize(new
@@ -462,6 +510,40 @@ public static class Program
             Console.WriteLine(info.Problems.Count == 0 ? $"  OK{(verify ? " (all stream checksums verified)" : "")}" : "  PROBLEMS: " + string.Join("; ", info.Problems));
         }
         return info.Problems.Count == 0 ? 0 : 1;
+    }
+
+    private static bool IsHttpsUrl(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps;
+
+    private static int Diff(PackageInfo older, PackageInfo newer, bool json)
+    {
+        var problems = older.Problems.Concat(newer.Problems).ToList();
+        if (problems.Count > 0 || older.Header is null || newer.Header is null)
+        {
+            Console.Error.WriteLine("error: " + string.Join("; ", problems.DefaultIfEmpty("not a FluentSetup package")));
+            return 1;
+        }
+        var d = PackageDiff.Compare(older, newer);
+        if (json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                oldVersion = d.OldVersion, newVersion = d.NewVersion, added = d.Added, changed = d.Changed, removed = d.Removed, unchanged = d.Unchanged,
+                newFileSize = d.NewFileSize, reusableBytes = d.ReusableBytes, differentialDownload = d.DifferentialDownload,
+            }, ReportJson));
+            return 0;
+        }
+        static string Size(long n) => n < 0 ? "-" : PackageBuilder.Format(n);
+        static string Name(FileChange c) => c.Variant.Length > 0 ? $"{c.Path} [{c.Variant}]" : c.Path;
+        Console.WriteLine($"{Path.GetFileName(older.Path)} ({d.OldVersion}) -> {Path.GetFileName(newer.Path)} ({d.NewVersion})");
+        Console.WriteLine($"  {d.Changed.Count:N0} changed, {d.Added.Count:N0} added, {d.Removed.Count:N0} removed, {d.Unchanged:N0} unchanged");
+        foreach (var (label, list) in new[] { ("changed", d.Changed), ("added", d.Added), ("removed", d.Removed) })
+        {
+            foreach (var c in list.Take(25)) Console.WriteLine($"  {label,-8} {Name(c)} ({Size(c.OldSize)} -> {Size(c.NewSize)})");
+            if (list.Count > 25) Console.WriteLine($"  {label,-8} ... and {list.Count - 25:N0} more (--json lists all)");
+        }
+        Console.WriteLine($"  differential update: about {PackageBuilder.Format(d.DifferentialDownload)} of {PackageBuilder.Format(d.NewFileSize)} to download " +
+                          $"({PackageBuilder.Format(d.ReusableBytes)} in unchanged streams)");
+        return 0;
     }
 
     private static int Init(ParsedArgs a)
@@ -603,7 +685,7 @@ internal sealed class ParsedArgs
     private readonly Dictionary<string, string?> _options = new(StringComparer.Ordinal);
     private readonly HashSet<string> _used = [];
     private readonly List<string> _defines = [];
-    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease", "refresh-installers", "test-hooks", "msbuild", "force"];
+    private static readonly HashSet<string> Flags = ["verbose", "v", "json", "sign", "no-sign", "verify", "non-interactive", "check", "prerelease", "refresh-installers", "no-cache", "test-hooks", "msbuild", "force"];
 
     public static ParsedArgs Parse(string[] args)
     {

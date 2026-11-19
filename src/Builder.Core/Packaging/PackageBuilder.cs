@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using FluentSetup.Builder.Core.Model;
 using FluentSetup.Builder.Core.Prerequisites;
@@ -30,6 +32,8 @@ public sealed class BuildOptions
     public bool RefreshInstallers { get; set; }
     /// <summary>Test builds only: the installer honours FLUENTSETUP_TEST_FAULT_AFTER and --ui-simulate.</summary>
     public bool TestHooks { get; set; }
+    /// <summary>Reuse compressed streams of earlier builds (<see cref="StreamCache"/>); false compresses everything.</summary>
+    public bool UseCache { get; set; } = true;
 }
 
 /// <summary>An official prerequisite installer stored in the package (<c>"auto": "bundle"</c>).</summary>
@@ -61,6 +65,8 @@ public sealed class BuildReport
     public string Architecture { get; set; } = "";
     public int FileCount { get; set; }
     public int StreamCount { get; set; }
+    /// <summary>Streams taken from the stream cache instead of being compressed again.</summary>
+    public int CachedStreams { get; set; }
     public bool IncludesWinUI { get; set; }
     public bool Signed { get; set; }
     public SizeBreakdown Sizes { get; set; } = new();
@@ -73,6 +79,8 @@ public sealed class BuildReport
     public List<BundledInstaller> BundledInstallers { get; set; } = [];
     /// <summary>The installer writes a signed uninstall.exe (signing.signUninstaller).</summary>
     public bool UninstallerSigned { get; set; }
+    /// <summary>Files of the app signed for the package (signing.files).</summary>
+    public int SignedFiles { get; set; }
 }
 
 public sealed class BuildFailedException(string message, IEnumerable<Diagnostic>? diagnostics = null) : Exception(message)
@@ -84,6 +92,7 @@ public sealed class BuildFailedException(string message, IEnumerable<Diagnostic>
 public sealed class PackageBuilder
 {
     private const long SolidBlockBytes = 32L * 1024 * 1024;
+    private const long MinBlockBytes = 16L * 1024 * 1024;
     private const long OwnStreamBytes = 16L * 1024 * 1024;
 
     public async Task<BuildReport> BuildAsync(SetupProject project, string projectPath, BuildOptions options,
@@ -179,6 +188,12 @@ public sealed class PackageBuilder
         report.Diagnostics.AddRange(fileChecks.Items);
         if (collected.Diagnostics.HasErrors || fileChecks.HasErrors) throw new BuildFailedException("Some files cannot be installed.", report.Diagnostics);
         report.FileCount = collected.Files.Count;
+        Directory.CreateDirectory(tempDir);
+        if ((options.Sign ?? project.Signing.Enabled) && project.Signing.Files.Count > 0)
+        {
+            progress?.Report(new(BuildStage.Signing, 0, "Signing the app's programs"));
+            report.SignedFiles = SignAppFiles(project, projectDir, collected, tempDir, report, log);
+        }
         report.Sizes.PayloadRaw = collected.TotalSize;
 
         // Official prerequisite installers to store in the package ("auto": "bundle"), downloaded or from the cache.
@@ -208,10 +223,12 @@ public sealed class PackageBuilder
         }
         log($"Collected {collected.Files.Count:N0} files, {Format(collected.TotalSize)} in {sw.Elapsed.TotalSeconds:F1}s");
 
-        Directory.CreateDirectory(tempDir);
-
         // ---- compress ------------------------------------------------------------------------------------------
         var level = project.Output.Compression switch { "fast" => 3, "max" => 19, _ => 12 };
+        // Long-distance matching over the whole block for "normal" (2^25 = 32 MiB, a block's size) and "max" (2^27, the
+        // decoder's limit, for files of their own); "fast" keeps the level's defaults.
+        var windowLog = project.Output.Compression switch { "fast" => 0, "max" => 27, _ => 25 };
+        var fromCache = new StrongBox<int>();
         // Shared files first, then each variant's files in streams of their own: installing one variant never has to
         // decode another variant's data.
         var ordered = collected.Files
@@ -236,7 +253,11 @@ public sealed class PackageBuilder
             }
             current.Add(f);
             currentSize += f.Size;
-            if (currentSize >= SolidBlockBytes)
+            // Block ends depend on the files themselves, not on the running total alone: past 16 MiB a block ends after
+            // a file whose path hashes to a boundary (about one file in four), at 32 MiB in any case. A file that grows
+            // or shrinks then only moves the ends up to the next boundary, and the blocks after it come out the same
+            // as in the last build or release (stream cache, differential updates).
+            if (currentSize >= SolidBlockBytes || (currentSize >= MinBlockBytes && IsBlockBoundary(f.RelativePath)))
             {
                 blocks.Add(current);
                 current = [];
@@ -272,9 +293,9 @@ public sealed class PackageBuilder
         // are: on their own afterwards they would leave all but one core idle.
         var uiTask = uiFiles is null
             ? Task.FromResult<CompressedStream?>(null)
-            : Task.Run<CompressedStream?>(() => CompressFiles(uiFiles, Path.Combine(tempDir, "ui.zst"), 19, 0, true, _ => { }, ct), ct);
+            : Task.Run<CompressedStream?>(() => CompressFiles(uiFiles, Path.Combine(tempDir, "ui.zst"), 19, 0, 27, false, options.UseCache, fromCache, _ => { }, ct), ct);
         // Bundled installers are already compressed: a fast level, one stream each so setup decodes only the one it needs.
-        var redistTask = Task.Run(() => redistFiles.Select((f, i) => CompressFiles([f], Path.Combine(tempDir, $"redist-{i}.zst"), 3, 0, false, _ => { }, ct)).ToArray(), ct);
+        var redistTask = Task.Run(() => redistFiles.Select((f, i) => CompressFiles([f], Path.Combine(tempDir, $"redist-{i}.zst"), 3, 0, 0, false, options.UseCache, fromCache, _ => { }, ct)).ToArray(), ct);
 
         var results = new CompressedStream[blocks.Count];
         long done = 0;
@@ -285,7 +306,7 @@ public sealed class PackageBuilder
             Parallel.For(0, blocks.Count, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
             {
                 var workers = blocks[i].Count == 1 && blocks[i][0].Size >= OwnStreamBytes ? Math.Min(4, Environment.ProcessorCount) : 0;
-                results[i] = CompressFiles(blocks[i], Path.Combine(tempDir, $"block-{i}.zst"), level, workers, project.Output.Compression == "max", n =>
+                results[i] = CompressFiles(blocks[i], Path.Combine(tempDir, $"block-{i}.zst"), level, workers, windowLog, project.Output.CodeFilter, options.UseCache, fromCache, n =>
                 {
                     var now = Interlocked.Add(ref done, n);
                     progress?.Report(new(BuildStage.Compressing, (double)now / total, $"Compressing ({Format(now)} of {Format(total)})"));
@@ -300,7 +321,9 @@ public sealed class PackageBuilder
         var ui = uiTask.GetAwaiter().GetResult();
         var redist = redistTask.GetAwaiter().GetResult();
         report.StreamCount = results.Length;
-        log($"Compressed to {Format(results.Sum(r => r.CompressedSize))} in {sw.Elapsed.TotalSeconds:F1}s (level {level}, {blocks.Count} streams)");
+        report.CachedStreams = fromCache.Value;
+        if (options.UseCache) StreamCache.Prune();
+        log($"Compressed to {Format(results.Sum(r => r.CompressedSize))} in {sw.Elapsed.TotalSeconds:F1}s (level {level}, {blocks.Count} streams, {fromCache.Value} from the cache)");
 
         // ---- write ---------------------------------------------------------------------------------------------
         progress?.Report(new(BuildStage.Writing, 0, "Writing Setup.exe"));
@@ -409,7 +432,57 @@ public sealed class PackageBuilder
 
     // ---- helpers ---------------------------------------------------------------------------------------------------
 
-    internal sealed record FileEntry(CollectedFile File, long Offset, byte[] Sha256);
+    /// <summary>
+    /// signing.files: copies the matching programs that carry no signature yet into the build's temporary folder, signs
+    /// them there in one batch and puts the signed copies into the package in place of the originals.
+    /// </summary>
+    private static int SignAppFiles(SetupProject project, string projectDir, CollectionResult collected, string tempDir, BuildReport report, Action<string> log)
+    {
+        var globs = project.Signing.Files.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => new Glob(p)).ToList();
+        var picked = new List<(int Index, string Copy)>();
+        var folder = Path.Combine(tempDir, "signed");
+        for (var i = 0; i < collected.Files.Count; i++)
+        {
+            var f = collected.Files[i];
+            if (!Glob.MatchesAny(globs, f.RelativePath)) continue;
+            long certificates;
+            try
+            {
+                using var fs = File.OpenRead(f.SourcePath);
+                certificates = PackageFormat.ReadSecurityDirectory(fs).Offset;
+            }
+            catch (InvalidDataException)
+            {
+                report.Diagnostics.Add(new Diagnostic(Severity.Warning, "FS2005", "signing.files", $"{f.RelativePath} is not a Windows program or DLL and is not signed."));
+                continue;
+            }
+            if (certificates != 0)
+            {
+                log($"{f.RelativePath} is signed already");
+                continue;
+            }
+            var copy = Path.Combine(folder, picked.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), Path.GetFileName(f.RelativePath));
+            Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+            File.Copy(f.SourcePath, copy);
+            File.SetAttributes(copy, FileAttributes.Normal);
+            picked.Add((i, copy));
+        }
+        if (picked.Count == 0)
+        {
+            report.Diagnostics.Add(new Diagnostic(Severity.Warning, "FS2006", "signing.files", "No file to sign: the patterns match no unsigned program or DLL of the package."));
+            return 0;
+        }
+        log($"Signing {picked.Count} of the app's files");
+        Signer.Sign(project.Signing, projectDir, picked.Select(p => p.Copy).ToList(), project.App.Name, log);
+        foreach (var (index, copy) in picked)
+        {
+            var f = collected.Files[index];
+            collected.Files[index] = f with { SourcePath = copy, Size = new FileInfo(copy).Length };
+        }
+        return picked.Count;
+    }
+
+    internal sealed record FileEntry(CollectedFile File, long Offset, byte[] Sha256, BranchFilterKind Filter = BranchFilterKind.None);
 
     internal sealed class CompressedStream
     {
@@ -422,53 +495,114 @@ public sealed class PackageBuilder
 
     internal sealed record StreamRecord(long Offset, long Size, long RawSize, byte[] Sha256);
 
-    private static CompressedStream CompressFiles(List<CollectedFile> files, string tempFile, int level, int workers, bool longWindow,
-                                                  Action<long> onBytes, CancellationToken ct)
+    /// <summary>
+    /// One stream of <paramref name="files"/>. <paramref name="windowLog"/> 0 keeps the level's defaults; otherwise the
+    /// window and long-distance matching are set (the decoder accepts windows up to 2^27). With
+    /// <paramref name="useCache"/> the files are hashed first and a stream of an earlier build with the same content and
+    /// parameters is used as it is (<paramref name="cached"/> counts those). With <paramref name="codeFilter"/>, x86/x64
+    /// and Arm64 programs go through their branch filter first (<see cref="BranchFilterState"/>), checked by decoding.
+    /// </summary>
+    private static CompressedStream CompressFiles(List<CollectedFile> files, string tempFile, int level, int workers, int windowLog, bool codeFilter,
+                                                  bool useCache, StrongBox<int> cached, Action<long> onBytes, CancellationToken ct)
     {
-        var entries = new List<FileEntry>(files.Count);
-        long raw = 0;
-        using var fileOut = new FileStream(tempFile, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16);
-        using var hashOut = new HashingStream(fileOut);
-        using (var zstd = new CompressionStream(hashOut, level, 1 << 20, leaveOpen: true))
+        var filters = files.Select(f => codeFilter ? BranchFilterState.For(f.SourcePath) : BranchFilterKind.None).ToArray();
+        byte[][]? hashes = null;
+        string? key = null;
+        if (useCache)
         {
-            if (workers > 1) zstd.SetParameter(ZSTD_cParameter.ZSTD_c_nbWorkers, workers);
-            // The decoder caps the window at 2^27; never produce frames that need more.
-            if (longWindow)
+            hashes = files.Select(f => HashFile(f, ct)).ToArray();
+            key = StreamCache.Key(level, workers, windowLog, files.Select((f, i) => (f.Size, hashes[i])).ToList(), string.Concat(filters.Select(k => (int)k)));
+            if (StreamCache.TryGet(key, tempFile) is { } hit)
             {
-                zstd.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, 27);
-                zstd.SetParameter(ZSTD_cParameter.ZSTD_c_enableLongDistanceMatching, 1);
-            }
-            zstd.SetPledgedSrcSize((ulong)files.Sum(f => f.Size));
-            var buffer = new byte[1 << 20];
-            foreach (var f in files)
-            {
-                using var input = new FileStream(f.SourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
-                if (input.Length != f.Size) throw new BuildFailedException($"'{f.SourcePath}' changed while the package was being built.");
-                using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                long left = f.Size;
-                while (left > 0)
+                var hitEntries = new List<FileEntry>(files.Count);
+                long offset = 0;
+                for (var i = 0; i < files.Count; i++)
                 {
-                    ct.ThrowIfCancellationRequested();
-                    var n = input.Read(buffer, 0, (int)Math.Min(buffer.Length, left));
-                    if (n == 0) throw new BuildFailedException($"'{f.SourcePath}' became shorter while the package was being built.");
-                    sha.AppendData(buffer, 0, n);
-                    zstd.Write(buffer, 0, n);
-                    left -= n;
-                    onBytes(n);
+                    hitEntries.Add(new FileEntry(files[i], offset, hashes[i], filters[i]));
+                    offset += files[i].Size;
                 }
-                entries.Add(new FileEntry(f, raw, sha.GetHashAndReset()));
-                raw += f.Size;
+                onBytes(offset);
+                Interlocked.Increment(ref cached.Value);
+                return new CompressedStream { TempFile = tempFile, Files = hitEntries, RawSize = offset, CompressedSize = hit.Size, Sha256 = hit.Sha256 };
             }
         }
-        hashOut.Flush();
-        return new CompressedStream
+        var entries = new List<FileEntry>(files.Count);
+        long raw = 0;
+        CompressedStream result;
+        using (var fileOut = new FileStream(tempFile, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16))
+        using (var hashOut = new HashingStream(fileOut))
         {
-            TempFile = tempFile,
-            Files = entries,
-            RawSize = raw,
-            CompressedSize = hashOut.Length,
-            Sha256 = hashOut.GetHash(),
-        };
+            using (var zstd = new CompressionStream(hashOut, level, 1 << 20, leaveOpen: true))
+            {
+                if (workers > 1) zstd.SetParameter(ZSTD_cParameter.ZSTD_c_nbWorkers, workers);
+                if (windowLog > 0)
+                {
+                    zstd.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, windowLog);
+                    zstd.SetParameter(ZSTD_cParameter.ZSTD_c_enableLongDistanceMatching, 1);
+                }
+                zstd.SetPledgedSrcSize((ulong)files.Sum(f => f.Size));
+                var buffer = new byte[1 << 20];
+                for (var i = 0; i < files.Count; i++)
+                {
+                    var f = files[i];
+                    using var input = new FileStream(f.SourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
+                    if (input.Length != f.Size) throw new BuildFailedException($"'{f.SourcePath}' changed while the package was being built.");
+                    using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                    var filter = new BranchFilterState(filters[i], encode: true);
+                    using var check = filters[i] == BranchFilterKind.None ? null : new BranchFilterCheck(filters[i]);
+                    long left = f.Size;
+                    var carry = 0;  // bytes the filter needs again with the next chunk (at most 4)
+                    while (left > 0 || carry > 0)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        var n = left > 0 ? input.Read(buffer, carry, (int)Math.Min(buffer.Length - carry, left)) : 0;
+                        if (n == 0 && left > 0) throw new BuildFailedException($"'{f.SourcePath}' became shorter while the package was being built.");
+                        sha.AppendData(buffer, carry, n);
+                        left -= n;
+                        var avail = carry + n;
+                        var ready = filter.Process(buffer.AsSpan(0, avail), left == 0);
+                        zstd.Write(buffer, 0, ready);
+                        check?.Add(buffer.AsSpan(0, ready), left == 0 && ready == avail);
+                        buffer.AsSpan(ready, avail - ready).CopyTo(buffer);
+                        carry = avail - ready;
+                        onBytes(n);
+                    }
+                    var digest = sha.GetHashAndReset();
+                    if (hashes is not null && !digest.AsSpan().SequenceEqual(hashes[i])) throw new BuildFailedException($"'{f.SourcePath}' changed while the package was being built.");
+                    if (check is not null && !check.Finish().AsSpan().SequenceEqual(digest))
+                        throw new BuildFailedException($"The branch filter could not be undone for '{f.SourcePath}' (internal error; set output.codeFilter to false).");
+                    entries.Add(new FileEntry(f, raw, digest, filters[i]));
+                    raw += f.Size;
+                }
+            }
+            hashOut.Flush();
+            result = new CompressedStream
+            {
+                TempFile = tempFile,
+                Files = entries,
+                RawSize = raw,
+                CompressedSize = hashOut.Length,
+                Sha256 = hashOut.GetHash(),
+            };
+        }
+        if (key is not null) StreamCache.Put(key, tempFile, result.Sha256);
+        return result;
+    }
+
+    private static byte[] HashFile(CollectedFile f, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        using var input = new FileStream(f.SourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, FileOptions.SequentialScan);
+        if (input.Length != f.Size) throw new BuildFailedException($"'{f.SourcePath}' changed while the package was being built.");
+        return SHA256.HashData(input);
+    }
+
+    /// <summary>About one path in four, decided by the path alone (case-insensitive), so it is the same in every build.</summary>
+    internal static bool IsBlockBoundary(string relativePath)
+    {
+        Span<byte> digest = stackalloc byte[32];
+        SHA256.HashData(Encoding.UTF8.GetBytes(relativePath.ToLowerInvariant()), digest);
+        return (digest[0] & 3) == 0;
     }
 
     private static StreamRecord AppendStream(FileStream output, CompressedStream s, long overlayStart, SizeBreakdown sizes)
@@ -965,6 +1099,7 @@ public sealed class PackageBuilder
                     w.WriteString("feed", u.Feed.Trim());
                 }
                 if (u.Signer.Length > 0) w.WriteString("signer", u.Signer);
+                if (u.Differential) w.WriteBoolean("differential", true);
                 w.WriteEndObject();
             }
         }
@@ -997,6 +1132,7 @@ public sealed class PackageBuilder
                 if (f.File.Attributes != 0) w.WriteNumber("attributes", (int)f.File.Attributes);
                 if (f.File.Preserve) w.WriteBoolean("preserve", true);
                 if (f.File.Variant.Length > 0) w.WriteString("variant", f.File.Variant);
+                if (BranchFilterState.HeaderName(f.Filter) is { } filterName) w.WriteString("filter", filterName);
                 w.WriteEndObject();
             }
         }

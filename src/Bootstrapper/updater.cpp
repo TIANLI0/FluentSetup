@@ -6,10 +6,17 @@
 // through a handle that keeps it from changing, a valid FluentSetup package of the same app id and architecture, the
 // advertised version (which must be newer than the installed one), and the signer when the project pins one. The new
 // Setup.exe then runs with /passive (progress only) or /quiet and does the actual update, journaled as always.
+//
+// Differential downloads (update.differential, off unless the project turns it on): the downloaded Setup.exe is kept
+// per user (%LocalAppData%\FluentSetup\updates\<app id>, the last one only), and the next update rebuilds the new
+// Setup.exe from it (or from the Setup.exe that installed the app, if it is still there), byte for byte, fetching only
+// what it does not have with range requests (install::RebuildFromBase). Without it, downloads go to a private
+// temporary folder and are removed after use.
 #include "Bootstrapper/updater.h"
 
 #include "Archive/container.h"
 #include "Common/error.h"
+#include "Common/fs.h"
 #include "Common/hash.h"
 #include "Common/json.h"
 #include "Common/log.h"
@@ -17,6 +24,7 @@
 #include "Common/security.h"
 #include "Common/text.h"
 #include "Common/version.h"
+#include "Install.Core/differential.h"
 #include "Install.Core/extensions.h"
 #include "Install.Core/installed.h"
 
@@ -26,9 +34,11 @@
 #include <wincrypt.h>
 #include <wintrust.h>
 
+#include <algorithm>
 #include <atomic>
 #include <functional>
 #include <list>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -44,6 +54,7 @@ constexpr wchar_t kDownloadPrefix[] = L"FluentSetup-upd-";
 struct Source {
     std::wstring github, feed, asset, checksums, signer;
     bool prerelease = false;
+    bool differential = false;  // keep the download and rebuild the next one from it (update.differential)
 };
 
 struct Release {
@@ -97,6 +108,7 @@ std::optional<Source> ReadSource(const install::Package& pkg, std::wstring& why)
     s.checksums = u["checksums"].asWide();
     s.signer = u["signer"].asWide();
     s.prerelease = u["prerelease"].asBool();
+    s.differential = u["differential"].asBool(false);
     if (s.github.empty() == s.feed.empty()) why = L"update needs either github or feed";
     else if (!s.github.empty() && !IsRepositoryName(s.github)) why = L"update.github is not owner/name";
     else if (!s.github.empty() && (s.asset.empty() || !path::IsValidComponent(ReplaceAll(s.asset, L"{Version}", L"1.0.0")))) why = L"update.asset is not a file name";
@@ -356,44 +368,155 @@ void SweepOldDownloads() {
 struct Downloaded {
     std::wstring path;
     UniqueHandle lock;  // read-only, shared for reading only: the file cannot change until Setup has started from it
+    bool kept = false;  // in the app's update folder, kept for the next update (and as the repair source)
 };
 
-bool DownloadRelease(const Release& r, const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress,
-                     Downloaded& out, std::wstring& error) {
-    SweepOldDownloads();
-    const std::wstring dir = path::Join(path::TempRoot(), std::wstring(kDownloadPrefix) + RandomToken().substr(0, 16));
-    if (const DWORD e = security::CreatePrivateDirectory(dir)) {
-        error = L"Cannot create a download folder: " + Win32Message(e);
-        return false;
+// ---- differential downloads (install::RebuildFromBase) ---------------------------------------------------------
+
+// %LocalAppData%\FluentSetup\updates\<app id>: the last downloaded Setup.exe of the app.
+std::wstring KeptFolder(const std::wstring& appId) {
+    const std::wstring local = path::KnownFolder(FOLDERID_LocalAppData);
+    return local.empty() ? std::wstring() : path::Join(local, L"FluentSetup\\updates\\" + appId);
+}
+
+// Earlier Setup.exe files of the app to take streams from, best first: the one kept by the last update, then the one
+// that installed the current version, if it is still where it was.
+std::vector<std::wstring> BasePackages(const std::wstring& appId) {
+    std::vector<std::pair<FILETIME, std::wstring>> kept;
+    if (const std::wstring dir = KeptFolder(appId); !dir.empty()) {
+        WIN32_FIND_DATAW fd{};
+        UniqueFind find(::FindFirstFileExW(path::Join(dir, L"*.exe").c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr, 0));
+        for (bool more = find.valid(); more; more = ::FindNextFileW(find.get(), &fd)) {
+            if (!(fd.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))) kept.emplace_back(fd.ftLastWriteTime, path::Join(dir, fd.cFileName));
+        }
     }
-    std::wstring name = r.fileName;
-    if (!path::IsValidComponent(name) || name.size() < 5 || !EqualsIgnoreCase(std::wstring_view(name).substr(name.size() - 4), L".exe")) name = L"Setup.exe";
-    out.path = path::Join(dir, name);
-    log::Info(L"Downloading %S to %s", r.url.c_str(), out.path.c_str());
-    const auto discard = [&] {
-        out.lock.reset();
-        ::DeleteFileW(out.path.c_str());
-        ::RemoveDirectoryW(dir.c_str());
-    };
-    if (!install::Download(r.url, out.path, r.sha256, r.size, cancel, progress, error)) {
-        discard();
-        return false;
+    std::sort(kept.begin(), kept.end(), [](const auto& a, const auto& b) { return ::CompareFileTime(&a.first, &b.first) > 0; });
+    std::vector<std::wstring> out;
+    for (auto& k : kept) out.push_back(std::move(k.second));
+    if (const auto product = install::FindInstalled(appId)) {
+        try {
+            const install::InstallRecord record = install::LoadVerifiedRecord(*product);
+            if (!record.sourcePackage.empty() && std::none_of(out.begin(), out.end(), [&](const std::wstring& o) { return EqualsIgnoreCase(o, record.sourcePackage); })) {
+                out.push_back(record.sourcePackage);
+            }
+        } catch (const Failure&) {
+            // no usable record: only the kept download
+        }
     }
+    return out;
+}
+
+bool DownloadDifferential(const Release& r, const std::wstring& basePath, const std::wstring& dest, const std::atomic<bool>& cancel,
+                          const std::function<void(uint64_t, uint64_t)>& progress, std::wstring& why) {
+    const install::RangeGetter get = [&](uint64_t first, uint64_t end, uint64_t& total, const std::function<bool(const uint8_t*, size_t)>& sink,
+                                         std::wstring& error) { return install::HttpGetRange(r.url, first, end - 1, total, sink, cancel, error); };
+    return install::RebuildFromBase(get, r.size, basePath, dest, cancel, progress, why);
+}
+
+// Opens the finished download read-only (no other writers from now on) and hashes it once more through that handle.
+bool LockAndCheck(const Release& r, Downloaded& out, std::wstring& error) {
     out.lock.reset(::CreateFileW(path::Long(out.path).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!out.lock) {
         error = L"Cannot open the download: " + Win32Message(::GetLastError());
-        discard();
         return false;
     }
-    // Hash once more through the handle that now keeps the file unchanged.
     Sha256 hash;
     std::vector<uint8_t> buffer(256 * 1024);
+    uint64_t size = 0;
     DWORD got = 0;
-    while (::ReadFile(out.lock.get(), buffer.data(), static_cast<DWORD>(buffer.size()), &got, nullptr) && got > 0) hash.Update(buffer.data(), got);
-    if (hash.Finish() != r.sha256) {
-        error = L"The downloaded file changed after it was checked";
-        discard();
+    while (::ReadFile(out.lock.get(), buffer.data(), static_cast<DWORD>(buffer.size()), &got, nullptr) && got > 0) {
+        hash.Update(buffer.data(), got);
+        size += got;
+    }
+    if (hash.Finish() != r.sha256 || (r.size != 0 && size != r.size)) {
+        error = L"The downloaded file does not match the published SHA-256";
+        out.lock.reset();
         return false;
+    }
+    return true;
+}
+
+bool DownloadRelease(const Release& r, const Source& s, const std::wstring& appId, const std::atomic<bool>& cancel,
+                     const std::function<void(uint64_t, uint64_t)>& progress, Downloaded& out, std::wstring& error) {
+    SweepOldDownloads();
+    std::wstring name = r.fileName;
+    if (!path::IsValidComponent(name) || name.size() < 5 || !EqualsIgnoreCase(std::wstring_view(name).substr(name.size() - 4), L".exe")) name = L"Setup.exe";
+
+    // update.differential: the download goes to the app's update folder and stays; otherwise a private temporary folder.
+    std::wstring dir;
+    if (s.differential) {
+        if (const std::wstring kept = KeptFolder(appId); !kept.empty()) {
+            try {
+                fs::CreateDirectories(kept);
+                dir = kept;
+                out.kept = true;
+            } catch (const Failure& f) {
+                log::Warn(L"Cannot create %s (%s); the download is not kept", kept.c_str(), f.detail().c_str());
+            }
+        }
+    }
+    if (!out.kept) {
+        dir = path::Join(path::TempRoot(), std::wstring(kDownloadPrefix) + RandomToken().substr(0, 16));
+        if (const DWORD e = security::CreatePrivateDirectory(dir)) {
+            error = L"Cannot create a download folder: " + Win32Message(e);
+            return false;
+        }
+    }
+    const std::wstring final = path::Join(dir, name);
+    const std::wstring partial = out.kept ? path::Join(dir, L"." + RandomToken().substr(0, 12) + L".partial") : final;
+    const auto discard = [&] {
+        out.lock.reset();
+        ::DeleteFileW(path::Long(partial).c_str());
+        if (!out.kept) ::RemoveDirectoryW(dir.c_str());
+    };
+
+    bool differential = false;
+    if (out.kept) {
+        for (const auto& base : BasePackages(appId)) {
+            std::wstring why;
+            if (DownloadDifferential(r, base, partial, cancel, progress, why)) {
+                differential = true;
+                break;
+            }
+            ::DeleteFileW(path::Long(partial).c_str());
+            if (cancel) {
+                error = L"Cancelled";
+                discard();
+                return false;
+            }
+            log::Info(L"No differential download from %s: %s", base.c_str(), why.c_str());
+        }
+    }
+    out.path = partial;
+    if (differential && !LockAndCheck(r, out, error)) {
+        log::Warn(L"The rebuilt download does not match (%s); downloading the whole file", error.c_str());
+        ::DeleteFileW(path::Long(partial).c_str());
+        differential = false;
+        error.clear();
+    }
+    if (!differential) {
+        log::Info(L"Downloading %S to %s", r.url.c_str(), partial.c_str());
+        if (!install::Download(r.url, partial, r.sha256, r.size, cancel, progress, error) || !LockAndCheck(r, out, error)) {
+            discard();
+            return false;
+        }
+    }
+    if (!out.kept) return true;
+
+    // Kept: the download under its own name, and the earlier one goes. The file is checked once more after the move.
+    out.lock.reset();
+    if (::MoveFileExW(path::Long(partial).c_str(), path::Long(final).c_str(), MOVEFILE_REPLACE_EXISTING)) out.path = final;
+    if (!LockAndCheck(r, out, error)) {
+        discard();
+        ::DeleteFileW(path::Long(out.path).c_str());
+        return false;
+    }
+    WIN32_FIND_DATAW fd{};
+    UniqueFind find(::FindFirstFileExW(path::Join(dir, L"*").c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr, 0));
+    for (bool more = find.valid(); more; more = ::FindNextFileW(find.get(), &fd)) {
+        if (fd.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) continue;
+        const std::wstring other = path::Join(dir, fd.cFileName);
+        if (!EqualsIgnoreCase(other, out.path)) ::DeleteFileW(path::Long(other).c_str());  // one still running stays until next time
     }
     return true;
 }
@@ -538,7 +661,7 @@ int InstallQuietly(const install::Package& pkg, const Source& s, const std::wstr
     }
     std::atomic<bool> cancel{false};
     Downloaded d;
-    if (found == Lookup::Failed || !DownloadRelease(r, cancel, nullptr, d, error)) {
+    if (found == Lookup::Failed || !DownloadRelease(r, s, pkg.appId, cancel, nullptr, d, error)) {
         log::Error(L"Update failed: %s", error.c_str());
         return static_cast<int>(ErrorCode::UpdateFailed);
     }
@@ -736,7 +859,7 @@ private:
             std::wstring error;
             Downloaded d;
             const auto progress = [&](uint64_t done, uint64_t) { shared->done = done; };
-            if (!DownloadRelease(r, shared->cancel, progress, d, error)) {
+            if (!DownloadRelease(r, source, appId, shared->cancel, progress, d, error)) {
                 if (!shared->cancel) log::Error(L"Download failed: %s", error.c_str());
                 shared->Set(Phase::Failed, error);
                 return;
@@ -864,14 +987,14 @@ RepairLookup FindRepairPackage(const install::Package& pkg, const std::wstring& 
     const Lookup found = FindExactRelease(*source, pkg.appId, version, r, error);
     if (found == Lookup::None) return RepairLookup::None;
     Downloaded d;
-    if (found == Lookup::Failed || !DownloadRelease(r, cancel, progress, d, error)) return RepairLookup::Failed;
+    if (found == Lookup::Failed || !DownloadRelease(r, *source, pkg.appId, cancel, progress, d, error)) return RepairLookup::Failed;
     if (!VerifyPackage(d.path, pkg.appId, pkg.architecture, r, *source, error)) {
         Discard(d);
         return RepairLookup::Failed;
     }
     out.path = d.path;
     out.lock = std::move(d.lock);
-    out.downloaded = true;
+    out.downloaded = !d.kept;  // a kept download stays: the setup of the installed version, for the next repair or update
     return RepairLookup::Found;
 }
 

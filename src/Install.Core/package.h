@@ -2,6 +2,7 @@
 // Field names match shared/schemas/package-header.schema.json.
 #pragma once
 
+#include "Archive/pefilter.h"
 #include "Common/hash.h"
 #include "Common/json.h"
 #include "Install.Core/extensions.h"
@@ -38,6 +39,7 @@ struct FileInfo {
     uint32_t attributes = 0;  // FILE_ATTRIBUTE_READONLY | HIDDEN only
     bool preserve = false;    // user data: never overwritten if present, never removed
     std::string variant;      // empty = every variant; else only installed when this variant is chosen
+    archive::BranchFilter filter = archive::BranchFilter::None;  // payload only: undone after decoding (Archive/pefilter.h)
 };
 
 // Alternative builds of the app in one package (e.g. framework-dependent vs self-contained). Files without a variant

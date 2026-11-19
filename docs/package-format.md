@@ -96,7 +96,7 @@ Then (native reader) the footer is rejected with `PackageCorrupt` unless all of 
   `overlaySize = footerStart - overlayStart`;
 * no flag bits other than bit 0.
 
-`PackageInspector` applies a subset of these checks (see "Known differences" in section 9).
+`PackageInspector` applies a subset of these checks (see "Known differences" in section 10).
 
 ## 3. Streams and compression
 
@@ -109,8 +109,13 @@ index and the file's offset inside the **decoded** stream.
 * Payload files are sorted by extension, then by relative path (ordinal, case-insensitive), so similar files compress
   together.
 * A file of 16 MiB or more (`OwnStreamBytes`) gets a stream of its own.
-* Smaller files are accumulated into a solid block; a block is closed as soon as its raw size reaches 32 MiB
-  (`SolidBlockBytes`). The last partial block becomes the final stream.
+* Smaller files are accumulated into a solid block. Past 16 MiB (`MinBlockBytes`) a block is closed after a file whose
+  lower-case relative path hashes to a boundary (`IsBlockBoundary`: the first byte of its SHA-256 is a multiple of 4,
+  about one file in four), at 32 MiB (`SolidBlockBytes`) in any case. The last partial block becomes the final stream.
+  Because block ends depend on the files and not only on the running total, a file that changes size moves the ends
+  only up to the next boundary: the blocks after it are byte-identical to the last build's. The stream cache
+  (`StreamCache`, keyed by the files' sizes and SHA-256 and the compression parameters) and differential updates
+  (section 9) rely on that.
 * Blocks are compressed in parallel; each stream is a single zstd frame with the pledged source size set.
 * The WinUI front end (the `*.exe`, `*.dll`, `*.pri` and `*.xbf` files at the top level of `runtime\<arch>\ui`, plus
   `app.ico` if an icon is available) is one stream, written before the payload streams.
@@ -120,7 +125,7 @@ index and the file's offset inside the **decoded** stream.
 | Data | Level | Other parameters |
 |---|---:|---|
 | Payload, `output.compression = "fast"` | 3 | library defaults for the level |
-| Payload, `"normal"` (default) | 12 | library defaults for the level |
+| Payload, `"normal"` (default) | 12 | `windowLog = 25` (one block), long-distance matching enabled |
 | Payload, `"max"` | 19 | `windowLog = 27`, long-distance matching enabled |
 | WinUI front-end stream | 19 | `windowLog = 27`, long-distance matching enabled |
 | Header | 12 (19 with `"max"`) | one-shot `Compressor(level).Wrap`; most of a large header is incompressible file hashes |
@@ -131,7 +136,26 @@ that need a window larger than 128 MiB are refused (`PackageCorrupt`). The build
 for exactly this reason. The header is decoded in one shot (`DecodeAll`) into a buffer of exactly `headerRawSize`
 bytes (at most 64 MiB); if the frame declares a content size it must equal `headerRawSize`.
 
-### 3.3 Reading a stream (`StreamReader`)
+### 3.3 Branch filters (`output.codeFilter`)
+
+A payload file entry may carry `"filter": "x86"` or `"filter": "arm64"` (x86/x64 or Arm64 programs and DLLs, by the PE
+machine type). Its bytes in the stream are then filtered (`BranchFilter.cs` encodes, `src/Archive/pefilter.h`
+decodes; both are line-for-line the same):
+
+* `x86`: scanning from the start of the file, at every byte `E8` (call rel32) or `E9` (jmp rel32) whose 4-byte
+  operand lies inside the file, an operand `v` with -2^24 <= `v` < 2^24 is replaced by the 25-bit sign extension of
+  `(v + p) mod 2^25`, `p` = file offset of the next instruction (`i + 5`); decoding subtracts. The scan always continues
+  after the operand. Other operands, and an `E8`/`E9` within the last 4 bytes, are left alone.
+* `arm64`: every 4-byte word at a file offset that is a multiple of 4 and matches `100101xx…` (BL, imm26) gets
+  `imm26 + offset / 4 (mod 2^26)`; decoding subtracts. Trailing bytes (fewer than 4) are left alone.
+
+Only operand bits change and each change is a bijection on its range, so decoding restores any input exactly, also
+data that only looks like code. Positions are file offsets, so files are processed in chunks of any size (setup keeps
+at most 4 bytes back between chunks). `sha256` is always the hash of the original file. The builder decodes everything
+it encodes as it goes and fails the build if the result does not hash to the original. Only the payload set may carry
+filters (the parser rejects them elsewhere).
+
+### 3.4 Reading a stream (`StreamReader`)
 
 * The range `[offset, offset + size)` must lie entirely in the stream area (`offset <= headerOffset` and
   `size <= headerOffset - offset`), otherwise `PackageCorrupt`.
@@ -152,7 +176,7 @@ header under the `header` key; `--verify` additionally checks every stream hash.
 ### 4.1 Example (trimmed)
 
 Generated from the demo package with
-`src\CLI\bin\Release\net10.0\fluentsetup.exe inspect "out\uitest\FluentSetup Demo-1.0.0-Setup.exe" --json`;
+`src\CLI\bin\Release\net10.0\fsetup.exe inspect "out\uitest\FluentSetup Demo-1.0.0-Setup.exe" --json`;
 long arrays and the license text are shortened.
 
 ```json
@@ -291,7 +315,7 @@ Directory templates expand `{LocalAppData}`, `{UserProgramFiles}`, `{AppData}`, 
 | Field | Rules |
 |---|---|
 | `streams[]` | ≤ 1,000,000 entries. Each: `offset` ≥ 0, `size` > 0, `rawSize` ≥ 0 (all numbers), `sha256` = 64 hex digits (SHA-256 of the stored bytes). Streams must be in ascending offset order and must not overlap, and must lie in the stream area. |
-| `files[]` | ≤ 2,000,000 entries. Each: `path` (safe relative path, see below), `size`, `sha256` (of the decoded file), `stream` (index), `offset` (inside the decoded stream), optional `attributes` (masked to `READONLY \| HIDDEN`), optional `preserve` (user data: never overwritten if present, never removed). |
+| `files[]` | ≤ 2,000,000 entries. Each: `path` (safe relative path, see below), `size`, `sha256` (of the decoded file), `stream` (index), `offset` (inside the decoded stream), optional `attributes` (masked to `READONLY \| HIDDEN`), optional `preserve` (user data: never overwritten if present, never removed), optional `filter` (`x86` \| `arm64`, payload only, section 3.3). |
 | `directories[]` | Extra directories to create (may be empty). Same path rules; must not collide with a file. |
 
 Consistency rules:
@@ -424,7 +448,28 @@ otherwise it writes the unsigned uninstaller.
   absolute offset and the stub refuses a footer whose overlay starts before the end of the PE sections, so tools that
   rewrite or grow the PE image break the package.
 
-## 9. Known differences between the readers
+## 9. Differential updates
+
+With `update.differential` (opt-in, off by default) the built-in updater keeps the last downloaded Setup.exe of an app
+on the user's PC (per user, `%LocalAppData%\FluentSetup\updates\<app id>`) and rebuilds the next one from it (`install::RebuildFromBase`,
+`src/Install.Core/differential.cpp`):
+
+1. Range request for the first 64 KiB: the PE headers give the certificate table's offset, so the end of the
+   container data.
+2. Range request for the last 64 KiB of the container data through the end of the file: footer (found as in
+   section 2.1), padding and certificate table; then the header range if it starts before that.
+3. `Container::Open` on the partly written file checks the header against the footer's SHA-256; the header lists every
+   stream (payload, front end, bundled installers) with offset, size and SHA-256.
+4. Every stream that the base package also has (same SHA-256 and size) is copied from it; all other bytes are
+   downloaded, neighbouring ranges merged when less than 256 KiB lies between them. Less than 1 MiB or an eighth of
+   the file in common: the whole file is downloaded instead.
+5. The finished file is hashed through a handle that keeps it from changing and must match the published SHA-256;
+   `VerifyPackage` and `update.signer` follow as for a full download. A mismatch falls back to the full download.
+
+Nothing new is trusted: the bytes taken from the base end up in a file that must hash to the published value. The
+bases tried are the kept downloads (newest first) and the Setup.exe recorded at install time.
+
+## 10. Known differences between the readers
 
 `PackageInspector` (used by `fsetup inspect` and the build's verification step) is more lenient than the native
 reader. A file it accepts can still be rejected by Setup.exe:

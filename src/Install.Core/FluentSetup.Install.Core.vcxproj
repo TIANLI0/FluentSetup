@@ -13,6 +13,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="engine.h" />
+    <ClInclude Include="differential.h" />
     <ClInclude Include="extensions.h" />
     <ClInclude Include="installed.h" />
     <ClInclude Include="integration.h" />
@@ -22,6 +23,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="engine.cpp" />
+    <ClCompile Include="differential.cpp" />
     <ClCompile Include="extensions.cpp" />
     <ClCompile Include="installed.cpp" />
     <ClCompile Include="integration.cpp" />

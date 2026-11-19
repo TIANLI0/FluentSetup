@@ -212,6 +212,11 @@ public sealed class OutputSettings
     public List<string> Variants { get; set; } = [];
     /// <summary>Embed the WinUI 3 front end (falls back to Win32 automatically where it cannot run).</summary>
     public bool IncludeWinUI { get; set; } = true;
+    /// <summary>
+    /// Branch filter for x86/x64 and Arm64 programs and DLLs before compression (relative call targets made absolute,
+    /// undone by setup): their machine code compresses better. false stores them as they are.
+    /// </summary>
+    public bool CodeFilter { get; set; } = true;
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
 }
 
@@ -231,6 +236,12 @@ public sealed class SigningSettings
     public string SignToolPath { get; set; } = "";
     /// <summary>Also sign the uninstall.exe that setup writes into the install folder (UAC and SmartScreen then show the publisher when uninstalling).</summary>
     public bool SignUninstaller { get; set; } = true;
+    /// <summary>
+    /// The app's own programs to sign as well, as patterns over the installed paths (e.g. "MyApp.exe", "MyApp*.dll").
+    /// Signed copies go into the package; the build output folder is left as it is. Files that already carry a
+    /// signature (other vendors' DLLs, the .NET runtime) are skipped.
+    /// </summary>
+    public List<string> Files { get; set; } = [];
     /// <summary>Settings of the trustedSigning provider.</summary>
     public TrustedSigningSettings? TrustedSigning { get; set; }
     /// <summary>Settings of the command provider.</summary>
@@ -488,6 +499,13 @@ public sealed class UpdateSettings
     /// this name (the certificate's subject common name, e.g. "Contoso Ltd").
     /// </summary>
     public string Signer { get; set; } = "";
+    /// <summary>
+    /// Opt-in: keep the downloaded Setup.exe on the user's PC (per user, %LocalAppData%\FluentSetup\updates\&lt;app id&gt;,
+    /// the last one only) and download only what changed next time: streams the kept file already has are copied, the
+    /// rest comes with range requests. The rebuilt file must match the published SHA-256 like any download. Costs the
+    /// size of one Setup.exe on the user's disk; needs a server that answers range requests (GitHub does).
+    /// </summary>
+    public bool Differential { get; set; }
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
 
     [JsonIgnore] public bool Enabled => !string.IsNullOrWhiteSpace(GitHub) || !string.IsNullOrWhiteSpace(Feed);

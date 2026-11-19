@@ -17,7 +17,7 @@ $platform = if ($Arch -eq 'arm64') { 'ARM64' } else { 'x64' }
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $root
 $msbuild = & (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe') -latest -prerelease -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
-$cli = Join-Path $root 'src\CLI\bin\Release\net10.0\fluentsetup.exe'
+$cli = Join-Path $root 'src\CLI\bin\Release\net10.0\fsetup.exe'
 if (-not (Test-Path $cli)) { throw "Build the CLI first (scripts/build.ps1)." }
 
 $work = Join-Path $root 'out\e2e'
@@ -105,7 +105,8 @@ $v1 = New-Package '1.0.0' {
     'readme 1.0' | Set-Content "$s\readme.txt"
     '{"theme":"default"}' | Set-Content "$s\config\user-settings.json"
     'legacy' | Set-Content "$s\data\legacy.dat"
-    1..300 | ForEach-Object { "item $_" | Set-Content "$s\data\sub\item$_.txt" }
+    'the same in 1.0 and 2.0' | Set-Content "$s\data\shared.txt"
+    1..299 | ForEach-Object { "item $_" | Set-Content "$s\data\sub\item$_.txt" }
     '中文内容' | Set-Content "$s\资源 文件\说明.txt" -Encoding UTF8
 }
 $v2 = New-Package '2.0.0' {
@@ -113,9 +114,14 @@ $v2 = New-Package '2.0.0' {
     New-Item -ItemType Directory -Force "$s\config", "$s\data\sub", "$s\资源 文件", "$s\plugins" | Out-Null
     'readme 2.0' | Set-Content "$s\readme.txt"
     '{"theme":"default"}' | Set-Content "$s\config\user-settings.json"
-    1..300 | ForEach-Object { "item $_ v2" | Set-Content "$s\data\sub\item$_.txt" }
+    'the same in 1.0 and 2.0' | Set-Content "$s\data\shared.txt"
+    1..299 | ForEach-Object { "item $_ v2" | Set-Content "$s\data\sub\item$_.txt" }
     '中文内容 2' | Set-Content "$s\资源 文件\说明.txt" -Encoding UTF8
     'plugin' | Set-Content "$s\plugins\new-plugin.dll"
+    # 20 MiB that do not compress: a stream of its own, so the payload is decoded on several threads.
+    $big = [byte[]]::new(20MB)
+    [Random]::new(42).NextBytes($big)
+    [IO.File]::WriteAllBytes("$s\data\big.bin", $big)
 }
 $v3 = New-Package '3.0.0' {
     param($s)
@@ -140,6 +146,9 @@ Check 'no pending marker' { -not (Test-Path "HKCU:\Software\FluentSetup\Pending\
 
 '{"theme":"user-choice"}' | Set-Content "$installDir\config\user-settings.json"
 'app created' | Set-Content "$installDir\logs\runtime.log"
+# A mark in an alternate data stream survives only as long as the file itself is not replaced.
+'kept' | Set-Content "$installDir\data\shared.txt" -Stream fsetup-e2e
+'kept' | Set-Content "$installDir\readme.txt" -Stream fsetup-e2e
 
 Write-Host '==> Reinstall same version' -ForegroundColor Cyan
 $code = Run-Setup $v1 @('/quiet') 'reinstall-v1'
@@ -152,7 +161,11 @@ Check 'exit code 0' { $code -eq 0 }
 Check 'installed version is 2.0.0' { (Installed-Version) -eq '2.0.0' }
 Check 'obsolete file removed' { -not (Test-Path "$installDir\data\legacy.dat") }
 Check 'new file added' { Test-Path "$installDir\plugins\new-plugin.dll" }
+Check 'large file of its own stream installed' { (Get-FileHash "$installDir\data\big.bin").Hash -eq (Get-FileHash (Join-Path $work 'stage-2.0.0\data\big.bin')).Hash }
 Check 'changed file updated' { (Get-Content "$installDir\readme.txt") -eq 'readme 2.0' }
+Check 'changed file replaced (mark gone)' { -not (Get-Item "$installDir\readme.txt" -Stream fsetup-e2e -ErrorAction SilentlyContinue) }
+Check 'unchanged file left in place (mark kept)' { (Get-Content "$installDir\data\shared.txt" -Stream fsetup-e2e -ErrorAction SilentlyContinue) -eq 'kept' }
+Check 'log: unchanged files stay in place' { (Get-Content "$logs\upgrade-v2.log" -Raw) -match 'files are unchanged and stay in place' }
 Check 'preserved user data kept on upgrade' { (Get-Content "$installDir\config\user-settings.json") -match 'user-choice' }
 Check 'app-created file untouched' { Test-Path "$installDir\logs\runtime.log" }
 Check 'ARP shows 2.0.0' { (Get-ItemProperty $arpKey).DisplayVersion -eq '2.0.0' }
@@ -163,10 +176,11 @@ Check 'exit code 10 (DowngradeBlocked)' { $code -eq 10 }
 Check 'still 2.0.0' { (Installed-Version) -eq '2.0.0' }
 
 Write-Host '==> Corrupted package is refused' -ForegroundColor Cyan
+# 3.0.0 replaces every file, so its first payload stream is read (an unchanged file's stream is not read at all).
 $corrupt = Join-Path $work 'corrupt-Setup.exe'
-Copy-Item $v2 $corrupt
+Copy-Item $v3 $corrupt
 $bytes = [IO.File]::ReadAllBytes($corrupt)
-$report = Get-Content (Join-Path $work 'report-2.0.0.json') -Raw | ConvertFrom-Json
+$report = Get-Content (Join-Path $work 'report-3.0.0.json') -Raw | ConvertFrom-Json
 $target = [int]($report.sizes.stub + $report.sizes.winUiFrontEnd + 64)   # inside the first payload stream
 $bytes[$target] = $bytes[$target] -bxor 0xFF
 [IO.File]::WriteAllBytes($corrupt, $bytes)
@@ -573,7 +587,9 @@ if ($r.Code -eq 19 -and $r.Log -match $offline) {
     $r = Run-Update @('/install-update', '/quiet') 'update-feed-install'
     Check 'feed: a download that is not a setup package is refused (exit 19), the app is unchanged' {
         $r.Code -eq 19 -and $r.Log -match 'not a valid setup package' -and (Get-ItemProperty $arpKey).DisplayVersion -eq '12.0.1' }
-    Check 'feed: the refused download was removed' { -not (Get-ChildItem $env:TEMP -Directory -Filter 'FluentSetup-upd-*' | Get-ChildItem -File) }
+    Check 'feed: the refused download was removed' {
+        -not (Get-ChildItem $env:TEMP -Directory -Filter 'FluentSetup-upd-*' | Get-ChildItem -File) -and
+        -not (Get-ChildItem (Join-Path $env:LOCALAPPDATA "FluentSetup\updates\$appId") -File -ErrorAction SilentlyContinue) }
     Remove-Existing
     $badPkg = New-Package '12.0.2' { param($s) } @{} @{ update = @{ feed = "$fixtures/update-feed-badhash.json" } }
     $code = Run-Setup $badPkg @('/quiet') 'update-badhash-setup'
