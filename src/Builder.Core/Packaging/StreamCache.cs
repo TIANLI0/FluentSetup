@@ -11,6 +11,9 @@ namespace FluentSetup.Builder.Core.Packaging;
 /// bytes are checked against their recorded SHA-256 before they are used. Lives next to the installer cache
 /// (<c>%LocalAppData%\FluentSetup\cache\streams</c>, or <c>FLUENTSETUP_CACHE</c>); entries unused for
 /// <see cref="MaxAge"/> are removed, and the oldest ones once the cache grows past <see cref="MaxBytes"/>.
+/// The signed copies of the app's programs (signing.files, <see cref="SignedExtension"/>) live here too, so a rebuild
+/// does not sign them again with a new timestamp (which would change their hash and defeat the stream cache and
+/// differential updates).
 /// </summary>
 internal static class StreamCache
 {
@@ -21,6 +24,11 @@ internal static class StreamCache
     private static readonly Lock PruneLock = new();
 
     public static string Root => Path.Combine(Path.GetDirectoryName(InstallerCache.Root)!, "streams");
+
+    /// <summary>File extension of compressed streams.</summary>
+    public const string StreamExtension = ".zst";
+    /// <summary>File extension of signed copies of the app's programs.</summary>
+    public const string SignedExtension = ".signed";
 
     /// <summary>The cache key of a stream: compression parameters and, per file, its size and SHA-256.</summary>
     public static string Key(int level, int workers, int windowLog, IReadOnlyList<(long Size, byte[] Sha256)> files, string filters = "")
@@ -35,9 +43,9 @@ internal static class StreamCache
     /// Copies the cached stream for <paramref name="key"/> to <paramref name="dest"/>; null if there is none or it is
     /// damaged (then it is removed). Returns the stored size and SHA-256.
     /// </summary>
-    public static (long Size, byte[] Sha256)? TryGet(string key, string dest)
+    public static (long Size, byte[] Sha256)? TryGet(string key, string dest, string extension = StreamExtension)
     {
-        var data = Path.Combine(Root, key + ".zst");
+        var data = Path.Combine(Root, key + extension);
         var meta = data + ".sha256";
         try
         {
@@ -76,12 +84,12 @@ internal static class StreamCache
     }
 
     /// <summary>Stores a freshly compressed stream; failures are ignored (the cache is only an optimisation).</summary>
-    public static void Put(string key, string source, byte[] sha256)
+    public static void Put(string key, string source, byte[] sha256, string extension = StreamExtension)
     {
         try
         {
             Directory.CreateDirectory(Root);
-            var data = Path.Combine(Root, key + ".zst");
+            var data = Path.Combine(Root, key + extension);
             var temp = data + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
             File.Copy(source, temp);
             File.Move(temp, data, overwrite: true);
@@ -98,7 +106,8 @@ internal static class StreamCache
             try
             {
                 if (!Directory.Exists(Root)) return;
-                var entries = new DirectoryInfo(Root).GetFiles("*.zst")
+                var root = new DirectoryInfo(Root);
+                var entries = root.GetFiles("*" + StreamExtension).Concat(root.GetFiles("*" + SignedExtension))
                     .Select(f => (Data: f, Used: File.Exists(f.FullName + ".sha256") ? File.GetLastWriteTimeUtc(f.FullName + ".sha256") : DateTime.MinValue))
                     .OrderByDescending(e => e.Used).ToList();
                 long total = 0;

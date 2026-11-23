@@ -26,9 +26,13 @@ public:
     Value(int v) noexcept : type_(Type::Number), num_(v), int_(v), isInt_(true) {}
     Value(unsigned v) noexcept : type_(Type::Number), num_(v), int_(v), isInt_(true) {}
     Value(int64_t v) noexcept : type_(Type::Number), num_(static_cast<double>(v)), int_(v), isInt_(true) {}
+    // Above INT64_MAX a uint64 is kept as a (non-integer) double: it has no int64 representation.
     Value(uint64_t v) noexcept
-        : type_(Type::Number), num_(static_cast<double>(v)), int_(static_cast<int64_t>(v)), isInt_(true) {}
-    Value(double v) noexcept : type_(Type::Number), num_(v), int_(static_cast<int64_t>(v)) {}
+        : type_(Type::Number), num_(static_cast<double>(v)), int_(v <= kInt64Max ? static_cast<int64_t>(v) : 0),
+          isInt_(v <= kInt64Max) {}
+    // Never an integer (asInt/asUint return their fallback): converting an out-of-range double is undefined behaviour,
+    // and truncating 1.5 to 1 would accept what is not an integer.
+    Value(double v) noexcept : type_(Type::Number), num_(v) {}
     Value(std::string s) : type_(Type::String), str_(std::move(s)) {}
     Value(std::string_view s) : type_(Type::String), str_(s) {}
     Value(const char* s) : type_(Type::String), str_(s) {}
@@ -51,9 +55,11 @@ public:
 
     // Lenient accessors: return the fallback when the type does not match.
     [[nodiscard]] bool asBool(bool fallback = false) const noexcept { return isBool() ? bool_ : fallback; }
-    [[nodiscard]] int64_t asInt(int64_t fallback = 0) const noexcept { return isNumber() ? int_ : fallback; }
+    // Integers only: a number written with a fraction or an exponent, or outside the int64 range, gives the fallback.
+    [[nodiscard]] bool isInteger() const noexcept { return type_ == Type::Number && isInt_; }
+    [[nodiscard]] int64_t asInt(int64_t fallback = 0) const noexcept { return isInteger() ? int_ : fallback; }
     [[nodiscard]] uint64_t asUint(uint64_t fallback = 0) const noexcept {
-        return isNumber() && int_ >= 0 ? static_cast<uint64_t>(int_) : fallback;
+        return isInteger() && int_ >= 0 ? static_cast<uint64_t>(int_) : fallback;
     }
     [[nodiscard]] double asDouble(double fallback = 0) const noexcept { return isNumber() ? num_ : fallback; }
     [[nodiscard]] const std::string& asString() const noexcept;
@@ -71,6 +77,8 @@ public:
     Value& push(Value v);
 
 private:
+    static constexpr uint64_t kInt64Max = 0x7FFFFFFFFFFFFFFFull;
+
     Type type_ = Type::Null;
     bool bool_ = false;
     double num_ = 0;

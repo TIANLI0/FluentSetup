@@ -67,6 +67,12 @@ struct InstallOptions {
     bool variantChosen = false;           // picked by the user or /variant, not by variantSelection "auto" (kept on updates)
     bool removeUserData = false;          // uninstall: also delete uninstall.userData
     std::map<std::string, std::wstring> inputs;  // values of the package's inputs (id -> value), see Package::inputs
+    // The Setup.exe to record for repairs instead of the running file, when this runs from a private copy of it (an
+    // elevated repair). Recorded only if it hashes to exactly the running file.
+    std::wstring sourcePackage;
+    // Setup.exe /channel (an update passes on the one it was asked for): the update channel to record. "" = keep the
+    // installed one, or none (update.channel applies).
+    std::wstring updateChannel;
 };
 json::Value OptionsToJson(const InstallOptions& o);
 bool OptionsFromJson(const json::Value& v, InstallOptions& o);
@@ -82,6 +88,7 @@ struct Outcome {
     std::vector<std::wstring> deferredDeletes;  // uninstall: delete once the original uninstaller process has exited
     std::vector<std::wstring> warnings;         // non-fatal problems (e.g. an optional step that failed), English
     bool rebootRequired = false;                // files in use are replaced/removed at the next restart (exit code 3010)
+    std::string messageKey;                     // a more precise "error.*" string than the code's (e.g. error.installerBusy)
 };
 json::Value OutcomeToJson(const Outcome& o);
 Outcome OutcomeFromJson(const json::Value& v);

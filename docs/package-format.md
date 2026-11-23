@@ -296,6 +296,8 @@ than CR, LF and TAB.
 | `allowDowngrade` | `false` | |
 | `closeProcesses` | `[]` | ≤ 32 file names ending in `.exe`. |
 | `adoptUninstallKey` | absent | If present must equal `app.id` (case-insensitive). Written by the builder only when `install.adoptExistingInstall` is set. |
+| `legacyUninstallKeys` | `[]` | ≤ 32 uninstall key names (1–128 chars, no control characters, none of `\ / : * ? " < > |`). |
+| `legacyMsi` | absent | `{ "productCodes": [...], "upgradeCodes": [...] }`, ≤ 16 codes each, every one `{` + GUID + `}` (normalized to upper case, duplicates dropped); anything else is rejected. Written by the builder only when `install.legacyMsi` has a code. The engine removes the Windows Installer products found under them before it writes files (`legacy_msi.cpp`). |
 
 Directory templates expand `{LocalAppData}`, `{UserProgramFiles}`, `{AppData}`, `{ProgramFiles}`, `{ProgramData}`,
 `{AppName}` (sanitized name), `{Publisher}` (sanitized publisher, or the name if empty) and `{AppId}`.
@@ -352,6 +354,19 @@ All optional; an older stub never reads a 1.2 header (every Setup.exe reads only
 | `redist` | File set (like `frontend`) of bundled official prerequisite installers, one stream each; never installed, extracted into a private temporary folder only when the prerequisite is missing. Not copied into the uninstaller. |
 | `uninstallerImage` | `{header: base64, certificates: base64, checksum, sha256}`: the exact header of the signed `uninstall.exe`, its Authenticode certificate table and PE checksum, and the SHA-256 of the finished file (section 7). Not copied into the uninstaller. |
 | `testHooks` | `true` only in packages built with `fsetup build --test-hooks` (FluentSetup's own tests): enables `FLUENTSETUP_TEST_FAULT_AFTER` and `--ui-simulate`. |
+
+### 4.7b `update`
+
+Written when the project has an update source; kept in `uninstall.exe`, which reads it for `/check-update`,
+`/install-update` and repairs (`updater.cpp`, `ReadSource`). Absent: the package has no update source.
+
+| Key | Content |
+|---|---|
+| `github` | `owner/name`, with `asset` (file name with `{Version}`), `prerelease` (bool) and optional `checksums` (file name). |
+| `feed` | Instead of `github`: https URL of the feed (`feed.cpp`: the stable release in the top-level fields, other channels under `channels`). |
+| `signer` | Optional subject CN the download must be signed by. |
+| `differential` | Optional `true`: keep the download and rebuild the next one from it (section 9). |
+| `channel` | Optional (1.6.0 and later): the default update channel (`update.channel`), written only when it is not `stable`; must be a channel name (lower-case letters, digits, `-`, starting with a letter, ≤ 32). Older uninstallers ignore it. |
 
 ### 4.8 JSON parser limits
 

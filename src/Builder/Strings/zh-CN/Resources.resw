@@ -521,6 +521,11 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="UpgradeAdoptToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>接管现有安装</value></data>
   <data name="UpgradeLegacyKeysDescription.Text" xml:space="preserve"><value>旧产品名称的卸载项，例如改名前的名称或 Inno Setup 的 {GUID}_is1 项。其文件夹会被升级，安装完成后这些项会被删除。</value></data>
   <data name="UpgradeLegacyKeysBox.Header" xml:space="preserve"><value>旧的卸载项（每行一个）</value></data>
+  <data name="UpgradeLegacyMsiDescription.Text" xml:space="preserve"><value>由 MSI（WiX、InstallShield、Visual Studio 安装项目）安装的旧版本：填写其升级代码或产品代码。安装程序会在写入新文件之前通过 Windows Installer 将其卸载，不显示窗口，也不重启电脑。为所有用户安装的旧版本需要管理员权限才能卸载。</value></data>
+  <data name="UpgradeLegacyMsiUpgradeCodesBox.Header" xml:space="preserve"><value>MSI 升级代码（每行一个）</value></data>
+  <data name="UpgradeLegacyMsiUpgradeCodesBox.PlaceholderText" xml:space="preserve"><value>{12345678-1234-1234-1234-123456789ABC}</value></data>
+  <data name="UpgradeLegacyMsiProductCodesBox.Header" xml:space="preserve"><value>MSI 产品代码（每行一个）</value></data>
+  <data name="UpgradeLegacyMsiProductCodesBox.PlaceholderText" xml:space="preserve"><value>{12345678-1234-1234-1234-123456789ABC}</value></data>
   <data name="UpgradeRunningSection.Text" xml:space="preserve"><value>应用正在运行时</value></data>
   <data name="UpgradeCloseProcessesBox.Header" xml:space="preserve"><value>安装或卸载前要关闭的程序（每行一个 .exe 名称）</value></data>
   <data name="UpgradeCloseProcessesBox.PlaceholderText" xml:space="preserve"><value>MyApp.exe</value></data>
@@ -623,6 +628,8 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="UpdateFeedBox.PlaceholderText" xml:space="preserve"><value>https://example.com/myapp/latest.json</value></data>
   <data name="UpdateSignerBox.Header" xml:space="preserve"><value>要求的签名者（可选）</value></data>
   <data name="UpdateSignerBox.PlaceholderText" xml:space="preserve"><value>证书使用者名称，例如 Contoso Ltd</value></data>
+  <data name="UpdateChannelBox.Header" xml:space="preserve"><value>更新通道</value></data>
+  <data name="UpdateChannelBox.PlaceholderText" xml:space="preserve"><value>stable（或例如 beta：更新源中同名的条目；GitHub 上为预发布版本）</value></data>
   <data name="UpdateDifferentialToggle.Header" xml:space="preserve"><value>只下载有变化的部分（增量更新）</value></data>
   <data name="UpdateDifferentialDescription.Text" xml:space="preserve"><value>在用户电脑上保留最近一次下载的 Setup.exe（每个用户占用一份安装包的磁盘空间），下次更新时只下载变化的部分。适合体积较大的应用；更新服务器需要支持范围请求（GitHub 支持）。</value></data>
   <data name="UpdateHowToUse.Text" xml:space="preserve"><value>在应用里，“检查更新”可运行安装目录下的“uninstall.exe /install-update /relaunch”（先弹出小窗口询问），后台检查用“uninstall.exe /check-update”（退出代码 18 = 有更新）。下载的文件必须与发布的 SHA-256 一致，且是本应用的更新版本；文件名中的 {Version} 代表发布的版本号。</value></data>
@@ -955,4 +962,336 @@ MyApp*.dll</value></data>
   <data name="BuildRunSetup.Content" xml:space="preserve"><value>运行安装程序</value></data>
   <data name="BuildInspect.Content" xml:space="preserve"><value>检查</value></data>
   <data name="Build_RunSetupErrorTitle" xml:space="preserve"><value>无法启动安装程序</value></data>
+  <data name="BuildCodeFilterTitle.Text" xml:space="preserve"><value>程序和 DLL 的分支过滤器</value></data>
+  <data name="BuildCodeFilterDescription.Text" xml:space="preserve"><value>压缩前先让 x86/x64 和 Arm64 程序及 DLL 经过分支过滤器（安装时还原）：本机代码压缩后约小 4-8%，.NET 程序集约小 1%。关闭则按原样存储。</value></data>
+  <data name="BuildCodeFilterToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>程序和 DLL 的分支过滤器</value></data>
+  <data name="SignTrustedExcludeBox.Header" xml:space="preserve"><value>跳过的凭据（可选）</value></data>
+  <data name="SignTrustedExcludeBox.PlaceholderText" xml:space="preserve"><value>例如 ManagedIdentityCredential</value></data>
+  <data name="SignTrustedExcludeBox.Description" xml:space="preserve"><value>要跳过的 DefaultAzureCredential 凭据来源，每行一个：EnvironmentCredential、WorkloadIdentityCredential、ManagedIdentityCredential、SharedTokenCacheCredential、VisualStudioCredential、VisualStudioCodeCredential、AzureCliCredential、AzurePowerShellCredential、AzureDeveloperCliCredential、InteractiveBrowserCredential。</value></data>
+  <data name="FilesExtraSourceBox.PlaceholderText" xml:space="preserve"><value>C:\路径\文件夹</value></data>
+  <data name="FilesExtraSourceBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>要添加的文件夹</value></data>
+  <data name="FilesExtraTargetBox.PlaceholderText" xml:space="preserve"><value>子文件夹</value></data>
+  <data name="FilesExtraTargetBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>安装文件夹中的位置</value></data>
+  <data name="VariantSelectionTitle.Text" xml:space="preserve"><value>变体的选择方式</value></data>
+  <data name="VariantSelectionDescription.Text" xml:space="preserve"><value>由用户选择，或由安装程序选择其先决条件已安装的变体（否则选默认变体）。</value></data>
+  <data name="VariantSelectionCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>变体的选择方式</value></data>
+  <data name="VariantSelectionCombo.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>user：显示单选按钮，预先选中默认变体。auto：若某个非默认变体所限定的全部先决条件（requirements.*.variants）都已安装，安装程序就预先选中它，否则选中默认变体，因此不会额外安装任何组件；只提供这台电脑能运行的变体（只剩一个时不显示选择）。更新时保留用户选过的变体（只要电脑仍能运行它）；由安装程序选的变体会再次自动选择。/variant 参数始终优先。</value></data>
+  <data name="VariantSelectionUser.Content" xml:space="preserve"><value>由用户选择（user）</value></data>
+  <data name="VariantSelectionAuto.Content" xml:space="preserve"><value>按已安装的组件自动选择（auto）</value></data>
+  <data name="LanguageOther.Content" xml:space="preserve"><value>其他语言</value></data>
+  <data name="AppLanguageCombo.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>安装程序的语言。自动 = 按用户的 Windows 显示语言顺序，取第一个安装程序有字符串的语言，否则为 en-US。地区标记使用其语言的字符串表（zh-HK、zh-MO、zh-Hant -&gt; zh-TW，其他 zh -&gt; zh-CN，de-AT -&gt; de-DE，fr-CA -&gt; fr-FR，es-MX -&gt; es-ES，pt-PT -&gt; pt-BR）。其他任何语言标记都需要安装包自带字符串（ui.strings 或 ui.localization）。Setup.exe /lang 可覆盖此设置。</value></data>
+  <data name="AppOtherLanguageTitle.Text" xml:space="preserve"><value>语言标记</value></data>
+  <data name="AppOtherLanguageDescription.Text" xml:space="preserve"><value>没有内置字符串表的语言，例如 nl-NL；安装包必须自带其字符串（ui.strings 或 ui.localization）。</value></data>
+  <data name="AppOtherLanguageBox.PlaceholderText" xml:space="preserve"><value>nl-NL</value></data>
+  <data name="AppOtherLanguageBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>语言标记</value></data>
+  <data name="TextError_NotUnderstood" xml:space="preserve"><value>第 {0} 行无法识别：“{1}”。请每行写一种语言，格式为 语言 = 文本，例如 en-US = Hello。</value></data>
+  <data name="TextError_StringsNotUnderstood" xml:space="preserve"><value>第 {0} 行无法识别：“{1}”。请每行写一个字符串，格式为 语言: 键 = 文本，例如 zh-CN: welcome.title = 欢迎。</value></data>
+  <data name="TextError_NotALanguage" xml:space="preserve"><value>第 {0} 行：“{1}”不是 en-US、zh-CN 这样的语言标记。如果英文文本本身含有“=”，请在前面加上 en-US =。</value></data>
+  <data name="TextError_Duplicate" xml:space="preserve"><value>第 {0} 行：{1} 出现了多次，只会使用最后一行。</value></data>
+  <data name="TextError_NotANumber" xml:space="preserve"><value>“{0}”不是整数。请使用逗号分隔的整数，例如 0, 3010。</value></data>
+  <data name="SaveUnreadable_Title" xml:space="preserve"><value>部分文本无法保存</value></data>
+  <data name="SaveUnreadable_Body" xml:space="preserve"><value>以下行无法识别，保存时将被省略：
+{0}
+
+仍要保存吗？</value></data>
+  <data name="SaveUnreadable_Save" xml:space="preserve"><value>仍然保存</value></data>
+  <data name="Build_UnreadableText" xml:space="preserve"><value>请先修正“问题”中列出的无法识别的行，然后再生成。</value></data>
+  <data name="BuildRunning_Title" xml:space="preserve"><value>正在生成</value></data>
+  <data name="BuildRunning_Body" xml:space="preserve"><value>要取消生成吗？关闭项目前会先删除生成的临时文件。</value></data>
+  <data name="BuildRunning_Cancel" xml:space="preserve"><value>取消生成</value></data>
+  <data name="BuildRunning_Keep" xml:space="preserve"><value>继续生成</value></data>
+  <data name="Diag_FS1802_2949166c" xml:space="preserve"><value>'{0}' 不是有效的变量名（可使用字母、数字、_、. 和 -，须以字母或 _ 开头）。</value></data>
+  <data name="Diag_FS1801_3c55b209" xml:space="preserve"><value>未知变量 $({0})。请在 "variables" 中定义，或使用 -D {1}=value 指定。</value></data>
+  <data name="Diag_FS1107_ec2de20e" xml:space="preserve"><value>无法安装 '{0}'：{1}。</value></data>
+  <data name="Diag_FS1108_442f137e" xml:space="preserve"><value>'{0}' 已被安装程序保留（uninstall.exe、uninstall.json 和 .fsetup）。</value></data>
+  <data name="Diag_FS1109_617b9426" xml:space="preserve"><value>有两个源映射到 '{0}'：{1} 和 {2}。</value></data>
+  <data name="Diag_FS1120_eda08ad1" xml:space="preserve"><value>无法读取文件夹 {0}：{1}</value></data>
+  <data name="Diag_FS1121_c8ea5591" xml:space="preserve"><value>已跳过链接（符号链接或目录联接）：{0}</value></data>
+  <data name="Diag_FS1107_b414ea2e" xml:space="preserve"><value>无法安装 '{0}'：名称中包含 '\'。</value></data>
+  <data name="Diag_FS1122_94237ba8" xml:space="preserve"><value>文件数超过 {0} 个。</value></data>
+  <data name="Diag_FS1123_0c8dfcb5" xml:space="preserve"><value>'{0}' 既是文件又是文件夹。</value></data>
+  <data name="Diag_FS1124_ab181c28" xml:space="preserve"><value>没有要安装的文件：源文件夹为空，或所有文件都被排除。</value></data>
+  <data name="Diag_FS1110_4a03037f" xml:space="preserve"><value>主程序 '{0}' 不在要安装的文件中。</value></data>
+  <data name="Diag_FS1320_49662a67" xml:space="preserve"><value>找不到本地化文件夹：{0}</value></data>
+  <data name="Diag_FS1321_b7ab8594" xml:space="preserve"><value>'{0}' 不是语言标记（例如 fr-FR）；已忽略该文件。</value></data>
+  <data name="Diag_FS1322_7c45afa2" xml:space="preserve"><value>JSON 无效：{0}</value></data>
+  <data name="Diag_FS1323_a25edb6c" xml:space="preserve"><value>项目中没有选项 '{0}'。</value></data>
+  <data name="Diag_FS1324_a0512886" xml:space="preserve"><value>项目中没有 ID 为 '{0}' 的操作。</value></data>
+  <data name="Diag_FS1326_326d11a5" xml:space="preserve"><value>files.variants 中没有变体 '{0}'。</value></data>
+  <data name="Diag_FS1325_31b8f65d" xml:space="preserve"><value>找不到许可协议文件：{0}</value></data>
+  <data name="Diag_FS1306_1ea0e6d8" xml:space="preserve"><value>许可协议文件大于 1 MB。</value></data>
+  <data name="Diag_FS1327_4dad3be9" xml:space="preserve"><value>已翻译 {0}/{1} 条安装程序字符串；缺少的以英文显示（例如 {2}）。运行 fsetup locale add {3} 可列出全部。</value></data>
+  <data name="Diag_FS1328_711b7011" xml:space="preserve"><value>已有 ''{0}'' 的文本，但安装程序没有该语言的字符串，因此不会在 {1} 中显示。请在 {2}.json 中添加 "strings" 表。</value></data>
+  <data name="Diag_FS1662_500fb1f1" xml:space="preserve"><value>files.variants 中没有变体 {0}。</value></data>
+  <data name="Diag_FS2001_9706c0a4" xml:space="preserve"><value>缺少 {0} 的安装程序运行时：{1}</value></data>
+  <data name="Diag_FS2002_8d2d5591" xml:space="preserve"><value>{0} 的 WinUI 前端不可用；安装包将只使用 Win32 界面。</value></data>
+  <data name="Diag_FS2004_33718df4" xml:space="preserve"><value>此必备组件没有官方安装程序。</value></data>
+  <data name="Diag_FS2005_5d5f1797" xml:space="preserve"><value>{0} 不是 Windows 程序或 DLL，且未签名。</value></data>
+  <data name="Diag_FS2006_37377b96" xml:space="preserve"><value>没有要签名的文件：这些模式未匹配安装包中任何未签名的程序或 DLL。</value></data>
+  <data name="Diag_FS1604_363ec432" xml:space="preserve"><value>不是有效的相对路径：{0}。</value></data>
+  <data name="Diag_FS1605_106759db" xml:space="preserve"><value>参数过多或过长。</value></data>
+  <data name="Diag_FS1606_375de1bf" xml:space="preserve"><value>下载必须使用 https URL。</value></data>
+  <data name="Diag_FS1607_22ff34c4" xml:space="preserve"><value>请提供文件的 SHA-256（64 个十六进制字符）或签名者；安装程序拒绝运行任何不匹配的文件。</value></data>
+  <data name="Diag_FS1683_29de3a50" xml:space="preserve"><value>证书的使用者名称，例如 Microsoft Corporation（最多 256 个字符，首尾不能有空格）。</value></data>
+  <data name="Diag_FS1608_5d90acde" xml:space="preserve"><value>大小必须是以字节为单位的文件大小，未知时为 0。</value></data>
+  <data name="Diag_FS1609_d68a6760" xml:space="preserve"><value>同时设置了内置安装程序和下载；将使用内置安装程序。</value></data>
+  <data name="Diag_FS1660_d28caa2f" xml:space="preserve"><value>请使用 warn 或 fail。</value></data>
+  <data name="Diag_FS1615_79237558" xml:space="preserve"><value>帮助链接必须是 https URL。</value></data>
+  <data name="Diag_FS1601_2bc0891f" xml:space="preserve"><value>'{0}' 必须是以 .exe 结尾的文件名（不含文件夹）。</value></data>
+  <data name="Diag_FS1602_f29e9631" xml:space="preserve"><value>最多 32 个进程名称。</value></data>
+  <data name="Diag_FS1603_f8669cae" xml:space="preserve"><value>未知的 .NET Framework 版本。请使用以下之一：{0}。</value></data>
+  <data name="Diag_FS1614_aeb7f987" xml:space="preserve"><value>不是有效的版本。</value></data>
+  <data name="Diag_FS1616_e482a4af" xml:space="preserve"><value>已忽略：未设置 requirements.netFramework。</value></data>
+  <data name="Diag_FS1617_54491ce6" xml:space="preserve"><value>请使用 desktop、core 或 aspnetcore。</value></data>
+  <data name="Diag_FS1618_34e903cd" xml:space="preserve"><value>请提供最低运行时版本，例如 8.0.0。</value></data>
+  <data name="Diag_FS1619_8d79343d" xml:space="preserve"><value>请使用 patch、minor 或 major。</value></data>
+  <data name="Diag_FS1661_326d11a5" xml:space="preserve"><value>files.variants 中没有变体 '{0}'。</value></data>
+  <data name="Diag_FS1663_9193a9ed" xml:space="preserve"><value>请使用 Windows App SDK 版本，例如 2.5.1（1.x 运行时则为 1.6）。</value></data>
+  <data name="Diag_FS1666_40c4f264" xml:space="preserve"><value>需要 run（应用中某个 .exe 的相对路径），且最多 32 个参数。</value></data>
+  <data name="Diag_FS1650_a385636d" xml:space="preserve"><value>旧产品的卸载项名称（不是此应用的 ID）。</value></data>
+  <data name="Diag_FS1651_b907a67e" xml:space="preserve"><value>要安装的文件中某个 .exe 或 .dll 的相对路径。</value></data>
+  <data name="Diag_FS1652_e8fae2da" xml:space="preserve"><value>最多 32 项。</value></data>
+  <data name="Diag_FS1653_37d17fae" xml:space="preserve"><value>'{0}' 在此处不是有效的名称。</value></data>
+  <data name="Diag_FS1667_2935001e" xml:space="preserve"><value>单个文件夹名称（最多 64 个字符），例如发布者或应用名称。</value></data>
+  <data name="Diag_FS1610_c8746bc5" xml:space="preserve"><value>选项 ID 可使用字母、数字、'-' 和 '_'（最多 32 个）。</value></data>
+  <data name="Diag_FS1611_3bf90c8c" xml:space="preserve"><value>选项 ID '{0}' 重复。</value></data>
+  <data name="Diag_FS1664_8760427c" xml:space="preserve"><value>需要 Run 值名称，且最多 32 个参数。</value></data>
+  <data name="Diag_FS1665_015b5406" xml:space="preserve"><value>需要 app.mainExecutable（要启动的程序）。</value></data>
+  <data name="Diag_FS1612_ff9d9c60" xml:space="preserve"><value>请为该选项提供标签（按语言分别提供，或在本地化文件中提供并在此处保留一个）。</value></data>
+  <data name="Diag_FS1668_b7945ceb" xml:space="preserve"><value>runValue 是 Run 值名称，scheduledTask 是任务名称（文件夹写法："Folder\Task"）。</value></data>
+  <data name="Diag_FS1669_6b49f7b1" xml:space="preserve"><value>必选选项始终处于选中状态：将忽略 detect 和 quietDefault。</value></data>
+  <data name="Diag_FS1613_32c6edce" xml:space="preserve"><value>最多 16 个选项。</value></data>
+  <data name="Diag_FS1620_cce4ac65" xml:space="preserve"><value>请使用 afterInstall 或 beforeUninstall。</value></data>
+  <data name="Diag_FS1621_95da8f78" xml:space="preserve"><value>操作运行已安装文件中的 .exe，以相对路径指定（{0}）。</value></data>
+  <data name="Diag_FS1622_106759db" xml:space="preserve"><value>参数过多或过长。</value></data>
+  <data name="Diag_FS1623_54835d36" xml:space="preserve"><value>超时必须为 1-3600 秒。</value></data>
+  <data name="Diag_FS1624_a71d8ea1" xml:space="preserve"><value>请使用 fail、warn 或 ignore。</value></data>
+  <data name="Diag_FS1625_0f9aab3d" xml:space="preserve"><value>没有选项 '{0}'。</value></data>
+  <data name="Diag_FS1626_30b257de" xml:space="preserve"><value>需要 hive（HKLM|HKCU）、其下的项（最多 255 个字符）、值名称（最多 128 个字符；为空 = 该项的默认值）以及版本。</value></data>
+  <data name="Diag_FS1629_05148afc" xml:space="preserve"><value>操作 ID 可使用字母、数字、'-' 和 '_'（最多 32 个）。</value></data>
+  <data name="Diag_FS1633_8760427c" xml:space="preserve"><value>需要 Run 值名称，且最多 32 个参数。</value></data>
+  <data name="Diag_FS1627_6955c77c" xml:space="preserve"><value>此步骤失败时安装将回滚；但程序本身造成的影响（驱动程序、任务）无法由安装程序撤消。</value></data>
+  <data name="Diag_FS1628_9858b00f" xml:space="preserve"><value>最多 32 个操作。</value></data>
+  <data name="Diag_FS1630_5ec2dc05" xml:space="preserve"><value>必须是 {{CommonAppData}}\Folder、{{LocalAppData}}\Folder、{{AppData}}\Folder 或 {{InstallDir}}\Folder。</value></data>
+  <data name="Diag_FS1631_6b01e3a2" xml:space="preserve"><value>计划任务名称无效（文件夹写法："Folder\Task"）。</value></data>
+  <data name="Diag_FS1632_46c8a41b" xml:space="preserve"><value>Run 值名称无效。</value></data>
+  <data name="Diag_FS1654_e8fae2da" xml:space="preserve"><value>最多 32 项。</value></data>
+  <data name="Diag_FS1655_4e633b26" xml:space="preserve"><value>'{0}' 必须为 {1}。</value></data>
+  <data name="Diag_FS1656_aefa05d1" xml:space="preserve"><value>需要服务名称和 1-8 个 SDDL 权限字符串，例如 LCRPWP。</value></data>
+  <data name="Diag_FS1657_cbd6511e" xml:space="preserve"><value>最多 32 个参数。</value></data>
+  <data name="Diag_FS1658_616e5c0c" xml:space="preserve"><value>最多 8 个文件夹。</value></data>
+  <data name="Diag_FS1659_43d2fa68" xml:space="preserve"><value>安装文件夹内的文件夹（相对路径），或用 "" 表示安装文件夹本身。</value></data>
+  <data name="Diag_FS1640_8e2d1b16" xml:space="preserve"><value>'{0}' 不在要安装的文件中。</value></data>
+  <data name="Diag_FS1641_8e2d1b16" xml:space="preserve"><value>'{0}' 不在要安装的文件中。</value></data>
+  <data name="Diag_FS1642_8e2d1b16" xml:space="preserve"><value>'{0}' 不在要安装的文件中。</value></data>
+  <data name="Diag_FS1220_abf8fe58" xml:space="preserve"><value>AppUserModelID 最多 128 个字符，可使用字母、数字、'.'、'-' 或 '_'（不含空格），例如 Contoso.Notes。</value></data>
+  <data name="Diag_FS1221_2b195ed4" xml:space="preserve"><value>CLSID 请写成 {{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}}。</value></data>
+  <data name="Diag_FS1222_546b81b9" xml:space="preserve"><value>Toast 激活器必须与 app.appUserModelId 一起使用。</value></data>
+  <data name="Diag_FS1223_553d57d9" xml:space="preserve"><value>请使用 auto 或 off。</value></data>
+  <data name="Diag_FS1224_9f99b0ec" xml:space="preserve"><value>请使用 fail 或 reboot。</value></data>
+  <data name="Diag_FS1225_c14530bc" xml:space="preserve"><value>在下次重启时替换文件需要管理员权限；按用户安装时将直接失败。</value></data>
+  <data name="Diag_FS1226_494dc11a" xml:space="preserve"><value>App Paths 注册的是 app.mainExecutable；请先设置它。</value></data>
+  <data name="Diag_FS1312_f9f81945" xml:space="preserve"><value>找不到横幅图像：{0}</value></data>
+  <data name="Diag_FS1313_d9581180" xml:space="preserve"><value>横幅必须是 .png、.jpg 或 .bmp 图像。</value></data>
+  <data name="Diag_FS1314_43e4eca7" xml:space="preserve"><value>横幅图像大于 1 MB。</value></data>
+  <data name="Diag_FS1901_27cb19e1" xml:space="preserve"><value>最多 16 个快捷方式。</value></data>
+  <data name="Diag_FS1902_2426424b" xml:space="preserve"><value>快捷方式名称（不含 .lnk，最多 128 个字符），须为有效的文件名。</value></data>
+  <data name="Diag_FS1903_566daa79" xml:space="preserve"><value>请设置目标（或 app.mainExecutable）。</value></data>
+  <data name="Diag_FS1904_b032f1dd" xml:space="preserve"><value>目标是已安装文件中的相对路径。</value></data>
+  <data name="Diag_FS1905_cbb9d8e5" xml:space="preserve"><value>图标是已安装文件中的相对路径。</value></data>
+  <data name="Diag_FS1906_06f3aafb" xml:space="preserve"><value>安装文件夹内的文件夹（相对路径）。</value></data>
+  <data name="Diag_FS1907_fb32e51f" xml:space="preserve"><value>请使用 startMenu、desktop 或 startup。</value></data>
+  <data name="Diag_FS1908_168cfc42" xml:space="preserve"><value>单个文件夹名称（最多 64 个字符）。</value></data>
+  <data name="Diag_FS1910_187405b4" xml:space="preserve"><value>最多 128 个字符，可使用字母、数字、'.'、'-' 或 '_'。</value></data>
+  <data name="Diag_FS1911_a5646924" xml:space="preserve"><value>最多 32 个参数，每个最多 1024 个字符。</value></data>
+  <data name="Diag_FS1911_96538fca" xml:space="preserve"><value>最多 259 个字符，且只能占一行。</value></data>
+  <data name="Diag_FS1912_96a20d77" xml:space="preserve"><value>同一位置已有名为 '{0}' 的快捷方式。</value></data>
+  <data name="Diag_FS1912_f93b87c7" xml:space="preserve"><value>此名称与应用自身的“开始”菜单快捷方式相同，会将其替换。</value></data>
+  <data name="Diag_FS1920_948dee89" xml:space="preserve"><value>最多 16 种文件类型。</value></data>
+  <data name="Diag_FS1921_3f825c75" xml:space="preserve"><value>列出 1-16 个扩展名，例如 [".cnote"]。</value></data>
+  <data name="Diag_FS1922_7dfeace8" xml:space="preserve"><value>'{0}' 不是安装程序可以注册的扩展名（'.' 加 1-32 个字母、数字、'-'、'_'；不能是程序或 Shell 类型，例如 .exe 或 .lnk）。</value></data>
+  <data name="Diag_FS1930_3ab9e16f" xml:space="preserve"><value>'{0}' 被关联了两次。</value></data>
+  <data name="Diag_FS1923_20ae0a9b" xml:space="preserve"><value>ProgID，例如 Contoso.Notes.Document（由点分隔的若干段字母和数字，最多 39 个字符，不能是 Microsoft.* 或 Windows.*）。</value></data>
+  <data name="Diag_FS1930_50406d17" xml:space="preserve"><value>ProgID '{0}' 被使用了两次。</value></data>
+  <data name="Diag_FS1924_b30554cf" xml:space="preserve"><value>最多 256 个字符，且只能占一行。</value></data>
+  <data name="Diag_FS1925_566daa79" xml:space="preserve"><value>请设置目标（或 app.mainExecutable）。</value></data>
+  <data name="Diag_FS1925_6d72d562" xml:space="preserve"><value>程序是已安装文件中某个 .exe 的相对路径。</value></data>
+  <data name="Diag_FS1926_cbb9d8e5" xml:space="preserve"><value>图标是已安装文件中的相对路径。</value></data>
+  <data name="Diag_FS1927_a5646924" xml:space="preserve"><value>最多 32 个参数，每个最多 1024 个字符。</value></data>
+  <data name="Diag_FS1927_7d7e0183" xml:space="preserve"><value>没有参数包含 %1，因此程序无法得知要打开哪个文件。</value></data>
+  <data name="Diag_FS1928_3f487741" xml:space="preserve"><value>MIME 类型，例如 application/x-contoso-note。</value></data>
+  <data name="Diag_FS1932_9003579f" xml:space="preserve"><value>最多 16 个协议。</value></data>
+  <data name="Diag_FS1933_c072d78b" xml:space="preserve"><value>'{0}' 不是安装程序可以注册的协议方案（小写，2-32 个字符；不能是 http、https、file、mailto、ms-* 等）。</value></data>
+  <data name="Diag_FS1936_e3ca004d" xml:space="preserve"><value>'{0}' 被注册了两次。</value></data>
+  <data name="Diag_FS1933_b30554cf" xml:space="preserve"><value>最多 256 个字符，且只能占一行。</value></data>
+  <data name="Diag_FS1934_566daa79" xml:space="preserve"><value>请设置目标（或 app.mainExecutable）。</value></data>
+  <data name="Diag_FS1934_6d72d562" xml:space="preserve"><value>程序是已安装文件中某个 .exe 的相对路径。</value></data>
+  <data name="Diag_FS1934_cbb9d8e5" xml:space="preserve"><value>图标是已安装文件中的相对路径。</value></data>
+  <data name="Diag_FS1934_a5646924" xml:space="preserve"><value>最多 32 个参数，每个最多 1024 个字符。</value></data>
+  <data name="Diag_FS1940_51c195c9" xml:space="preserve"><value>最多 32 个注册表项。</value></data>
+  <data name="Diag_FS1941_60635715" xml:space="preserve"><value>作用域所在 hive 下的项，例如 Software\Contoso\Notes（Software\&lt;Vendor&gt; 或更深层级；不能是 Microsoft、Classes、Policies、Wow6432Node、RegisteredApplications、Clients 或 FluentSetup）。Software\Classes 请改用 associations 和 protocols。</value></data>
+  <data name="Diag_FS1942_3a063a8c" xml:space="preserve"><value>每个项最多 32 个值。</value></data>
+  <data name="Diag_FS1946_829642bb" xml:space="preserve"><value>请使用 values、key 或 keep。</value></data>
+  <data name="Diag_FS1943_e8210409" xml:space="preserve"><value>最多 255 个字符，不能包含控制字符。</value></data>
+  <data name="Diag_FS1944_4bab3122" xml:space="preserve"><value>请使用 string、expandString、dword、qword 或 multiString。</value></data>
+  <data name="Diag_FS1945_5ebfcf85" xml:space="preserve"><value>'{0}' 不是 {1} 位数字（十进制或 0x 十六进制）。</value></data>
+  <data name="Diag_FS1948_a1ee57e1" xml:space="preserve"><value>最多 16384 个字符。</value></data>
+  <data name="Diag_FS1948_05623ea8" xml:space="preserve"><value>不含值的项会被创建，并在卸载时变为空后再次删除。</value></data>
+  <data name="Diag_FS1950_e669ede4" xml:space="preserve"><value>最多 16 个环境变量。</value></data>
+  <data name="Diag_FS1951_367f0b05" xml:space="preserve"><value>要将文件夹添加到 PATH，请使用 install.addToPath。</value></data>
+  <data name="Diag_FS1951_8f72f7ba" xml:space="preserve"><value>'{0}' 不是安装程序可以设置的名称（可使用字母、数字、_ . ( ) -；不能是 TEMP 或 SystemRoot 等 Windows 变量）。</value></data>
+  <data name="Diag_FS1954_bc6c9bd7" xml:space="preserve"><value>'{0}' 被设置了两次。</value></data>
+  <data name="Diag_FS1952_9117b70f" xml:space="preserve"><value>最多 8192 个字符。</value></data>
+  <data name="Diag_FS1960_f4241301" xml:space="preserve"><value>最多 8 个服务。</value></data>
+  <data name="Diag_FS1966_82cf7dd1" xml:space="preserve"><value>服务需要按计算机安装（install.scope 为 machine 或 userOrMachine）。</value></data>
+  <data name="Diag_FS1967_5935e3aa" xml:space="preserve"><value>仅当用户选择“所有用户”时才会安装服务。</value></data>
+  <data name="Diag_FS1961_074fa0ac" xml:space="preserve"><value>可使用字母、数字、'.'、'-' 和 '_'（最多 80 个）。</value></data>
+  <data name="Diag_FS1968_fd808a36" xml:space="preserve"><value>服务 '{0}' 被声明了两次。</value></data>
+  <data name="Diag_FS1962_b64f2a57" xml:space="preserve"><value>服务程序是已安装文件中某个 .exe 的相对路径。</value></data>
+  <data name="Diag_FS1963_d33c5e51" xml:space="preserve"><value>请使用 auto、delayedAuto、manual 或 disabled。</value></data>
+  <data name="Diag_FS1964_21e1b524" xml:space="preserve"><value>请使用 localSystem、localService 或 networkService。</value></data>
+  <data name="Diag_FS1965_05a81c2d" xml:space="preserve"><value>最多 16 个服务名称。</value></data>
+  <data name="Diag_FS1970_a5646924" xml:space="preserve"><value>最多 32 个参数，每个最多 1024 个字符。</value></data>
+  <data name="Diag_FS1970_64119daa" xml:space="preserve"><value>显示名称最多 256 个字符，描述最多 1024 个字符，且只能占一行。</value></data>
+  <data name="Diag_FS1971_77b0e409" xml:space="preserve"><value>最多 16 条防火墙规则。</value></data>
+  <data name="Diag_FS1978_af0ebcc4" xml:space="preserve"><value>防火墙规则需要按计算机安装（install.scope 为 machine 或 userOrMachine）。</value></data>
+  <data name="Diag_FS1978_a9b9929d" xml:space="preserve"><value>仅当用户选择“所有用户”时才会添加防火墙规则。</value></data>
+  <data name="Diag_FS1972_fa329023" xml:space="preserve"><value>规则名称，1-128 个字符（不能包含 '|'）。</value></data>
+  <data name="Diag_FS1973_e7477196" xml:space="preserve"><value>请设置程序（或 app.mainExecutable）。</value></data>
+  <data name="Diag_FS1973_46a664bd" xml:space="preserve"><value>已安装文件中某个 .exe 的相对路径。</value></data>
+  <data name="Diag_FS1974_a1437c9e" xml:space="preserve"><value>请使用 in 或 out。</value></data>
+  <data name="Diag_FS1975_b41000f1" xml:space="preserve"><value>请使用 any、tcp 或 udp。</value></data>
+  <data name="Diag_FS1976_3f143f12" xml:space="preserve"><value>端口（1-65535，范围用 '-'，以 ',' 分隔）需要协议为 tcp 或 udp。</value></data>
+  <data name="Diag_FS1977_4c6da3c3" xml:space="preserve"><value>请使用 domain、private 和/或 public。</value></data>
+  <data name="Diag_FS1980_b50c7402" xml:space="preserve"><value>最多 8 个输入项。</value></data>
+  <data name="Diag_FS1981_b71283a8" xml:space="preserve"><value>输入项 ID 可使用字母、数字、'-' 和 '_'（最多 32 个）。</value></data>
+  <data name="Diag_FS1982_803e1d91" xml:space="preserve"><value>输入项 ID '{0}' 重复。</value></data>
+  <data name="Diag_FS1983_2292adc6" xml:space="preserve"><value>请为该字段提供标签（按语言分别提供）。</value></data>
+  <data name="Diag_FS1984_e389df50" xml:space="preserve"><value>请使用 text、password 或 choice。</value></data>
+  <data name="Diag_FS1985_99588a4f" xml:space="preserve"><value>选择项至少需要一个值。</value></data>
+  <data name="Diag_FS1985_d21742b2" xml:space="preserve"><value>最多 32 个选择项。</value></data>
+  <data name="Diag_FS1986_778ab0a9" xml:space="preserve"><value>最多 512 个字符。</value></data>
+  <data name="Diag_FS1986_2b37e231" xml:space="preserve"><value>不是有效的正则表达式：{0}</value></data>
+  <data name="Diag_FS1987_c28eae68" xml:space="preserve"><value>最多 4096 个字符。</value></data>
+  <data name="Diag_FS1988_80fe6d4c" xml:space="preserve"><value>该字段不接受此默认值（模式或选择项不符）。</value></data>
+  <data name="Diag_FS1989_b680eaea" xml:space="preserve"><value>更新时不会记住密码。</value></data>
+  <data name="Diag_FS1990_4d6d8e2f" xml:space="preserve"><value>最多 16 个配置文件。</value></data>
+  <data name="Diag_FS1991_40152488" xml:space="preserve"><value>相对于安装文件夹的路径，或 {{LocalAppData}}\X、{{AppData}}\X、{{CommonAppData}}\X。</value></data>
+  <data name="Diag_FS1992_2668e5c1" xml:space="preserve"><value>请使用 json 或 ini。</value></data>
+  <data name="Diag_FS1993_adb21053" xml:space="preserve"><value>列出 1-64 个值。</value></data>
+  <data name="Diag_FS1994_5887357e" xml:space="preserve"><value>INI 键（不能包含 '='）。</value></data>
+  <data name="Diag_FS1994_d6092c3e" xml:space="preserve"><value>以点分隔的 JSON 路径，例如 server.url。</value></data>
+  <data name="Diag_FS1995_19f53303" xml:space="preserve"><value>INI 值需要节（section）。</value></data>
+  <data name="Diag_FS1996_aa8653bb" xml:space="preserve"><value>请使用 string、number 或 bool。</value></data>
+  <data name="Diag_FS1999_c28eae68" xml:space="preserve"><value>最多 4096 个字符。</value></data>
+  <data name="Diag_FS1998_f0e131dc" xml:space="preserve"><value>{{Input:{0}}} 未引用 inputs[] 中的任何输入项。</value></data>
+  <data name="Diag_FS1670_51257bbe" xml:space="preserve"><value>不是有效的版本，例如 14.40。</value></data>
+  <data name="Diag_FS1671_f3dc36df" xml:space="preserve"><value>请使用 x64、x86、arm64，或留空（使用安装包的体系结构）。</value></data>
+  <data name="Diag_FS1672_7dabf8e9" xml:space="preserve"><value>最多 8 个自定义必备组件。</value></data>
+  <data name="Diag_FS1673_7774e79f" xml:space="preserve"><value>可使用字母、数字、'-' 和 '_'（最多 32 个）。</value></data>
+  <data name="Diag_FS1674_3870c721" xml:space="preserve"><value>ID '{0}' 重复。</value></data>
+  <data name="Diag_FS1675_dbab7785" xml:space="preserve"><value>向用户显示的名称，1-128 个字符。</value></data>
+  <data name="Diag_FS1676_e8d8db59" xml:space="preserve"><value>通过注册表值（detect.registry）或文件（detect.file）检测该必备组件，二选一。</value></data>
+  <data name="Diag_FS1677_02ae7939" xml:space="preserve"><value>需要 hive（HKLM|HKCU）、项、值名称（未指定版本时为空 = 检测项本身），以及可选的最低版本。</value></data>
+  <data name="Diag_FS1678_73f644fa" xml:space="preserve"><value>{{ProgramFiles}}\X、{{ProgramFilesX86}}\X、{{System}}\X、{{CommonAppData}}\X、{{LocalAppData}}\X 或 {{AppData}}\X。</value></data>
+  <data name="Diag_FS1679_aeb7f987" xml:space="preserve"><value>不是有效的版本。</value></data>
+  <data name="Diag_FS1681_f0875b8c" xml:space="preserve"><value>只有内置必备组件才有官方安装程序；请提供安装程序或下载地址。</value></data>
+  <data name="Diag_FS1680_dc84f5bc" xml:space="preserve"><value>请使用 bundle、download，或留空。</value></data>
+  <data name="Diag_FS1680_a7477691" xml:space="preserve"><value>官方安装程序根据版本选择；请先设置版本。</value></data>
+  <data name="Diag_FS1682_bb493467" xml:space="preserve"><value>同时设置了应用文件中的安装程序和官方安装程序；将使用应用中的安装程序。</value></data>
+  <data name="Diag_FS1682_c6398130" xml:space="preserve"><value>将使用下载 URL，而不是 Microsoft 官方安装程序。</value></data>
+  <data name="Diag_FS1001_bc5f9df2" xml:space="preserve"><value>应用 ID 为必填项（例如 "Contoso.Notes"）。</value></data>
+  <data name="Diag_FS1002_3cf6fe7e" xml:space="preserve"><value>应用 ID 只能包含字母、数字、'.'、'-' 和 '_'（最多 64 个），且不能以 '.' 开头或结尾。</value></data>
+  <data name="Diag_FS1003_28965cd4" xml:space="preserve"><value>应用名称为必填项。</value></data>
+  <data name="Diag_FS1004_3ecf35be" xml:space="preserve"><value>应用名称超过 128 个字符。</value></data>
+  <data name="Diag_FS1005_bb04e09e" xml:space="preserve"><value>发布者超过 128 个字符。</value></data>
+  <data name="Diag_FS1006_9bf63fd6" xml:space="preserve"><value>未设置发布者：Windows 设置中将不显示该应用的发布者。</value></data>
+  <data name="Diag_FS1007_5addcec3" xml:space="preserve"><value>'{0}' 不是有效的版本。请使用以点分隔的 1-4 个数字，后面可跟 -tag（例如 1.2.0 或 2.0.0-beta.1）。</value></data>
+  <data name="Diag_FS1008_8eca990c" xml:space="preserve"><value>描述超过 1024 个字符。</value></data>
+  <data name="Diag_FS1009_f46e3819" xml:space="preserve"><value>网站必须是以 http:// 或 https:// 开头的绝对 URL。</value></data>
+  <data name="Diag_FS1016_209b2b10" xml:space="preserve"><value>支持 URL 必须是以 http:// 或 https:// 开头的绝对 URL。</value></data>
+  <data name="Diag_FS1017_6450fe6d" xml:space="preserve"><value>发行说明 URL 必须是以 http:// 或 https:// 开头的绝对 URL。</value></data>
+  <data name="Diag_FS1018_9e720041" xml:space="preserve"><value>最多 {0} 个链接：安装程序会将它们与网站、发行说明和支持链接显示在同一行。</value></data>
+  <data name="Diag_FS1019_8bd811f0" xml:space="preserve"><value>链接必须是以 http:// 或 https:// 开头的绝对 URL。</value></data>
+  <data name="Diag_FS1020_0efd5166" xml:space="preserve"><value>{0} 的标签必须为 1-64 个字符（省略标签则显示网站名称）。</value></data>
+  <data name="Diag_FS1010_d1d653b9" xml:space="preserve"><value>找不到图标文件：{0}</value></data>
+  <data name="Diag_FS1011_8f474d42" xml:space="preserve"><value>图标必须是 .ico 或 .png 文件。</value></data>
+  <data name="Diag_FS1012_29ad0d6c" xml:space="preserve"><value>未设置图标：将使用默认的 FluentSetup 图标。</value></data>
+  <data name="Diag_FS1013_068aa1d4" xml:space="preserve"><value>主程序路径无效：{0}。</value></data>
+  <data name="Diag_FS1014_b2a6d655" xml:space="preserve"><value>主程序必须是 .exe 文件。</value></data>
+  <data name="Diag_FS1015_206e26da" xml:space="preserve"><value>未设置主程序：不会创建快捷方式，安装后也无法启动应用。</value></data>
+  <data name="Diag_FS1116_ce78e58b" xml:space="preserve"><value>变体 ID 可使用字母、数字、- 和 _（最多 32 个）。</value></data>
+  <data name="Diag_FS1111_e19ee0c0" xml:space="preserve"><value>变体 ID '{0}' 重复。</value></data>
+  <data name="Diag_FS1112_659c887c" xml:space="preserve"><value>请为该变体提供标签（按语言分别提供，或在本地化文件中提供）。</value></data>
+  <data name="Diag_FS1101_72ae4771" xml:space="preserve"><value>请选择包含此版本的文件夹。</value></data>
+  <data name="Diag_FS1102_405c87af" xml:space="preserve"><value>找不到源文件夹：{0}</value></data>
+  <data name="Diag_FS1113_b4c13193" xml:space="preserve"><value>最多 8 个变体。</value></data>
+  <data name="Diag_FS1114_1c96270b" xml:space="preserve"><value>只能有一个默认变体。</value></data>
+  <data name="Diag_FS1115_ec700cd7" xml:space="preserve"><value>已忽略：使用 files.variants 时，每个变体都有自己的源。</value></data>
+  <data name="Diag_FS1117_e65aea24" xml:space="preserve"><value>请使用 "user"（由用户选择）或 "auto"（由安装程序根据已安装的内容选择）。</value></data>
+  <data name="Diag_FS1118_089e8fe5" xml:space="preserve"><value>变体少于两个时不起作用。</value></data>
+  <data name="Diag_FS1119_604d348e" xml:space="preserve"><value>variantSelection 为 "auto" 时，变体 '{0}' 没有仅限于它的要求（requirements.*.variants），因此总是优先于默认变体 '{1}' 被选中。</value></data>
+  <data name="Diag_FS1662_326d11a5" xml:space="preserve"><value>files.variants 中没有变体 '{0}'。</value></data>
+  <data name="Diag_FS1101_81d3d5b0" xml:space="preserve"><value>请选择包含应用文件的文件夹。</value></data>
+  <data name="Diag_FS1103_c0415c61" xml:space="preserve"><value>找不到额外源：{0}</value></data>
+  <data name="Diag_FS1104_3c14c0dd" xml:space="preserve"><value>目标文件夹不是有效的相对路径：{0}。</value></data>
+  <data name="Diag_FS1105_c3b90f9d" xml:space="preserve"><value>不是有效的相对文件夹：{0}。</value></data>
+  <data name="Diag_FS1106_1e051ff5" xml:space="preserve"><value>模式 '{0}' 不是相对 glob。</value></data>
+  <data name="Diag_FS1201_ab16d755" xml:space="preserve"><value>安装范围必须为 user、machine 或 userOrMachine。</value></data>
+  <data name="Diag_FS1202_b9ad5e71" xml:space="preserve"><value>默认安装范围必须为 user 或 machine。</value></data>
+  <data name="Diag_FS1203_00dc9a43" xml:space="preserve"><value>按用户安装不能安装到 Program Files（需要管理员权限）。请使用 {{LocalAppData}}\Programs。</value></data>
+  <data name="Diag_FS1204_34659542" xml:space="preserve"><value>按计算机安装不能安装到某个用户的配置文件中。</value></data>
+  <data name="Diag_FS1205_31aea915" xml:space="preserve"><value>'{0}' 不是 off、on、optionalOff、optionalOn 之一。</value></data>
+  <data name="Diag_FS1206_d2bf178f" xml:space="preserve"><value>不支持不经询问直接启动；请使用 optionalOn。</value></data>
+  <data name="Diag_FS1207_cd9ab828" xml:space="preserve"><value>最低 Windows 内部版本号超出范围。</value></data>
+  <data name="Diag_FS1208_dbcc04fc" xml:space="preserve"><value>FluentSetup 本身需要 Windows 10 版本 1809（内部版本 17763）或更高版本。</value></data>
+  <data name="Diag_FS1301_bbf8877e" xml:space="preserve"><value>主题必须为 system、light 或 dark。</value></data>
+  <data name="Diag_FS1302_50c4018b" xml:space="preserve"><value>背景材质必须为 mica、micaAlt 或 none。</value></data>
+  <data name="Diag_FS1303_85bf3d73" xml:space="preserve"><value>不使用系统主题色时，主题色必须形如 #0067C0。</value></data>
+  <data name="Diag_FS1304_caa00382" xml:space="preserve"><value>默认语言必须为 auto 或语言标记，例如 zh-CN。</value></data>
+  <data name="Diag_FS1311_fb4a57a7" xml:space="preserve"><value>请使用 firstInstall 或 always。</value></data>
+  <data name="Diag_FS1315_3ebf8175" xml:space="preserve"><value>请使用 page 或 inline。</value></data>
+  <data name="Diag_FS1305_31b8f65d" xml:space="preserve"><value>找不到许可协议文件：{0}</value></data>
+  <data name="Diag_FS1307_fcfa0aa4" xml:space="preserve"><value>已忽略 '{0}' 的字符串：'{1}' 不是语言标记（例如 en-US、zh-CN 或 fr-FR）。</value></data>
+  <data name="Diag_FS1308_34c49ea2" xml:space="preserve"><value>文本超过 {0} 个字符。</value></data>
+  <data name="Diag_FS1401_1f3cf50b" xml:space="preserve"><value>体系结构必须为 x64 或 arm64。</value></data>
+  <data name="Diag_FS1402_74ce7fff" xml:space="preserve"><value>压缩必须为 fast、normal 或 max。</value></data>
+  <data name="Diag_FS1403_ef68473d" xml:space="preserve"><value>输出文件名必须是以 .exe 结尾的有效文件名。</value></data>
+  <data name="Diag_FS1404_f3e580e2" xml:space="preserve"><value>请选择输出文件夹。</value></data>
+  <data name="Diag_FS1309_cf51d925" xml:space="preserve"><value>'{0}' 不是语言标记；已忽略此许可协议。</value></data>
+  <data name="Diag_FS1310_31b8f65d" xml:space="preserve"><value>找不到许可协议文件：{0}</value></data>
+  <data name="Diag_FS1709_0e4fd44b" xml:space="preserve"><value>在设置 update.github 或 update.feed 之前，更新设置不起作用。</value></data>
+  <data name="Diag_FS1701_b149380e" xml:space="preserve"><value>请选择 GitHub 发布（update.github）或更新源（update.feed），不能同时使用。</value></data>
+  <data name="Diag_FS1702_acb8a9a8" xml:space="preserve"><value>'{0}' 不是 GitHub 仓库；请写成 owner/name，例如 contoso/notes。</value></data>
+  <data name="Diag_FS1703_19d350e2" xml:space="preserve"><value>更新源必须是 https URL。</value></data>
+  <data name="Diag_FS1704_85cfc8ad" xml:space="preserve"><value>'{0}' 不是以 .exe 结尾的文件名（{{Version}} 是唯一可用的占位符）。</value></data>
+  <data name="Diag_FS1705_57642589" xml:space="preserve"><value>Setup.exe 名称“{0}”中直接写入了当前版本（{1}），因此会按相同的名称查找下一个版本。请改为在 update.asset（或 output.fileName）中写 {{Version}}。</value></data>
+  <data name="Diag_FS1706_8abf55c2" xml:space="preserve"><value>update.checksums 必须是发布资产的文件名，例如 SHA256SUMS.txt。</value></data>
+  <data name="Diag_FS1707_c8678d4e" xml:space="preserve"><value>update.asset、update.checksums 和 update.prerelease 仅用于 update.github；使用更新源时，由更新源指定文件及其 SHA-256。</value></data>
+  <data name="Diag_FS1708_26acf44e" xml:space="preserve"><value>update.signer 必须是证书的使用者名称，首尾不能有空格（最多 256 个字符）。</value></data>
+  <data name="Diag_FS1710_2986cbdd" xml:space="preserve"><value>已设置 update.signer，但此项目未签名：不带该签名的更新将被拒绝。</value></data>
+  <data name="Diag_FS1210_238393f1" xml:space="preserve"><value>安装文件夹为必填项。</value></data>
+  <data name="Diag_FS1211_ac5980e3" xml:space="preserve"><value>'{0}' 中有未知占位符。已知占位符：{1}。</value></data>
+  <data name="Diag_FS1212_2dfddb16" xml:space="preserve"><value>安装文件夹必须以已知文件夹占位符（例如 {{ProgramFiles}}）开头，或为绝对路径。</value></data>
+  <data name="Diag_FS1504_24bce567" xml:space="preserve"><value>'{0}' 不是签名提供程序。请使用 signtool、trustedSigning 或 command。</value></data>
+  <data name="Diag_FS1503_eec10168" xml:space="preserve"><value>时间戳 URL 无效（应为 http:// 或 https:// URL，留空则不加时间戳）。</value></data>
+  <data name="Diag_FS1520_80862c47" xml:space="preserve"><value>模式为空：请指定要签名的应用程序，例如 "MyApp.exe" 或 "MyApp*.dll"。</value></data>
+  <data name="Diag_FS1517_a35157e9" xml:space="preserve"><value>使用 {0} 提供程序时，将忽略 certificateThumbprint、certificateFile 和 passwordEnvironmentVariable。</value></data>
+  <data name="Diag_FS1517_ca7686bb" xml:space="preserve"><value>使用 {0} 提供程序时将忽略此项。</value></data>
+  <data name="Diag_FS1501_9423723a" xml:space="preserve"><value>签名需要证书指纹（来自证书存储）或 .pfx 文件。</value></data>
+  <data name="Diag_FS1518_39c7bd76" xml:space="preserve"><value>指纹必须是证书的 SHA-1 哈希：40 个十六进制字符（允许包含空格）。</value></data>
+  <data name="Diag_FS1502_9debb3b9" xml:space="preserve"><value>找不到证书文件：{0}</value></data>
+  <data name="Diag_FS1505_63a63dec" xml:space="preserve"><value>请提供该帐户的区域终结点，例如 https://eus.codesigning.azure.net。</value></data>
+  <data name="Diag_FS1506_88442560" xml:space="preserve"><value>请提供 Artifact Signing 帐户名称。</value></data>
+  <data name="Diag_FS1507_824dd7e6" xml:space="preserve"><value>请提供证书配置文件名称。</value></data>
+  <data name="Diag_FS1508_8f1d3ca8" xml:space="preserve"><value>请提供 Azure.CodeSigning.Dlib.dll 的路径（NuGet 包 Microsoft.ArtifactSigning.Client，bin\x64）。</value></data>
+  <data name="Diag_FS1508_ddf94ed6" xml:space="preserve"><value>找不到文件：{0}</value></data>
+  <data name="Diag_FS1509_f1d975f6" xml:space="preserve"><value>未知的凭据类型：{0}。已知类型：{1}。</value></data>
+  <data name="Diag_FS1510_ca024bf0" xml:space="preserve"><value>请提供签名程序（PATH 中的名称或路径）。</value></data>
+  <data name="Diag_FS1513_00a8276b" xml:space="preserve"><value>找不到签名程序：{0}</value></data>
+  <data name="Diag_FS1514_3116d031" xml:space="preserve"><value>在 PATH 中找不到 '{0}'。</value></data>
+  <data name="Diag_FS1511_ece3f3f7" xml:space="preserve"><value>参数中必须包含 {{file}}（要签名的文件）。</value></data>
+  <data name="Diag_FS1512_c2a833aa" xml:space="preserve"><value>未知占位符 {0}。已知占位符：{1}。</value></data>
+  <data name="Diag_FS1515_4216721d" xml:space="preserve"><value>不是有效的环境变量名称。</value></data>
+  <data name="Diag_FS1516_c0d2ebd9" xml:space="preserve"><value>超时必须介于 10 到 3600 秒之间。</value></data>
 </root>

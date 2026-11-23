@@ -22,8 +22,10 @@
     <ClCompile Include="integration_tests.cpp" />
     <ClCompile Include="localization_tests.cpp" />
     <ClCompile Include="differential_tests.cpp" />
-    <!-- argument parser and string tables live in the bootstrapper; compile them here as well -->
+    <ClCompile Include="migration_tests.cpp" />
+    <!-- argument parser, feed parser and string tables live in the bootstrapper; compile them here as well -->
     <ClCompile Include="..\..\src\Bootstrapper\args.cpp" />
+    <ClCompile Include="..\..\src\Bootstrapper\feed.cpp" />
     <ClCompile Include="..\..\src\Bootstrapper\localization.cpp" />
   </ItemGroup>
   <ItemGroup>

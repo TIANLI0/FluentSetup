@@ -51,8 +51,8 @@
                                 <DataTemplate x:DataType="vm:ExtraSourceRow">
                                     <Grid ColumnSpacing="8">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                        <TextBox Text="{x:Bind Source, Mode=TwoWay}" PlaceholderText="C:\path\to\folder" IsSpellCheckEnabled="False" />
-                                        <TextBox Grid.Column="1" Text="{x:Bind Target, Mode=TwoWay}" PlaceholderText="subfolder" IsSpellCheckEnabled="False" />
+                                        <TextBox Text="{x:Bind Source, Mode=TwoWay}" x:Uid="FilesExtraSourceBox" IsSpellCheckEnabled="False" />
+                                        <TextBox Grid.Column="1" Text="{x:Bind Target, Mode=TwoWay}" x:Uid="FilesExtraTargetBox" IsSpellCheckEnabled="False" />
                                         <Button Grid.Column="2" Click="OnRemoveExtra" Tag="{x:Bind}" x:Uid="FilesRemoveExtra">
                                             <FontIcon Glyph="&#xE74D;" FontSize="14" />
                                         </Button>
@@ -136,6 +136,22 @@
                         <TextBlock Text="{x:Bind VM.Errors.OutputVariants, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.OutputVariants), Mode=OneWay}" />
                     </StackPanel>
                     <TextBox Grid.Column="2" Text="{x:Bind VM.OutputVariantsText, Mode=TwoWay}" Width="240" VerticalAlignment="Center" IsSpellCheckEnabled="False" x:Uid="VariantsOutputBox" />
+                </Grid>
+            </Border>
+            <!-- files.variantSelection: the user picks, or setup picks from what is installed -->
+            <Border Style="{StaticResource RowCardStyle}" Margin="0,4,0,0" Visibility="{x:Bind VM.HasVariants, Mode=OneWay}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE8AB;" Style="{StaticResource RowIconStyle}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Uid="VariantSelectionTitle" Style="{StaticResource RowTitleStyle}" />
+                        <TextBlock x:Uid="VariantSelectionDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        <TextBlock Text="{x:Bind VM.Errors.FilesVariantSelection, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.FilesVariantSelection), Mode=OneWay}" />
+                    </StackPanel>
+                    <ComboBox Grid.Column="2" Style="{StaticResource RowComboStyle}" SelectedIndex="{x:Bind VM.VariantSelectionIndex, Mode=TwoWay}" x:Uid="VariantSelectionCombo">
+                        <ComboBoxItem x:Uid="VariantSelectionUser" />
+                        <ComboBoxItem x:Uid="VariantSelectionAuto" />
+                    </ComboBox>
                 </Grid>
             </Border>
             <TextBlock Text="{x:Bind VM.Errors.FilesVariants, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.FilesVariants), Mode=OneWay}" />

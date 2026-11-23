@@ -133,6 +133,11 @@ bool DeleteForeignArpEntry(const std::wstring& keyName, Scope scope) {
     return ::RegDeleteKeyExW(RootFor(scope), ArpKeyPath(keyName).c_str(), kView, 0) == ERROR_SUCCESS;
 }
 
+bool IsUpdateChannelName(std::wstring_view name) noexcept {
+    if (name.empty() || name.size() > 32 || name[0] < L'a' || name[0] > L'z') return false;
+    return std::all_of(name.begin(), name.end(), [](wchar_t c) { return (c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9') || c == L'-'; });
+}
+
 json::Value RecordToJson(const InstallRecord& r) {
     json::Value v;
     v.set("format", 1);
@@ -170,8 +175,10 @@ json::Value RecordToJson(const InstallRecord& r) {
         json::Value source;
         source.set("path", r.sourcePackage);
         source.set("sha256", r.sourcePackageSha256);
+        if (!r.sourcePackageFileSha256.empty()) source.set("fileSha256", r.sourcePackageFileSha256);
         v.set("sourcePackage", source);
     }
+    if (!r.updateChannel.empty()) v.set("updateChannel", r.updateChannel);
     json::Value registry = json::Value::MakeArray();
     for (const auto& item : r.registry) {
         json::Value e;
@@ -250,8 +257,13 @@ InstallRecord RecordFromJson(const json::Value& v) {
         if (path::ValidateAbsoluteSyntax(source["path"].asWide(), p) == path::Problem::None) {
             r.sourcePackage = p;
             r.sourcePackageSha256 = source["sha256"].asWide().substr(0, 64);
+            // Absent in records written by FluentSetup 1.5.0 and older.
+            std::vector<uint8_t> digest;
+            if (FromHex(source["fileSha256"].asString(), digest) && digest.size() == 32) r.sourcePackageFileSha256 = source["fileSha256"].asWide();
         }
     }
+    // Absent unless Setup.exe or an update ran with /channel (versions after FluentSetup 1.5.0).
+    if (const std::wstring channel = v["updateChannel"].asWide(); IsUpdateChannelName(channel)) r.updateChannel = channel;
     if (v["registry"].array().size() > 1024) throw bad(L"registry");
     for (const auto& e : v["registry"].array()) {
         RegistryItem item;

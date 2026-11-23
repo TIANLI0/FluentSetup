@@ -16,6 +16,10 @@
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
+  <!-- SchemaTests: checks shared/schemas/fluentsetup.project.schema.json against what the serializer writes. -->
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" Version="7.3.4" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Builder.Core\FluentSetup.Builder.Core.csproj" />
     <!-- Brings the installer runtime (stub, WinUI front end, strings) into the test output for packaging tests. -->

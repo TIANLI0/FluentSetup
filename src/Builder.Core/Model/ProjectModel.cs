@@ -154,6 +154,12 @@ public sealed class InstallSettings
     public bool AdoptExistingInstall { get; set; }
     /// <summary>Uninstall keys of older product names: adopted (their folder is upgraded) and removed after installing.</summary>
     public List<string> LegacyUninstallKeys { get; set; } = [];
+    /// <summary>
+    /// An older version installed by an MSI (WiX, InstallShield, Visual Studio installer projects): its product and/or
+    /// upgrade codes. Setup removes what Windows Installer has registered under them, through Windows Installer, before
+    /// the new files are written. null = none.
+    /// </summary>
+    public LegacyMsiSettings? LegacyMsi { get; set; }
     /// <summary>Asks a running copy to exit cleanly before files are replaced or removed, e.g. { "run": "App.exe", "arguments": ["--exit"] }; closeProcesses then handles the rest.</summary>
     public CommandSettings? CloseCommand { get; set; }
     /// <summary>Arguments for the app when an in-app updater ran Setup.exe with /relaunch (Inno: /RELAUNCH=1), e.g. ["--updated"].</summary>
@@ -173,6 +179,15 @@ public sealed class InstallSettings
     /// <summary>fail: a file that is still in use stops the installation (rolled back) | reboot: per-machine installs replace it at the next restart (exit code 3010).</summary>
     public string LockedFiles { get; set; } = "fail";
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
+}
+
+/// <summary>Windows Installer products an older version of the app was installed as (install.legacyMsi).</summary>
+public sealed class LegacyMsiSettings
+{
+    /// <summary>ProductCode GUIDs, e.g. "{12345678-1234-1234-1234-123456789ABC}" (one per released MSI, or the fixed one of a product).</summary>
+    public List<string> ProductCodes { get; set; } = [];
+    /// <summary>UpgradeCode GUIDs: every installed product of the family (MsiEnumRelatedProducts), whatever its version.</summary>
+    public List<string> UpgradeCodes { get; set; } = [];
 }
 
 public sealed class UiSettings
@@ -513,6 +528,12 @@ public sealed class UpdateSettings
     /// size of one Setup.exe on the user's disk; needs a server that answers range requests (GitHub does).
     /// </summary>
     public bool Differential { get; set; }
+    /// <summary>
+    /// Update channel installations follow unless the user picks another one (uninstall.exe /check-update /channel beta):
+    /// "stable" (default) or a name such as "beta" (lower-case letters, digits and '-'). Feed: the entry of that name in
+    /// the feed's "channels" (or the newer stable one); GitHub: any channel but stable includes pre-releases.
+    /// </summary>
+    public string Channel { get; set; } = "stable";
     [JsonExtensionData] public Dictionary<string, object>? Extra { get; set; }
 
     [JsonIgnore] public bool Enabled => !string.IsNullOrWhiteSpace(GitHub) || !string.IsNullOrWhiteSpace(Feed);

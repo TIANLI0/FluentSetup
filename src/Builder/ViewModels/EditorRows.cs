@@ -40,70 +40,62 @@ public static class TextForms
             ? [.. original]
             : (text ?? "").Split([',', ';', ' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
-    public static string Ints(IEnumerable<int>? values) =>
-        values is null ? "" : string.Join(", ", values.Select(v => v.ToString(CultureInfo.InvariantCulture)));
+    public static string Ints(IEnumerable<int>? values) => TextTables.FormatInts(values);
 
-    /// <summary>Whole numbers separated by commas or spaces; <paramref name="valid"/> is false if a part is not one.</summary>
-    public static List<int> ParseInts(string? text, out bool valid)
+    /// <summary>Whole numbers separated by commas or spaces; parts that are not one are added to <paramref name="errors"/>.</summary>
+    public static List<int> ParseInts(string? text, List<TextLineError>? errors = null) => TextTables.ParseInts(text, errors);
+
+    /// <summary>The stored numbers while the text is unchanged, else the numbers of the text (problems: <see cref="CheckInts"/>).</summary>
+    public static List<int> FromInts(string? text, List<int>? original) =>
+        original is not null && Same(text, Ints(original)) ? [.. original] : ParseInts(text);
+
+    public static List<TextLineError> CheckInts(string? text)
     {
-        valid = true;
-        var result = new List<int>();
-        foreach (var part in (text ?? "").Split([',', ';', ' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (int.TryParse(part, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var n)) result.Add(n);
-            else valid = false;
-        }
-        return result;
+        var errors = new List<TextLineError>();
+        TextTables.ParseInts(text, errors);
+        return errors;
     }
 
-    // Per-language texts: one "en-US = text" line each. Line breaks inside a text are shown as \n.
-    private static string Escape(string? v) => (v ?? "").Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal);
-    private static string Unescape(string v) => v.Replace("\\n", "\n", StringComparison.Ordinal);
+    // Per-language texts: one "en-US = text" line each (TextTables: how line breaks and backslashes are written).
+    public static string Localized(Dictionary<string, string>? texts) => TextTables.FormatLocalized(texts);
 
-    public static string Localized(Dictionary<string, string>? texts) =>
-        texts is null ? "" : string.Join(Environment.NewLine, texts.Select(kv => $"{kv.Key} = {Escape(kv.Value)}"));
-
-    /// <summary>A line without "=" is taken as English text.</summary>
+    /// <summary>A line without "=" is taken as English text. Lines that are not understood are left out here and
+    /// reported by <see cref="CheckLocalized"/> (an error in the problem list; saving asks first).</summary>
     public static Dictionary<string, string> FromLocalized(string? text, Dictionary<string, string>? original)
     {
         if (original is not null && Same(text, Localized(original))) return new(original);
-        var result = new Dictionary<string, string>();
-        foreach (var line in SplitLines(text))
-        {
-            var eq = line.IndexOf('=', StringComparison.Ordinal);
-            var (lang, value) = eq < 0 ? ("en-US", line) : (line[..eq].Trim(), line[(eq + 1)..].Trim());
-            if (lang.Length > 0) result[lang] = Unescape(value);
-        }
-        return result;
+        return TextTables.ParseLocalized(text);
+    }
+
+    /// <summary>The problems of a per-language text; none while it is unchanged from the project.</summary>
+    public static List<TextLineError> CheckLocalized(string? text, Dictionary<string, string>? original)
+    {
+        var errors = new List<TextLineError>();
+        if (original is null || !Same(text, Localized(original))) TextTables.ParseLocalized(text, errors);
+        return errors;
     }
 
     /// <summary>The first text of a per-language table, for headers.</summary>
     public static string FirstText(string? localizedText)
     {
-        var first = FromLocalized(localizedText, null).FirstOrDefault();
+        var first = TextTables.ParseLocalized(localizedText).FirstOrDefault();
         return first.Value ?? "";
     }
 
     // ui.strings: one "zh-CN: welcome.body = text" line per override.
-    public static string Strings(Dictionary<string, Dictionary<string, string>>? strings) =>
-        strings is null ? "" : string.Join(Environment.NewLine, strings.SelectMany(lang => (lang.Value ?? []).Select(kv => $"{lang.Key}: {kv.Key} = {Escape(kv.Value)}")));
+    public static string Strings(Dictionary<string, Dictionary<string, string>>? strings) => TextTables.FormatStrings(strings);
 
     public static Dictionary<string, Dictionary<string, string>> FromStrings(string? text, Dictionary<string, Dictionary<string, string>>? original)
     {
         if (original is not null && Same(text, Strings(original))) return original.ToDictionary(kv => kv.Key, kv => new Dictionary<string, string>(kv.Value ?? []));
-        var result = new Dictionary<string, Dictionary<string, string>>();
-        foreach (var line in SplitLines(text))
-        {
-            var colon = line.IndexOf(':', StringComparison.Ordinal);
-            var eq = line.IndexOf('=', StringComparison.Ordinal);
-            if (colon <= 0 || eq < colon) continue;
-            var lang = line[..colon].Trim();
-            var key = line[(colon + 1)..eq].Trim();
-            if (lang.Length == 0 || key.Length == 0) continue;
-            if (!result.TryGetValue(lang, out var table)) result[lang] = table = [];
-            table[key] = Unescape(line[(eq + 1)..].Trim());
-        }
-        return result;
+        return TextTables.ParseStrings(text);
+    }
+
+    public static List<TextLineError> CheckStrings(string? text, Dictionary<string, Dictionary<string, string>>? original)
+    {
+        var errors = new List<TextLineError>();
+        if (original is null || !Same(text, Strings(original))) TextTables.ParseStrings(text, errors);
+        return errors;
     }
 
     /// <summary>The original string when unchanged (also when it has surrounding spaces, or is null), else the trimmed text.</summary>
@@ -161,6 +153,9 @@ public abstract partial class EditorRow : ObservableObject
 
     /// <summary>Whether the item's card is open (new items start open).</summary>
     [ObservableProperty] public partial bool IsExpanded { get; set; }
+
+    /// <summary>Text the editor cannot read back (per-language texts, number lists), by field below the item.</summary>
+    internal virtual IEnumerable<(string Field, List<TextLineError> Errors)> CheckTexts() => [];
 
     /// <summary>Properties that only reflect state in the UI and never change the project.</summary>
     protected virtual bool IsViewState(string name) => name is nameof(Error) or nameof(IsExpanded);
@@ -450,6 +445,8 @@ public sealed partial class OptionRow : EditorRow
 
     partial void OnIdChanged(string oldValue, string newValue) => Owner?.OnOptionRenamed(oldValue, newValue);
 
+    internal override IEnumerable<(string Field, List<TextLineError> Errors)> CheckTexts() => [("label", TextForms.CheckLocalized(LabelText, _original.Label))];
+
     public static OptionRow From(UserOptionSettings o) => new()
     {
         _original = o,
@@ -556,14 +553,13 @@ public sealed partial class ActionRow : GatedRow
         }
     }
 
-    public string ExitCodesError
-    {
-        get
-        {
-            TextForms.ParseInts(ExitCodesText, out var valid);
-            return valid ? "" : Loc.Get("Actions_ExitCodesInvalid");
-        }
-    }
+    public string ExitCodesError => TextForms.CheckInts(ExitCodesText).Count == 0 ? "" : Loc.Get("Actions_ExitCodesInvalid");
+
+    internal override IEnumerable<(string Field, List<TextLineError> Errors)> CheckTexts() =>
+    [
+        ("name", TextForms.CheckLocalized(NameText, _original.Name)),
+        ("successExitCodes", TextForms.CheckInts(ExitCodesText)),
+    ];
 
     public static ActionRow From(ActionSettings a)
     {
@@ -605,9 +601,7 @@ public sealed partial class ActionRow : GatedRow
             Run = TextForms.Keep(Run, a.Run),
             Arguments = TextForms.FromLines(ArgumentsText, a.Arguments),
             TimeoutSeconds = TextForms.ToInt(TimeoutSeconds, a.TimeoutSeconds),
-            SuccessExitCodes = a.SuccessExitCodes is not null && TextForms.Same(ExitCodesText, TextForms.Ints(a.SuccessExitCodes))
-                ? [.. a.SuccessExitCodes]
-                : TextForms.ParseInts(ExitCodesText, out _),
+            SuccessExitCodes = TextForms.FromInts(ExitCodesText, a.SuccessExitCodes),
             OnFailure = TextForms.Pick(Failures, OnFailureIndex, a.OnFailure),
             IfOption = TextForms.Keep(IfOption, a.IfOption),
             SkipIfInstalled = HasSkipIfInstalled
@@ -653,6 +647,12 @@ public sealed partial class VariantRow : EditorRow
             return Default ? (label.Length == 0 ? Loc.Get("Variants_Default") : $"{label} · {Loc.Get("Variants_Default")}") : label;
         }
     }
+
+    internal override IEnumerable<(string Field, List<TextLineError> Errors)> CheckTexts() =>
+    [
+        ("label", TextForms.CheckLocalized(LabelText, _original.Label)),
+        ("description", TextForms.CheckLocalized(DescriptionText, _original.Description)),
+    ];
 
     public static VariantRow From(VariantSettings v) => new()
     {
@@ -708,6 +708,8 @@ public sealed partial class LinkRow : EditorRow
     [ObservableProperty] public partial string Url { get; set; } = "";
     /// <summary>Per-language label ("en-US = text" lines); empty = the installer names the site from its address.</summary>
     [ObservableProperty] public partial string LabelText { get; set; } = "";
+
+    internal override IEnumerable<(string Field, List<TextLineError> Errors)> CheckTexts() => [("label", TextForms.CheckLocalized(LabelText, _original.Label))];
 
     public static LinkRow From(AppLink l) => new() { _original = l, Url = l.Url ?? "", LabelText = TextForms.Localized(l.Label) };
 

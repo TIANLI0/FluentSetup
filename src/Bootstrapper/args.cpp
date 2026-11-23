@@ -3,6 +3,7 @@
 #include "Common/path.h"
 #include "Common/text.h"
 #include "Common/win.h"
+#include "Install.Core/installed.h"
 
 #include <algorithm>
 #include <shellapi.h>
@@ -152,6 +153,11 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
         } else if (name == L"install-update") {
             if (!flag()) return false;
             out.installUpdate = true;
+        } else if (name == L"channel") {
+            if (!value(v)) return false;
+            v = ToLower(v);
+            if (!install::IsUpdateChannelName(v)) return error = L"/channel needs a channel name such as stable or beta", false;
+            out.channel = v;
         } else if (name == L"help" || name == L"?" || name == L"h") {
             if (!flag()) return false;
             out.help = true;
@@ -261,22 +267,29 @@ bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error) {
             std::wstring normalized;
             if (path::ValidateAbsoluteSyntax(v, normalized) != path::Problem::None) return error = L"bad origin directory", false;
             out.originDir = normalized;
+        } else if (name == L"source-package") {
+            if (!value(v)) return false;
+            std::wstring normalized;
+            if (path::ValidateAbsoluteSyntax(v, normalized) != path::Problem::None) return error = L"bad source package", false;
+            out.sourcePackage = normalized;
         } else if (name == L"phase2") {
             if (!flag()) return false;
             out.phase2 = true;
-        } else if (name == L"origin-process" || name == L"result-pipe") {
+        } else if (name == L"origin-process" || name == L"result-pipe" || name == L"log-handle") {
             if (!value(v) || !ParseUnsigned(v, n) || n == 0) return error = L"bad handle value", false;
-            (name == L"origin-process" ? out.originProcess : out.resultPipe) = n;
+            (name == L"origin-process" ? out.originProcess : name == L"result-pipe" ? out.resultPipe : out.logHandle) = n;
         } else {
             error = L"Unknown option: " + token;
             return false;
         }
     }
     if (out.worker && (out.pipe.empty() || out.parentPid == 0)) return error = L"--worker requires --pipe and --parent-pid", false;
+    if (out.logHandle && !out.worker) return error = L"--log-handle is for the worker only", false;
     if ((out.checkUpdate || out.installUpdate) &&
         (out.checkUpdate == out.installUpdate || out.uninstall || out.modify || out.repair || out.worker || out.phase2)) {
         return error = L"/check-update and /install-update cannot be combined with each other or with /uninstall, /modify or /repair", false;
     }
+    if (!out.channel.empty() && (out.uninstall || out.modify)) return error = L"/channel cannot be combined with /uninstall or /modify", false;
     if (static_cast<int>(out.uninstall) + static_cast<int>(out.modify) + static_cast<int>(out.repair) > 1) {
         return error = L"/uninstall, /modify and /repair cannot be combined", false;
     }
@@ -310,6 +323,14 @@ std::wstring QuoteArg(const std::wstring& arg) {
     }
     out.push_back(L'"');
     return out;
+}
+
+bool IsWorkerLogPath(const std::wstring& logPath, const std::wstring& tempRoot) {
+    // Both normalized the same way (no "..", no "." segments, no streams, no device names); then a plain prefix test.
+    std::wstring log, logs;
+    if (path::ValidateAbsoluteSyntax(logPath, log) != path::Problem::None) return false;
+    if (path::ValidateAbsoluteSyntax(path::Join(tempRoot, L"FluentSetup"), logs) != path::Problem::None) return false;
+    return path::IsStrictlyUnder(log, logs);
 }
 
 }  // namespace fsetup::boot

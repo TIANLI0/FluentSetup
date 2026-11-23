@@ -156,7 +156,8 @@ Public switches: `/quiet|/verysilent|/s`, `/passive|/silent`, `/relaunch|/update
 
 | Switch | Used by |
 |---|---|
-| `--worker --pipe <name> --parent-pid <n> [--origin-dir <dir>] [--wait-pid <n>]` (+ `/uninstall` or `/modify`, `/log`, `/lang`) | Controller -> elevated worker |
+| `--worker --pipe <name> --parent-pid <n> [--origin-dir <dir>] [--wait-pid <n>] [--log-handle <handle>]` (+ `/uninstall` or `/modify`, `/log`, `/lang`) | Controller -> elevated worker. `--log-handle`: the value of the controller's open log file handle in the controller's process; the worker duplicates it (`DuplicateHandle` from `--parent-pid`) and logs through that copy instead of opening a path an unelevated process chose (`AdoptParentLog` in `main.cpp`). Only with `--worker`. |
+| `--source-package <file>` | A setup started from a private copy (an elevated repair, an elevated `/install-update`) -> the setup it runs: the original Setup.exe. The engine records it as `sourcePackage.path` instead of the copy only if it hashes to exactly the running file (`InstallOptions::sourcePackage`); otherwise the running file is recorded. |
 | `--phase2 --origin-dir <dir> --origin-process <handle> --result-pipe <handle>` | uninstall phase 1 -> phase 2 |
 | `--ui-simulate runtime-missing|crash-before-ready|crash-after-ready|hang` | tests of the WinUI fallback; honoured only by packages built with `fsetup build --test-hooks` (header `testHooks`), ignored with a log warning otherwise. The same applies to the `FLUENTSETUP_TEST_FAULT_AFTER` environment variable (e2e rollback test). |
 
@@ -189,7 +190,7 @@ installed version's Setup.exe, which asks for elevation itself:
 
 1. The controller publishes `WaitingForElevation`, creates pipe `FluentSetup-<32 hex>`, and starts **the same
    executable** through `ShellExecuteExW` with verb `runas` and `--worker --pipe <name> --parent-pid <pid>`
-   (plus `/uninstall` or `/modify`, `--origin-dir`, `--wait-pid`, `/log`, `/lang` as applicable). UAC cancel maps to
+   (plus `/uninstall` or `/modify`, `--origin-dir`, `--wait-pid`, `--log-handle`, `/log`, `/lang` as applicable). UAC cancel maps to
    `ElevationRequired`.
 2. The controller accepts one connection within 60 s and checks the client PID equals the launched process.
 3. The worker refuses to run unless it is elevated, the parent PID can be opened, the pipe server PID equals
@@ -242,7 +243,7 @@ throttled to one per 40 ms unless the state changes and carry a `cancellable` fl
 | State | What happens | Cancel |
 |---|---|---|
 | Validating | Refuse uninstaller packages; check the scope is allowed and that machine scope runs elevated. `DetectExisting()` (section 4). Reject a scope change of an existing install, a blocked downgrade, and an ARP key with the same id that is not ours unless adopted. `RecoverPending()` rolls back any unfinished previous operation. Requirements: missing ones without a bundled installer fail with `PrerequisiteMissing`, others are installed later. `CheckInstallDir()` (syntax, protected locations, links, other app, non-empty, writability for user scope, free space incl. 4 MiB margin). Load and verify the previous install record. | checked at the end |
-| Preparing | Close listed processes (WM_CLOSE, 4 s grace, then terminate). Write the pending marker `HKCU|HKLM\Software\FluentSetup\Pending\<appId>`. Create the install directory; for machine scope a newly created top directory outside Program Files gets a protected ACL. Verify the directory's final path equals the requested path. Recreate the hidden work directory `<dir>\.fsetup`, open `journal.jsonl`, journal `begin` and the created directories, create the backup folder `.fsetup\b-<random>`. | no explicit check |
+| Preparing | Close listed processes (WM_CLOSE, 4 s grace, then terminate). Remove the Windows Installer products of `install.legacyMsi` (`legacy_msi.cpp`: `MsiConfigureProductEx`, or an elevated `msiexec /x` for a per-machine product in a per-user install); not journaled, a failure stops here. Write the pending marker `HKCU|HKLM\Software\FluentSetup\Pending\<appId>`. Create the install directory; for machine scope a newly created top directory outside Program Files gets a protected ACL. Verify the directory's final path equals the requested path. Recreate the hidden work directory `<dir>\.fsetup`, open `journal.jsonl`, journal `begin` and the created directories, create the backup folder `.fsetup\b-<random>`. | no explicit check |
 | Installing | File-system work is done in bulk, from several threads (per-file latency of the file system and virus scanners dominates, not CPU), always journaled before it happens: on an update, folders that hold only files of the installed and the new version are moved to the backup folder with one rename each (journal `backup`); the parent directories are created (journal `mkdir`); the remaining existing targets are moved to the backup folder (all journaled `backup` first); every new file is journaled `place`. Then each stream is decoded by a `StreamReader` straight into the final files, which a few threads create just ahead of the decoder. Each file is hashed while written; mismatch fails with `PackageCorrupt`. Preserved files that already exist are decoded for verification but not written. Then extra `directories` are created and files of the previous version that this version no longer ships are moved to the backup folder. | yes, per file and per 1 MiB chunk, and after the obsolete-file step |
 | Registering (`cancellable=false`) | Write the new uninstaller to `.fsetup\uninstall.new` and move it into place (old one backed up). Create shortcuts (existing links backed up, journal `shortcut`), move away shortcuts of the previous version that are no longer wanted. Write `uninstall.json` atomically. Snapshot the ARP key (journal `reg`) and write the new ARP entry including `FluentSetupRecordSha256`. Run bundled prerequisite installers (failures become warnings), then `afterInstall` actions. | no |
 | Finalizing (`cancellable=false`) | Journal `commit` (point of no return). Remove now-empty directories of the old version, delete the work directory (including backups), clear the pending marker, notify the shell. | no |
@@ -288,8 +289,11 @@ there is no `commit`, rolls it back before doing anything else. A journal that a
   `shortcuts[]` whose option is selected), then `ApplyRegistration` (file types, URL schemes, Default apps capabilities,
   App Paths, `registry[]`) through a journaling `RegistryWriter`, removal of registry items of the previous record that
   this version no longer writes, and config files inside the install folder (journaled backup/place). The record gets
-  the registry items, planned environment variables, services, `firewall`, remembered `inputs` and `sourcePackage`
-  (Setup.exe path + header digest, for Repair).
+  the registry items, planned environment variables, services, `firewall`, remembered `inputs`, `sourcePackage`
+  (`path` of the Setup.exe, `sha256` its header digest for differential updates, `fileSha256` the SHA-256 of the whole
+  file, hashed through the container's deny-write handle; Repair runs that file only while it still hashes to
+  `fileSha256`, and records without it fall back to a download) and `updateChannel` (the channel chosen with
+  `/channel`, kept on updates; absent = `update.channel`).
 * **Install, before files are replaced:** the app's running services are stopped (`svcstop`), and with
   `install.restartManager: auto` the files of the existing installation are registered with Restart Manager and the
   programs using them are shut down (politely, then forced); they are restarted after the commit or after a rollback.

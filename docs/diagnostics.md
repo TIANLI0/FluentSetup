@@ -16,12 +16,12 @@ sentence comes from the localization key `error.<Name>` in `shared/localization/
 | Code | Name | Meaning | Typical causes (from the code) | Message key |
 |---:|---|---|---|---|
 | 0 | `Ok` | Success. | Also returned for `/help`. | `error.Ok` |
-| 1 | `Failed` | Unclassified failure. | A package action with `onFailure` = fail did not succeed (non-success exit code, timeout or could not start). | `error.Failed` |
+| 1 | `Failed` | Unclassified failure. | A package action with `onFailure` = fail did not succeed (non-success exit code, timeout or could not start); Windows Installer could not remove an older MSI version (`install.legacyMsi`; its error is in the detail and the log). | `error.Failed` |
 | 2 | `Cancelled` | The user cancelled; changes were rolled back. | Cancel during the operation; also the result when the window is closed before anything was started. | `error.Cancelled` |
 | 3 | `InvalidArguments` | Bad command line or option value. | Unknown switch, missing/invalid value (the usage text is shown); options sent by a front end that the package does not allow; requested scope not allowed by the package; app already installed in the other scope ("uninstall it first to change the installation scope"); installing with an uninstaller package; malformed options in the elevated worker. | `error.InvalidArguments` |
 | 4 | `PackageCorrupt` | The container, header or payload failed validation. | Missing/invalid footer, header or stream checksum mismatch, header rule violation, file checksum mismatch during installation, zstd frame needing a window > 128 MiB, Authenticode signature does not match the file. Any failure to open or validate the running package at start-up is reported with this code. | `error.PackageCorrupt` |
 | 5 | `UnsupportedSystem` | OS too old. | Windows build lower than the header's `app.minWindowsBuild`. | `error.UnsupportedSystem` |
-| 6 | `ElevationRequired` | Administrator rights needed but not granted. | The UAC prompt was declined or could not be shown; the UAC prompt of a `/quiet` per-machine operation started from a non-elevated process was declined; `ERROR_ELEVATION_REQUIRED`. | `error.ElevationRequired` |
+| 6 | `ElevationRequired` | Administrator rights needed but not granted. | The UAC prompt was declined or could not be shown; the UAC prompt of a `/quiet` per-machine operation started from a non-elevated process was declined; the UAC prompt for removing an older MSI version installed for all users (`install.legacyMsi`, per-user install) was declined; `ERROR_ELEVATION_REQUIRED`. | `error.ElevationRequired` |
 | 7 | `DiskFull` | Not enough space. | Path check `path.space` (free space < required size + 4 MiB); `ERROR_DISK_FULL` / `ERROR_HANDLE_DISK_FULL`. | `error.DiskFull` |
 | 8 | `FileInUse` | A file is locked. | `ERROR_SHARING_VIOLATION`, `ERROR_LOCK_VIOLATION`, `ERROR_USER_MAPPED_FILE` while replacing or removing files. | `error.FileInUse` |
 | 9 | `AccessDenied` | No permission. | Per-user target not writable (`path.notWritable`); `ERROR_ACCESS_DENIED`, `ERROR_PRIVILEGE_NOT_HELD`, `ERROR_WRITE_PROTECT`; access denied writing the Apps & features entry. | `error.AccessDenied` |
@@ -31,7 +31,7 @@ sentence comes from the localization key `error.<Name>` in `shared/localization/
 | 13 | `RegistryError` | Registration with Windows failed. | Writing registry values (Apps & features entry, pending marker); another product already uses the uninstall key named after the app id. | `error.RegistryError` |
 | 14 | `Internal` | IPC, protocol or unexpected state. | The elevated worker did not connect / stopped unexpectedly / failed its own checks; the worker pipe could not be created; an unexpected exception; the uninstaller could not start its relocated copy. | `error.Internal` |
 | 15 | `UnsafePath` | The location is not safe to use. | Install location rejected for any `path.*` reason other than space or writability (see section 6.3); a link or junction inside the install directory; the install directory resolves to a different path; a directory or link where a file must go; an action target outside the install directory. | `error.UnsafePath` |
-| 16 | `AlreadyRunning` | Another setup of the same app is running. | The mutex `Global\FluentSetup-<AppId>` is held (across sessions). | `error.AlreadyRunning` |
+| 16 | `AlreadyRunning` | Another setup of the same app is running. | The mutex `Global\FluentSetup-<AppId>` is held (across sessions). Also: Windows Installer is busy with another installation (error 1618) while setup removes an older MSI version (`install.legacyMsi`); the message is then `error.installerBusy`. | `error.AlreadyRunning`, `error.installerBusy` |
 | 17 | `PrerequisiteMissing` | A required component is missing. | A `requirements` entry (.NET Framework release, WebView2) is not satisfied and the package does not bundle an installer for it. The detail is the requirement's name. | `error.PrerequisiteMissing` |
 | 18 | `UpdateAvailable` | Not a failure. | `/check-update` found a published version newer than the installed one. | `error.UpdateAvailable` |
 | 19 | `UpdateFailed` | The update could not be checked, downloaded or used. | `/check-update`, `/install-update`: the GitHub API or the feed did not answer or answered nonsense (rate limit: HTTP 403/429); no SHA-256 is published; the download does not match it, is not a FluentSetup package, is another app or architecture, contains another version, or lacks the signature `update.signer` requires. The log (`%TEMP%\FluentSetup\<AppId>-update-<time>.log`) has the reason. | `error.UpdateFailed` |
@@ -49,7 +49,10 @@ Notes:
 * `FluentSetup.UI.exe` has its own exit codes (`0x20`–`0x26`); they only appear in the log, never as Setup.exe exit
   codes (protocol document, section 2.5).
 * Builder diagnostics (`FS1001` … `FS2006`, reported by `fsetup validate` / `build`) are a separate set of codes
-  and are not covered here.
+  and are not covered here. The Builder app adds a few of its own for text it cannot read back into the project:
+  `FS0900` (validation itself failed), `FS0901` (a line it cannot read), `FS0902` (a prefix that is not a language
+  tag), `FS0903` (a language or key given twice) and `FS0904` (an exit code that is not a number) in multi-language
+  texts, installer strings and exit-code lists; they block a build until fixed and never appear in `fsetup` output.
 
 ## 2. Logs
 
@@ -59,6 +62,8 @@ Notes:
 |---|---|
 | Default (install) | `%TEMP%\FluentSetup\<AppId>-install-YYYYMMDD-HHMMSS.log` |
 | Default (uninstall, including uninstall.exe) | `%TEMP%\FluentSetup\<AppId>-uninstall-YYYYMMDD-HHMMSS.log` |
+| Default (`/modify` and `/repair`, also from Apps & features "Modify") | `%TEMP%\FluentSetup\<AppId>-modify-YYYYMMDD-HHMMSS.log` |
+| Default (`/check-update`, `/install-update`) | `%TEMP%\FluentSetup\<AppId>-update-YYYYMMDD-HHMMSS.log`; the new Setup.exe an update starts writes its own `-install-` log |
 | Header could not be read | `<AppId>` is replaced by `package` |
 | `/log <file>` | That file. The path must be absolute on a local drive: its parent directory must pass the same syntax check as an install directory (drive-letter form, not a drive root, at most 200 characters, existing non-network drive) and the file name must be a valid name. Otherwise Setup.exe exits with 3. |
 
@@ -67,7 +72,9 @@ processes. The timestamp is local time at start-up. Missing parent directories a
 
 The file is opened in append mode, so several processes of one session can write to it:
 
-* the elevated worker receives `/log <same file>` and writes with the tag `worker`;
+* the elevated worker writes with the tag `worker` through a copy of its parent's open log handle (`--log-handle`);
+  without it (over-the-shoulder elevation as another account) it opens a `/log` path only below its own
+  `%TEMP%\FluentSetup`, else its default file there;
 * `uninstall.exe` phase 1 logs the relocation and closes the log; phase 2 receives the user's original switches
   (including `/log`, if given) and otherwise computes its own default name (tag `uninstall`).
 
@@ -261,6 +268,7 @@ detail "Install location rejected (path.<key>): <dir>".
 | `path.locked` | The app is already installed. Its location can't be changed during an update. | The app is installed in a different directory. |
 | `path.notEmpty` | This folder already contains files that setup would overwrite. … | The path is a file, or a non-empty folder that already contains one of the package's (non-preserved) files. |
 | `path.otherApp` | Another app is already installed in this folder. | The folder contains an `uninstall.json` or `uninstall.exe` of another installation. |
+| `path.insecure` | Other users can change files in this folder. To install for all users, choose a new or empty folder, or one that only administrators can change. | Per-machine installs only: a fresh install into an existing folder that already holds files, when someone other than Administrators, SYSTEM or TrustedInstaller owns it or may change it (the files there would be run with administrator rights later). A new or empty folder gets protected permissions instead; the folder of the installation being updated keeps its own. |
 | `path.notWritable` | You can't create files in this location without administrator permission. | Per-user installs only: creating a test folder fails with access denied. Choose a per-user location or install for everyone. |
 | `path.space` | Not enough free space: {0} required, {1} available. | Free space is less than the required size (payload + uninstaller) plus 4 MiB. |
 

@@ -2,6 +2,7 @@
 // internally, so they work beyond MAX_PATH.
 #pragma once
 
+#include "Common/hash.h"
 #include "Common/win.h"
 
 #include <cstdint>
@@ -32,6 +33,8 @@ void CreateDirectories(const std::wstring& dir, std::vector<std::wstring>* creat
 bool IsDirectoryEmpty(const std::wstring& dir);
 
 std::vector<uint8_t> ReadAll(const std::wstring& p, uint64_t maxBytes);
+// SHA-256 of the whole file behind an open handle (positional reads; the file pointer is not used). Throws Failure.
+Sha256Digest HashFile(HANDLE file);
 // Writes to "<p>.tmp-<random>" then atomically replaces `p` (write-through). Throws Failure.
 void WriteAllAtomic(const std::wstring& p, std::span<const uint8_t> data);
 
@@ -44,8 +47,11 @@ DWORD Move(const std::wstring& from, const std::wstring& to, bool replace = fals
 // Deletes a file, clearing the read-only attribute first. Returns the Win32 error (0 on success / already gone).
 DWORD DeleteFileForce(const std::wstring& p);
 
-// Recursively deletes a directory tree that this process created itself (staging/backup/temp directories).
-// Never follows links: link entries are removed as links. Returns false if anything remained.
+// Recursively deletes a directory tree (staging/backup/temp directories, app data on uninstall). Handle-based: every
+// entry is opened relative to its parent directory's handle without following reparse points, so swapping a folder
+// for a junction or symbolic link while the tree is deleted only gets the link removed, never its target. A link
+// passed as `dir` is removed as a link. When elevated, `dir` must resolve to itself (no redirected parent folder).
+// Returns false if anything remained.
 bool DeleteTree(const std::wstring& dir);
 
 }  // namespace fsetup::fs

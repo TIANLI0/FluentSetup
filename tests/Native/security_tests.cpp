@@ -6,13 +6,17 @@
 #include "Common/fs.h"
 #include "Common/parallel.h"
 #include "Common/path.h"
+#include "Common/security.h"
 #include "Common/text.h"
 #include "Install.Core/installed.h"
 #include "Install.Core/journal.h"
 #include "Install.Core/package.h"
 
+#include <winioctl.h>
+
 #include <atomic>
 #include <fstream>
+#include <thread>
 
 using namespace fsetup;
 
@@ -124,6 +128,56 @@ TEST(install_record_rejects_hostile_entries) {
                       ErrorCode::NotInstalled);
     CHECK_THROWS_CODE(install::RecordFromJson(rec("[]", R"(["C:\\Windows\\notepad.lnk"])")), ErrorCode::NotInstalled);
     CHECK_THROWS_CODE(install::RecordFromJson(rec("[]", R"(["C:\\Users\\Public\\Desktop\\x.exe"])")), ErrorCode::NotInstalled);
+}
+
+TEST(install_record_keeps_the_hash_of_the_whole_original_setup) {
+    install::InstallRecord r;
+    r.appId = L"T";
+    r.installDir = L"C:\\Apps\\T";
+    r.sourcePackage = L"C:\\Users\\u\\Downloads\\T-Setup.exe";
+    r.sourcePackageSha256 = std::wstring(64, L'a');
+    r.sourcePackageFileSha256 = std::wstring(64, L'b');
+    const install::InstallRecord back = install::RecordFromJson(install::RecordToJson(r));
+    CHECK(back.sourcePackage == r.sourcePackage && back.sourcePackageFileSha256 == r.sourcePackageFileSha256);
+    // Records of older versions have no whole-file hash (the repair then never runs the file); a malformed one is dropped.
+    json::Value old = install::RecordToJson(r);
+    json::Value source = old["sourcePackage"];
+    source.set("fileSha256", "not hex");
+    old.set("sourcePackage", source);
+    CHECK(install::RecordFromJson(old).sourcePackageFileSha256.empty());
+    r.sourcePackageFileSha256.clear();
+    CHECK(install::RecordFromJson(install::RecordToJson(r)).sourcePackageFileSha256.empty());
+}
+
+TEST(machine_install_folder_security) {
+    // Owned by TrustedInstaller; only administrators, SYSTEM and TrustedInstaller may change it.
+    CHECK(security::IsAdministratorControlled(path::KnownFolder(FOLDERID_System)));
+    // A folder this (standard or administrator) user created in its %TEMP%: the user owns it and may write to it.
+    const std::wstring dir = TempDir(L"acl");
+    CHECK(!security::IsAdministratorControlled(dir));
+    // %SystemRoot%\Temp: standard users may create files there.
+    CHECK(!security::IsAdministratorControlled(path::Join(path::KnownFolder(FOLDERID_Windows), L"Temp")));
+    CHECK(!security::IsAdministratorControlled(path::Join(dir, L"missing")));  // unreadable security: not controlled
+    // The protected descriptor parses and carries an owner and a protected DACL.
+    security::MachineInstallSecurity sd;
+    CHECK(sd.get() != nullptr);
+    fs::DeleteTree(dir);
+}
+
+TEST(file_hash_through_a_handle) {
+    const std::wstring dir = TempDir(L"hash");
+    const std::wstring file = path::Join(dir, L"f.bin");
+    std::string data(3u << 20, 'x');
+    data[12345] = 'y';
+    WriteText(file, data);
+    UniqueHandle h(::CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr));
+    CHECK(h.valid());
+    CHECK(fs::HashFile(h.get()) == Sha256::Of({reinterpret_cast<const uint8_t*>(data.data()), data.size()}));
+    // Locked against writers while the handle is open.
+    UniqueHandle writer(::CreateFileW(file.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr));
+    CHECK(!writer.valid() && ::GetLastError() == ERROR_SHARING_VIOLATION);
+    h.reset();
+    fs::DeleteTree(dir);
 }
 
 TEST(shortcut_paths_are_confined_to_scope_folders) {
@@ -301,6 +355,97 @@ TEST(link_detection) {
     CHECK(!fs::Exists(target));
 }
 
+namespace {
+
+// A junction (mount point) created in-process: fast enough to race DeleteTree with.
+bool MakeJunction(const std::wstring& link, const std::wstring& target) {
+    if (!::CreateDirectoryW(link.c_str(), nullptr)) return false;
+    UniqueHandle h(::CreateFileW(link.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                                 FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (!h) return false;
+    const std::wstring substitute = L"\\??\\" + target;
+    // REPARSE_DATA_BUFFER.MountPointReparseBuffer: tag, length, reserved, 4 offsets/lengths, then both names.
+    const size_t names = (substitute.size() + 1 + target.size() + 1) * sizeof(wchar_t);
+    std::vector<uint8_t> buffer(8 + 8 + names);
+    const auto put16 = [&](size_t at, size_t v) { const auto x = static_cast<uint16_t>(v); memcpy(buffer.data() + at, &x, 2); };
+    const DWORD tag = IO_REPARSE_TAG_MOUNT_POINT;
+    memcpy(buffer.data(), &tag, 4);
+    put16(4, 8 + names);
+    put16(8, 0);
+    put16(10, substitute.size() * sizeof(wchar_t));
+    put16(12, (substitute.size() + 1) * sizeof(wchar_t));
+    put16(14, target.size() * sizeof(wchar_t));
+    memcpy(buffer.data() + 16, substitute.c_str(), (substitute.size() + 1) * sizeof(wchar_t));
+    memcpy(buffer.data() + 16 + (substitute.size() + 1) * sizeof(wchar_t), target.c_str(), (target.size() + 1) * sizeof(wchar_t));
+    DWORD returned = 0;
+    return ::DeviceIoControl(h.get(), FSCTL_SET_REPARSE_POINT, buffer.data(), static_cast<DWORD>(buffer.size()), nullptr, 0, &returned,
+                             nullptr) != FALSE;
+}
+
+}  // namespace
+
+TEST(delete_tree_removes_a_root_link_as_a_link) {
+    const std::wstring dir = TempDir(L"rootlink");
+    const std::wstring target = path::Join(dir, L"target");
+    WriteText(path::Join(target, L"victim.txt"), "keep");
+    const std::wstring link = path::Join(dir, L"link");
+    CHECK(MakeJunction(link, target));
+    CHECK(fs::IsLinkLike(link) && fs::Exists(path::Join(link, L"victim.txt")));
+    CHECK(fs::DeleteTree(link));
+    CHECK(!fs::Exists(link));
+    CHECK(ReadText(path::Join(target, L"victim.txt")) == "keep");
+    CHECK(fs::DeleteTree(dir));
+    CHECK(!fs::Exists(dir));
+}
+
+TEST(delete_tree_reports_what_it_cannot_delete) {
+    const std::wstring dir = TempDir(L"inuse");
+    const std::wstring busy = path::Join(dir, L"sub\\busy.txt");
+    WriteText(busy, "busy");
+    WriteText(path::Join(dir, L"sub\\other.txt"), "x");
+    {
+        // Open without FILE_SHARE_DELETE: it cannot go, so the tree cannot either.
+        UniqueHandle h(::CreateFileW(busy.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr));
+        CHECK(h.valid());
+        CHECK(!fs::DeleteTree(dir));
+        CHECK(fs::Exists(busy) && !fs::Exists(path::Join(dir, L"sub\\other.txt")));
+    }
+    CHECK(fs::DeleteTree(dir));
+    CHECK(!fs::Exists(dir));
+    CHECK(fs::DeleteTree(dir));  // already gone: nothing remained
+}
+
+TEST(delete_tree_survives_folders_swapped_for_junctions) {
+    // A standard user who can write below the folder being deleted (ProgramData, during an elevated uninstall) swaps
+    // subfolders for junctions to somewhere else while the tree is deleted. Whatever the interleaving, only links may
+    // be removed there, never what they point to.
+    const std::wstring outside = TempDir(L"swap-outside");
+    for (int f = 0; f < 40; ++f) WriteText(path::Join(outside, L"victim" + std::to_wstring(f) + L".txt"), "keep");
+    for (int round = 0; round < 4; ++round) {
+        const std::wstring dir = TempDir(L"swap");
+        constexpr int kFolders = 24;
+        for (int d = 0; d < kFolders; ++d) {
+            for (int f = 0; f < 40; ++f) WriteText(path::Join(dir, L"a" + std::to_wstring(d) + L"\\f" + std::to_wstring(f) + L".bin"), "data");
+        }
+        std::atomic<bool> stop{false};
+        std::thread racer([&] {
+            for (int i = 0; !stop && i < 4000; ++i) {
+                const std::wstring sub = path::Join(dir, L"a" + std::to_wstring(i % kFolders));
+                if (::MoveFileExW(sub.c_str(), (sub + L"-moved" + std::to_wstring(i)).c_str(), 0)) MakeJunction(sub, outside);
+            }
+        });
+        fs::DeleteTree(dir);
+        stop = true;
+        racer.join();
+        fs::DeleteTree(dir);  // whatever the racer created after the first pass
+        bool intact = true;
+        for (int f = 0; f < 40; ++f) intact = intact && ReadText(path::Join(outside, L"victim" + std::to_wstring(f) + L".txt")) == "keep";
+        CHECK(intact);
+        CHECK(!fs::Exists(dir));
+    }
+    fs::DeleteTree(outside);
+}
+
 // ---- container layout ------------------------------------------------------------------------------------------
 
 namespace {
@@ -341,6 +486,7 @@ TEST(container_valid_minimal) {
     const auto file = MakeContainer(kUninstallerHeader, nullptr);
     auto c = archive::Container::Open(file);
     CHECK(c->HeaderJson() == kUninstallerHeader);
+    CHECK(c->FileDigest() == Sha256::Of(fs::ReadAll(file, 64 << 20)));  // the whole file, stub code included
     c.reset();
     ::DeleteFileW(file.c_str());
 }

@@ -32,10 +32,11 @@ public static class Program
               --json                    Print the build report as JSON instead of text
               --non-interactive         Never prompt (the default; accepted for CI scripts)
               --refresh-installers      Download official prerequisite installers ("auto": "bundle") again
-              --no-cache                Compress every stream again instead of reusing unchanged ones of earlier builds
-              --feed <file.json> --feed-url <https URL> [--feed-notes <https URL>]
+              --no-cache                Compress every stream and sign every signing.files program again instead of reusing earlier builds' results
+              --feed <file.json> --feed-url <https URL> [--feed-notes <https URL>] [--feed-channel <name>]
                                         Also write the update feed for update.feed: version, url, sha256, size
-                                        ({Version} and {FileName} in the URLs are filled in)
+                                        ({Version} and {FileName} in the URLs are filled in). --feed-channel
+                                        (default stable) updates only that channel of an existing feed file
               --msbuild                 Diagnostics as "<project> : error FS1234: ..." (for the MSBuild targets)
           fsetup validate [project] [--json] [-D <name>=<value> ...]
           fsetup inspect <Setup.exe> [--verify] [--json] [--diff <older Setup.exe>]
@@ -303,9 +304,26 @@ public static class Program
         var feedPath = a.Value("feed");
         var feedUrl = a.Value("feed-url");
         var feedNotes = a.Value("feed-notes");
+        var feedChannel = a.Value("feed-channel");
         a.EnsureAllUsed();
         if (options.Architecture is not null and not ("x64" or "arm64")) throw new UsageException("--arch must be x64 or arm64.");
         if ((feedPath is null) != (feedUrl is null)) throw new UsageException("--feed and --feed-url go together: the feed file to write and where Setup.exe will be downloaded from.");
+        if (feedChannel is not null && (feedPath is null || !UpdateFeed.IsValidChannel(feedChannel)))
+            throw new UsageException("--feed-channel needs --feed and a channel name: lower-case letters, digits and '-' (e.g. beta).");
+        feedChannel ??= UpdateFeed.StableChannel;
+        // The existing feed must be readable before anything is built: a channel is merged into it.
+        var feedFull = feedPath is null ? null : Path.GetFullPath(feedPath);
+        if (feedFull is not null && File.Exists(feedFull))
+        {
+            try { UpdateFeed.Merge(File.ReadAllText(feedFull), feedChannel, new UpdateFeed.Entry("1.0.0", "https://example.com/Setup.exe", new string('0', 64), 1, null)); }
+            catch (InvalidDataException e) { throw new UsageException($"{feedFull}: {e.Message}"); }
+        }
+        // Checked before the build, with sample values for the placeholders: a bad URL must not leave a Setup.exe behind.
+        if (feedUrl is not null && (!IsHttpsUrl(FillFeedUrl(feedUrl, "1.0.0", "Setup.exe")) ||
+                                    (feedNotes is not null && !IsHttpsUrl(FillFeedUrl(feedNotes, "1.0.0", "Setup.exe")))))
+        {
+            throw new UsageException("--feed-url and --feed-notes must be https URLs.");
+        }
 
         var lastStage = (BuildStage)(-1);
         var progress = new SyncProgress<BuildProgress>(p =>
@@ -324,17 +342,14 @@ public static class Program
         if (report.Success && feedPath is not null)
         {
             var fileName = Path.GetFileName(report.OutputPath!);
-            string Fill(string url) => url.Replace("{Version}", Uri.EscapeDataString(report.Version), StringComparison.Ordinal)
-                                          .Replace("{FileName}", Uri.EscapeDataString(fileName), StringComparison.Ordinal);
-            var url = Fill(feedUrl!);
-            var notes = feedNotes is null ? null : Fill(feedNotes);
+            var url = FillFeedUrl(feedUrl!, report.Version, fileName);
+            var notes = feedNotes is null ? null : FillFeedUrl(feedNotes, report.Version, fileName);
             if (!IsHttpsUrl(url) || (notes is not null && !IsHttpsUrl(notes))) throw new UsageException("--feed-url and --feed-notes must be https URLs.");
-            var feed = new Dictionary<string, object> { ["version"] = report.Version, ["url"] = url, ["sha256"] = report.Sha256!.ToLowerInvariant(), ["size"] = report.Sizes.Total };
-            if (notes is not null) feed["notes"] = notes;
-            var feedFull = Path.GetFullPath(feedPath);
-            Directory.CreateDirectory(Path.GetDirectoryName(feedFull)!);
-            File.WriteAllText(feedFull, JsonSerializer.Serialize(feed, ReportJson) + Environment.NewLine);
-            if (!json) Console.WriteLine($"Wrote the update feed {feedFull}");
+            var entry = new UpdateFeed.Entry(report.Version, url, report.Sha256!, report.Sizes.Total, notes);
+            Directory.CreateDirectory(Path.GetDirectoryName(feedFull!)!);
+            var existing = File.Exists(feedFull) ? File.ReadAllText(feedFull) : null;
+            File.WriteAllText(feedFull!, UpdateFeed.Merge(existing, feedChannel, entry));
+            if (!json) Console.WriteLine($"Wrote the update feed {feedFull}{(feedChannel == UpdateFeed.StableChannel ? "" : $" (channel {feedChannel})")}");
         }
         if (json)
         {
@@ -511,6 +526,10 @@ public static class Program
         }
         return info.Problems.Count == 0 ? 0 : 1;
     }
+
+    private static string FillFeedUrl(string url, string version, string fileName) =>
+        url.Replace("{Version}", Uri.EscapeDataString(version), StringComparison.Ordinal)
+           .Replace("{FileName}", Uri.EscapeDataString(fileName), StringComparison.Ordinal);
 
     private static bool IsHttpsUrl(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps;
 
@@ -698,7 +717,7 @@ internal sealed class ParsedArgs
                 var name = a.TrimStart('-');
                 string? value = null;
                 var eq = name.IndexOf('=');
-                if (name is "D" or "define")
+                if ((eq >= 0 ? name[..eq] : name) is "D" or "define")
                 {
                     // Repeatable: -D Name=Value, --define Name=Value, --define=Name=Value.
                     if (eq >= 0) p._defines.Add(name[(eq + 1)..]);

@@ -26,6 +26,10 @@ public static partial class ExtensionValidator
     [GeneratedRegex(@"^[0-9a-fA-F]{64}$")]
     private static partial Regex Sha256Regex();
 
+    /// <summary>A Windows Installer product or upgrade code: a GUID in braces.</summary>
+    [GeneratedRegex(@"^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$")]
+    private static partial Regex MsiCodeRegex();
+
     /// <summary>Full shared-framework name and display name for a project's runtime value.</summary>
     public static (string Runtime, string Label) DotNetRuntime(string value) => value switch
     {
@@ -157,6 +161,17 @@ public static partial class ExtensionValidator
         {
             if (!IsTaskOrValueName(n) || n.Equals(p.App.Id, StringComparison.OrdinalIgnoreCase))
                 d.Error("FS1650", $"install.legacyUninstallKeys[{i}]", "An uninstall key name of an older product (not this app's id).");
+        }
+        if (p.Install.LegacyMsi is { } msi)
+        {
+            foreach (var (list, name) in new[] { (msi.ProductCodes, "install.legacyMsi.productCodes"), (msi.UpgradeCodes, "install.legacyMsi.upgradeCodes") })
+            {
+                if (list.Count > 16) d.Error("FS1684", name, "At most 16 codes.");
+                foreach (var (c, i) in list.Select((c, i) => (c, i)).Where(x => !MsiCodeRegex().IsMatch(x.c)))
+                    d.Error("FS1684", $"{name}[{i}]", $"'{c}' is not a Windows Installer code: a GUID in braces, e.g. {{12345678-1234-1234-1234-123456789ABC}}.");
+            }
+            if (msi.ProductCodes.Count == 0 && msi.UpgradeCodes.Count == 0)
+                d.Warning("FS1685", "install.legacyMsi", "No product or upgrade codes: nothing installed by Windows Installer is removed.");
         }
         foreach (var (n, i) in p.Install.Ngen.Select((n, i) => (n, i)))
         {

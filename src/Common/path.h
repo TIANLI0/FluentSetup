@@ -30,6 +30,7 @@ enum class Problem {
     NotWritable,
     Space,
     Locked,
+    Insecure,  // per-machine install into an existing folder that standard users can change
 };
 const char* ProblemKey(Problem p) noexcept;
 

@@ -189,6 +189,18 @@ int RunUninstallPhase1(const std::wstring& self) {
     return static_cast<int>(exitCode);
 }
 
+// The worker's log: a duplicate of the parent's open log handle (--log-handle). The handle was opened by the unelevated
+// parent with its own rights, so writing through it gives that process nothing it did not have.
+bool AdoptParentLog(unsigned long parentPid, unsigned long long handleValue, const std::wstring& logPath) {
+    UniqueHandle parent(::OpenProcess(PROCESS_DUP_HANDLE, FALSE, parentPid));
+    HANDLE copy = nullptr;
+    if (!parent || !::DuplicateHandle(parent.get(), reinterpret_cast<HANDLE>(static_cast<uintptr_t>(handleValue)), ::GetCurrentProcess(),
+                                      &copy, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
+        return false;
+    }
+    return log::Adopt(copy, logPath, L"worker");
+}
+
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
@@ -236,13 +248,25 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     const bool uninstallMode = argsOk && !updateMode && !modifyMode && (args.uninstall || pkg.IsUninstaller());
 
     std::wstring logPath = argsOk ? args.logPath : std::wstring();
+    // The elevated worker writes to its parent's log through a copy of the parent's own handle: it never opens a path
+    // an unelevated process chose. Without that handle, only a path below its own %TEMP%\FluentSetup.
+    bool logOpen = false;
+    std::wstring refusedLog;
+    if (argsOk && args.worker) {
+        if (args.logHandle) logOpen = AdoptParentLog(args.parentPid, args.logHandle, logPath);
+        if (!logOpen && !logPath.empty() && !boot::IsWorkerLogPath(logPath, path::TempRoot())) {
+            refusedLog = logPath;
+            logPath.clear();
+        }
+    }
     if (logPath.empty()) {
         const std::wstring id = pkg.appId.empty() ? L"package" : pkg.appId;
         logPath = path::Join(path::Join(path::TempRoot(), L"FluentSetup"),
                              id + (updateMode ? L"-update-" : uninstallMode ? L"-uninstall-" : modifyMode ? L"-modify-" : L"-install-") +
                                  Timestamp() + L".log");
     }
-    log::Open(logPath, args.worker ? L"worker" : args.phase2 ? (modifyMode ? L"modify" : L"uninstall") : updateMode ? L"update" : L"setup");
+    if (!logOpen) log::Open(logPath, args.worker ? L"worker" : args.phase2 ? (modifyMode ? L"modify" : L"uninstall") : updateMode ? L"update" : L"setup");
+    if (!refusedLog.empty()) log::Warn(L"Not writing to %s: the elevated worker logs only below its own temporary folder", refusedLog.c_str());
     log::Info(L"FluentSetup %s (%s) started: %s", kProductVersion,
 #if defined(_M_ARM64)
               L"arm64",

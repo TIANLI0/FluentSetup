@@ -107,6 +107,26 @@ TEST(json_rejects_malformed_and_hostile_input) {
     CHECK(!json::Parse("[1,2,3]", v, nullptr, tiny));
 }
 
+TEST(json_integers_only_when_written_as_integers) {
+    json::Value v;
+    CHECK(json::Parse(R"([7,-3,9223372036854775807,-9223372036854775808,1.5,2.0,1e3,9223372036854775808,1e300,-1e300,18446744073709551616])", v));
+    const json::Array& a = v.array();
+    CHECK(a[0].isInteger() && a[0].asInt() == 7 && a[0].asUint() == 7);
+    CHECK(a[1].asInt() == -3 && a[1].asUint(42) == 42);
+    CHECK(a[2].asInt() == INT64_MAX && a[3].asInt() == INT64_MIN);
+    // Fractions, exponents and numbers outside int64 are not integers: the fallback, never a truncated or UB value.
+    for (size_t i = 4; i < a.size(); ++i) {
+        CHECK(a[i].isNumber() && !a[i].isInteger());
+        CHECK(a[i].asInt(-77) == -77 && a[i].asUint(77) == 77);
+    }
+    CHECK(a[4].asDouble() == 1.5 && a[8].asDouble() == 1e300);
+    CHECK(json::Value(1e300).asInt(5) == 5 && json::Value(-0.5).asUint(6) == 6);
+    CHECK(json::Value(UINT64_MAX).asUint(8) == 8 && !json::Value(UINT64_MAX).isInteger());
+    CHECK(json::Value(uint64_t{1} << 40).asUint() == (uint64_t{1} << 40));
+    json::Value back;
+    CHECK(json::Parse(json::Serialize(json::Value(UINT64_MAX)), back) && back.asDouble() > 1.8e19);
+}
+
 TEST(json_copy_on_write) {
     json::Value a;
     a.set("x", 1);
@@ -133,6 +153,34 @@ TEST(arguments_strict) {
                                L"setup.exe --worker", L"setup.exe --worker --pipe x --parent-pid abc",
                                L"setup.exe --pipe ..\\..\\evil --worker --parent-pid 5", L"setup.exe --ui-simulate rm-rf",
                                L"setup.exe /lang ..\\x", L"setup.exe --phase2 --origin-dir C:\\x"}) {
+        boot::Args c;
+        CHECK(!boot::ParseArgs(bad, c, err));
+    }
+}
+
+TEST(worker_log_location) {
+    std::wstring err;
+    boot::Args w;
+    CHECK(boot::ParseArgs(L"setup.exe --worker --pipe FluentSetup-1 --parent-pid 42 --log-handle 1234 /log C:\\logs\\x.log", w, err) && w.logHandle == 1234);
+    boot::Args notWorker;
+    CHECK(!boot::ParseArgs(L"setup.exe --log-handle 1234", notWorker, err));
+    // The elevated worker opens a /log path only below its own temp\FluentSetup.
+    const std::wstring temp = L"C:\\Users\\u\\AppData\\Local\\Temp";
+    CHECK(boot::IsWorkerLogPath(temp + L"\\FluentSetup\\App-install-1.log", temp));
+    CHECK(boot::IsWorkerLogPath(L"c:/users/U/appdata/local/temp/fluentsetup/sub/x.log", temp));
+    const std::vector<std::wstring> refused = {L"C:\\Windows\\System32\\evil.log", temp + L"\\FluentSetup", temp + L"\\FluentSetupX\\a.log",
+                                               temp + L"\\FluentSetup\\..\\..\\evil.log", temp + L"\\x.log", temp + L"\\FluentSetup\\a.log:ads",
+                                               L"\\\\server\\share\\FluentSetup\\a.log", L"relative\\a.log"};
+    for (const auto& bad : refused) CHECK(!boot::IsWorkerLogPath(bad, temp));
+}
+
+TEST(repair_source_package_switch) {
+    std::wstring err;
+    boot::Args a;
+    CHECK(boot::ParseArgs(L"setup.exe /passive --source-package \"C:\\Users\\u\\Downloads\\App Setup.exe\"", a, err) &&
+          a.sourcePackage == L"C:\\Users\\u\\Downloads\\App Setup.exe");
+    for (const wchar_t* bad : {L"setup.exe --source-package relative.exe", L"setup.exe --source-package \\\\server\\s\\x.exe",
+                               L"setup.exe --source-package C:\\a\\..\\x.exe"}) {
         boot::Args c;
         CHECK(!boot::ParseArgs(bad, c, err));
     }

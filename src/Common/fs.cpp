@@ -4,9 +4,13 @@
 #include "Common/hash.h"
 #include "Common/parallel.h"
 #include "Common/path.h"
+#include "Common/security.h"
 #include "Common/text.h"
 
+#include <winternl.h>
+
 #include <atomic>
+#include <mutex>
 
 namespace fsetup::fs {
 
@@ -101,6 +105,26 @@ std::vector<uint8_t> ReadAll(const std::wstring& p, uint64_t maxBytes) {
     return data;
 }
 
+Sha256Digest HashFile(HANDLE file) {
+    Sha256 hash;
+    std::vector<uint8_t> buffer(1u << 20);
+    for (uint64_t offset = 0;;) {
+        OVERLAPPED ov{};
+        ov.Offset = static_cast<DWORD>(offset);
+        ov.OffsetHigh = static_cast<DWORD>(offset >> 32);
+        DWORD read = 0;
+        if (!::ReadFile(file, buffer.data(), static_cast<DWORD>(buffer.size()), &read, &ov)) {
+            const DWORD e = ::GetLastError();
+            if (e == ERROR_HANDLE_EOF) break;
+            ThrowWin32(L"Read failed while hashing a file", e);
+        }
+        if (read == 0) break;
+        hash.Update(buffer.data(), read);
+        offset += read;
+    }
+    return hash.Finish();
+}
+
 void WriteAllAtomic(const std::wstring& p, std::span<const uint8_t> data) {
     const std::wstring temp = p + L".tmp-" + RandomToken().substr(0, 8);
     {
@@ -163,34 +187,167 @@ DWORD DeleteFileForce(const std::wstring& p) {
     return e;
 }
 
+namespace {
+
+// Handle-based deletion (DeleteTree). Every entry is opened relative to the handle of the directory it was listed in,
+// with FILE_OPEN_REPARSE_POINT, so nothing is ever reached through a path that someone could redirect between the
+// listing and the deletion: a folder swapped for a junction (by a standard user, under a folder such as ProgramData
+// that an elevated uninstall cleans) is opened as the junction itself and only the link is removed. Whether an entry is
+// a directory, a link or a file is decided from the opened handle, never from the listing.
+using NtCreateFileFn = LONG(NTAPI*)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK, PLARGE_INTEGER, ULONG, ULONG, ULONG,
+                                    ULONG, PVOID, ULONG);
+
+constexpr LONG kStatusObjectNameNotFound = static_cast<LONG>(0xC0000034);
+constexpr LONG kStatusObjectPathNotFound = static_cast<LONG>(0xC000003A);
+constexpr LONG kStatusDeletePending = static_cast<LONG>(0xC0000056);
+constexpr ULONG kFileOpen = 0x00000001;                   // FILE_OPEN
+constexpr ULONG kFileSynchronousIoNonAlert = 0x00000020;  // FILE_SYNCHRONOUS_IO_NONALERT
+constexpr ULONG kFileOpenForBackupIntent = 0x00004000;    // FILE_OPEN_FOR_BACKUP_INTENT
+constexpr ULONG kFileOpenReparsePoint = 0x00200000;       // FILE_OPEN_REPARSE_POINT
+constexpr DWORD kEntryAccess = DELETE | SYNCHRONIZE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES;
+
+NtCreateFileFn NtCreateFilePtr() {
+    static const auto fn = reinterpret_cast<NtCreateFileFn>(::GetProcAddress(::GetModuleHandleW(L"ntdll.dll"), "NtCreateFile"));
+    return fn;
+}
+
+// Opens `name` (one component) relative to `parent`, never following a reparse point. Empty handle when it is gone
+// (`gone` = true) or cannot be opened.
+UniqueHandle OpenRelative(HANDLE parent, std::wstring_view name, DWORD access, bool& gone) {
+    gone = false;
+    const NtCreateFileFn create = NtCreateFilePtr();
+    if (!create || name.empty() || name.size() > 32767) return UniqueHandle();
+    UNICODE_STRING us{};
+    us.Buffer = const_cast<wchar_t*>(name.data());
+    us.Length = us.MaximumLength = static_cast<USHORT>(name.size() * sizeof(wchar_t));
+    OBJECT_ATTRIBUTES oa{};
+    oa.Length = sizeof(oa);
+    oa.RootDirectory = parent;
+    oa.ObjectName = &us;
+    oa.Attributes = 0;  // the exact name from the listing (also in case-sensitive directories)
+    IO_STATUS_BLOCK io{};
+    HANDLE h = nullptr;
+    const LONG st = create(&h, access, &oa, &io, nullptr, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, kFileOpen,
+                           kFileSynchronousIoNonAlert | kFileOpenForBackupIntent | kFileOpenReparsePoint, nullptr, 0);
+    if (st < 0) {
+        gone = st == kStatusObjectNameNotFound || st == kStatusObjectPathNotFound || st == kStatusDeletePending;
+        return UniqueHandle();
+    }
+    return UniqueHandle(h);
+}
+
+// FILE_DISPOSITION_INFO_EX (Windows 10 1709+; IGNORE_READONLY 1809+), declared here: the SDK hides it behind
+// NTDDI_VERSION, which this project leaves at the Windows 10 baseline.
+constexpr int kFileDispositionInfoEx = 21;  // FILE_INFO_BY_HANDLE_CLASS::FileDispositionInfoEx
+constexpr DWORD kDispositionDelete = 0x1, kDispositionPosix = 0x2, kDispositionIgnoreReadOnly = 0x10;
+
+// Marks the open entry for deletion: POSIX semantics (the name goes when the handle closes, so the parent directory is
+// empty right away) and read-only ignored. Falls back to the classic disposition where the file system lacks the
+// extended one.
+bool DeleteByHandle(HANDLE h, DWORD attributes) {
+    DWORD flags = kDispositionDelete | kDispositionPosix | kDispositionIgnoreReadOnly;
+    if (::SetFileInformationByHandle(h, static_cast<FILE_INFO_BY_HANDLE_CLASS>(kFileDispositionInfoEx), &flags, sizeof(flags))) return true;
+    const DWORD e = ::GetLastError();
+    if (e != ERROR_INVALID_PARAMETER && e != ERROR_NOT_SUPPORTED && e != ERROR_INVALID_FUNCTION) return false;
+    if (attributes & FILE_ATTRIBUTE_READONLY) {
+        FILE_BASIC_INFO basic{};
+        basic.FileAttributes = attributes & ~FILE_ATTRIBUTE_READONLY;
+        if (basic.FileAttributes == 0) basic.FileAttributes = FILE_ATTRIBUTE_NORMAL;
+        ::SetFileInformationByHandle(h, FileBasicInfo, &basic, sizeof(basic));
+    }
+    FILE_DISPOSITION_INFO classic{TRUE};
+    return ::SetFileInformationByHandle(h, FileDispositionInfo, &classic, sizeof(classic)) != FALSE;
+}
+
+// Names in the directory, listed through its handle.
+bool ListDirectory(HANDLE dir, std::vector<std::wstring>& names) {
+    std::vector<uint8_t> buffer(64 * 1024);
+    FILE_INFO_BY_HANDLE_CLASS cls = FileFullDirectoryRestartInfo;
+    for (;;) {
+        if (!::GetFileInformationByHandleEx(dir, cls, buffer.data(), static_cast<DWORD>(buffer.size()))) {
+            return ::GetLastError() == ERROR_NO_MORE_FILES;
+        }
+        cls = FileFullDirectoryInfo;
+        for (size_t offset = 0;;) {
+            const auto* e = reinterpret_cast<const FILE_FULL_DIR_INFO*>(buffer.data() + offset);
+            const std::wstring_view name(e->FileName, e->FileNameLength / sizeof(wchar_t));
+            if (name != L"." && name != L"..") names.emplace_back(name);
+            if (e->NextEntryOffset == 0) break;
+            offset += e->NextEntryOffset;
+        }
+    }
+}
+
+// Deletes everything inside the open directory (not the directory itself).
+bool DeleteContents(HANDLE dir, int depth) {
+    // Deeper than any path Windows can address: something is wrong; stop rather than recurse on.
+    if (depth > 1024) return false;
+    std::vector<std::wstring> names;
+    if (!ListDirectory(dir, names)) return false;
+    // Files and links go right away, from several threads when there are many (per-file latency dominates: a backup
+    // folder holds a whole app version). Every thread works relative to the same directory handle, so this changes
+    // nothing about what can be reached. Subdirectories are kept open and emptied afterwards, one level at a time.
+    std::atomic<bool> ok{true};
+    std::mutex subdirsLock;
+    std::vector<std::pair<UniqueHandle, DWORD>> subdirs;
+    ParallelFor(names.size(), [&](size_t i) {
+        bool gone = false;
+        // Listing access too, in case it is a directory; an entry that refuses read access is opened for deletion only.
+        UniqueHandle h = OpenRelative(dir, names[i], kEntryAccess | FILE_LIST_DIRECTORY, gone);
+        if (!h && !gone) h = OpenRelative(dir, names[i], kEntryAccess, gone);
+        FILE_BASIC_INFO basic{};
+        if (!h) {
+            if (!gone) ok = false;
+        } else if (!::GetFileInformationByHandleEx(h.get(), FileBasicInfo, &basic, sizeof(basic))) {
+            ok = false;
+        } else if ((basic.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(basic.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            std::lock_guard lock(subdirsLock);
+            subdirs.emplace_back(std::move(h), basic.FileAttributes);
+        } else if (!DeleteByHandle(h.get(), basic.FileAttributes)) {
+            // A link (junction, symbolic link, mount point, any reparse point) is removed as a link, never entered.
+            ok = false;
+        }
+    }, names.size() >= 32 ? IoThreads() : 1);
+    for (auto& [h, attributes] : subdirs) {
+        if (!DeleteContents(h.get(), depth + 1) || !DeleteByHandle(h.get(), attributes)) ok = false;
+        h.reset();
+    }
+    return ok;
+}
+
+}  // namespace
+
 bool DeleteTree(const std::wstring& dir) {
     if (!Exists(dir)) return true;
-    if (IsLinkLike(dir)) return ::RemoveDirectoryW(path::Long(dir).c_str()) != FALSE;
-    // List the tree first (directories breadth-first, so every child comes after its parent), delete the files from
-    // several threads (per-file latency dominates: a backup folder holds a whole app version), then the directories
-    // deepest first. Directory links are unlinked, never entered.
-    std::vector<std::wstring> dirs{dir}, files, links;
-    for (size_t d = 0; d < dirs.size(); ++d) {
-        WIN32_FIND_DATAW fd{};
-        UniqueFind f(::FindFirstFileExW(path::Long(path::Join(dirs[d], L"*")).c_str(), FindExInfoBasic, &fd,
-                                        FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
-        if (!f.valid()) continue;
-        do {
-            if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
-            std::wstring child = path::Join(dirs[d], fd.cFileName);
-            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) files.push_back(std::move(child));
-            else if (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) links.push_back(std::move(child));
-            else dirs.push_back(std::move(child));
-        } while (::FindNextFileW(f.get(), &fd));
+    // The root itself is opened without following a link; a link is removed as a link.
+    const auto open = [&](DWORD access) {
+        return UniqueHandle(::CreateFileW(path::Long(dir).c_str(), access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                          OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    };
+    UniqueHandle root = open(kEntryAccess | FILE_LIST_DIRECTORY);
+    if (!root && ::GetLastError() == ERROR_ACCESS_DENIED) root = open(kEntryAccess);  // a file that refuses read access
+    if (!root) {
+        const DWORD e = ::GetLastError();
+        return e == ERROR_FILE_NOT_FOUND || e == ERROR_PATH_NOT_FOUND;
     }
-    std::atomic<bool> ok{true};
-    ParallelFor(files.size(), [&](size_t i) {
-        if (DeleteFileForce(files[i]) != 0) ok = false;
-    }, files.size() >= 32 ? IoThreads() : 1);
-    bool rest = true;
-    for (const auto& l : links) rest &= ::RemoveDirectoryW(path::Long(l).c_str()) != FALSE;
-    for (auto it = dirs.rbegin(); it != dirs.rend(); ++it) rest &= ::RemoveDirectoryW(path::Long(*it).c_str()) != FALSE;
-    return ok && rest;
+    FILE_BASIC_INFO basic{};
+    if (!::GetFileInformationByHandleEx(root.get(), FileBasicInfo, &basic, sizeof(basic))) return false;
+    if (security::IsElevated()) {
+        // An elevated process deletes only what it was asked to: a parent folder swapped for a junction between the
+        // caller's checks and the open above shows up in the final path.
+        std::wstring full(32768, L'\0'), longName(32768, L'\0');
+        const DWORD n = ::GetFullPathNameW(path::Long(dir).c_str(), static_cast<DWORD>(full.size()), full.data(), nullptr);
+        full.resize(n < full.size() ? n : 0);
+        const DWORD m = full.empty() ? 0 : ::GetLongPathNameW(full.c_str(), longName.data(), static_cast<DWORD>(longName.size()));
+        longName.resize(m < longName.size() ? m : 0);
+        if (StartsWithIgnoreCase(longName, L"\\\\?\\UNC\\")) longName = L"\\\\" + longName.substr(8);
+        else if (StartsWithIgnoreCase(longName, L"\\\\?\\")) longName = longName.substr(4);
+        while (longName.size() > 3 && longName.back() == L'\\') longName.pop_back();
+        if (longName.empty() || !EqualsIgnoreCase(FinalPath(root.get()), longName)) return false;
+    }
+    const DWORD attributes = basic.FileAttributes;
+    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) && !(attributes & FILE_ATTRIBUTE_REPARSE_POINT) && !DeleteContents(root.get(), 0)) return false;
+    return DeleteByHandle(root.get(), attributes);
 }
 
 }  // namespace fsetup::fs

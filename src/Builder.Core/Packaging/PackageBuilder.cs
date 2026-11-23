@@ -139,7 +139,7 @@ public sealed class PackageBuilder
         if (wanted.Count == 0) return [.. all];
         var missing = wanted.Where(id => all.All(v => v.Id != id)).ToList();
         if (missing.Count > 0)
-            throw new BuildFailedException($"Unknown variant: {string.Join(", ", missing)}.", [new Diagnostic(Severity.Error, "FS1662", "output.variants", $"No variant {string.Join(", ", missing)} in files.variants.")]);
+            throw new BuildFailedException($"Unknown variant: {string.Join(", ", missing)}.", [Diagnostic.Create(Severity.Error, "FS1662", "output.variants", $"No variant {string.Join(", ", missing)} in files.variants.")]);
         return [.. all.Where(v => wanted.Contains(v.Id))];
     }
     private static void Build(SetupProject project, string projectPath, BuildOptions options, BuildReport report, string tempDir,
@@ -155,6 +155,9 @@ public sealed class PackageBuilder
         progress?.Report(new(BuildStage.Validating, 0, "Validating project"));
         var variableDiagnostics = new DiagnosticBag();
         project = ProjectVariables.Expand(project, options.Defines, variableDiagnostics);
+        // --arch overrides the project's architecture everywhere (file name, update asset, validation), on the
+        // expanded copy only: the caller's project is not changed.
+        project.Output.Architecture = arch;
         report.AppId = project.App.Id;
         report.AppName = project.App.Name;
         report.Version = project.App.Version;
@@ -192,7 +195,7 @@ public sealed class PackageBuilder
         if ((options.Sign ?? project.Signing.Enabled) && project.Signing.Files.Count > 0)
         {
             progress?.Report(new(BuildStage.Signing, 0, "Signing the app's programs"));
-            report.SignedFiles = SignAppFiles(project, projectDir, collected, tempDir, report, log);
+            report.SignedFiles = SignAppFiles(project, projectDir, collected, tempDir, options.UseCache, report, log);
         }
         report.Sizes.PayloadRaw = collected.TotalSize;
 
@@ -204,7 +207,7 @@ public sealed class PackageBuilder
             if (source.Auto != "bundle" || !string.IsNullOrEmpty(source.Installer)) continue;
             if (source.Variants.Count > 0 && variants.Count > 0 && !source.Variants.Any(id => variants.Any(v => v.Id == id))) continue;
             var official = OfficialInstallers.For(kind, arch, version, runtime, vcArch)
-                ?? throw new BuildFailedException($"No official installer for {field}.", [new Diagnostic(Severity.Error, "FS2004", field + ".auto", "No official installer for this prerequisite.")]);
+                ?? throw new BuildFailedException($"No official installer for {field}.", [Diagnostic.Create(Severity.Error, "FS2004", field + ".auto", "No official installer for this prerequisite.")]);
             CachedInstaller cached;
             try
             {
@@ -212,7 +215,7 @@ public sealed class PackageBuilder
             }
             catch (InvalidDataException ex)
             {
-                throw new BuildFailedException(ex.Message, [new Diagnostic(Severity.Error, "FS2004", field + ".auto", ex.Message)]);
+                throw new BuildFailedException(ex.Message, [Diagnostic.Create(Severity.Error, "FS2004", field + ".auto", ex.Message)]);
             }
             bundled[source] = official.FileName;
             if (redistFiles.All(f => !f.RelativePath.Equals(official.FileName, StringComparison.OrdinalIgnoreCase)))
@@ -434,10 +437,17 @@ public sealed class PackageBuilder
 
     /// <summary>
     /// signing.files: copies the matching programs that carry no signature yet into the build's temporary folder, signs
-    /// them there in one batch and puts the signed copies into the package in place of the originals.
+    /// them there in one batch and puts the signed copies into the package in place of the originals. Signed copies are
+    /// kept in the stream cache, keyed by the unsigned file's SHA-256 and the signing configuration: an unchanged program
+    /// is not signed again (a new timestamp would change its bytes, so streams, differential updates and the installer's
+    /// "unchanged file" check would all see a new file on every build).
     /// </summary>
-    private static int SignAppFiles(SetupProject project, string projectDir, CollectionResult collected, string tempDir, BuildReport report, Action<string> log)
+    private static int SignAppFiles(SetupProject project, string projectDir, CollectionResult collected, string tempDir, bool useCache,
+                                    BuildReport report, Action<string> log)
     {
+        var identity = useCache ? Signer.CacheIdentity(project.Signing, projectDir, project.App.Name) : null;
+        var toSign = new List<(string Copy, string? Key)>();
+        var reused = 0;
         var globs = project.Signing.Files.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => new Glob(p)).ToList();
         var picked = new List<(int Index, string Copy)>();
         var folder = Path.Combine(tempDir, "signed");
@@ -453,7 +463,7 @@ public sealed class PackageBuilder
             }
             catch (InvalidDataException)
             {
-                report.Diagnostics.Add(new Diagnostic(Severity.Warning, "FS2005", "signing.files", $"{f.RelativePath} is not a Windows program or DLL and is not signed."));
+                report.Diagnostics.Add(Diagnostic.Create(Severity.Warning, "FS2005", "signing.files", $"{f.RelativePath} is not a Windows program or DLL and is not signed."));
                 continue;
             }
             if (certificates != 0)
@@ -463,17 +473,46 @@ public sealed class PackageBuilder
             }
             var copy = Path.Combine(folder, picked.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), Path.GetFileName(f.RelativePath));
             Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+            string? key = null;
+            if (identity is not null)
+            {
+                byte[] unsigned;
+                using (var fs = File.OpenRead(f.SourcePath)) unsigned = SHA256.HashData(fs);
+                key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(identity + ";" + Convert.ToHexStringLower(unsigned))));
+                if (StreamCache.TryGet(key, copy, StreamCache.SignedExtension) is not null)
+                {
+                    if (Signer.IsSigned(copy))
+                    {
+                        picked.Add((i, copy));
+                        reused++;
+                        continue;
+                    }
+                    File.Delete(copy);
+                }
+            }
             File.Copy(f.SourcePath, copy);
             File.SetAttributes(copy, FileAttributes.Normal);
             picked.Add((i, copy));
+            toSign.Add((copy, key));
         }
         if (picked.Count == 0)
         {
-            report.Diagnostics.Add(new Diagnostic(Severity.Warning, "FS2006", "signing.files", "No file to sign: the patterns match no unsigned program or DLL of the package."));
+            report.Diagnostics.Add(Diagnostic.Create(Severity.Warning, "FS2006", "signing.files", "No file to sign: the patterns match no unsigned program or DLL of the package."));
             return 0;
         }
-        log($"Signing {picked.Count} of the app's files");
-        Signer.Sign(project.Signing, projectDir, picked.Select(p => p.Copy).ToList(), project.App.Name, log);
+        if (reused > 0) log($"{reused} of the app's files signed by an earlier build (cache)");
+        if (toSign.Count > 0)
+        {
+            log($"Signing {toSign.Count} of the app's files");
+            Signer.Sign(project.Signing, projectDir, toSign.Select(p => p.Copy).ToList(), project.App.Name, log);
+            foreach (var (copy, key) in toSign)
+            {
+                if (key is null) continue;
+                byte[] sha;
+                using (var fs = File.OpenRead(copy)) sha = SHA256.HashData(fs);
+                StreamCache.Put(key, copy, sha, StreamCache.SignedExtension);
+            }
+        }
         foreach (var (index, copy) in picked)
         {
             var f = collected.Files[index];
@@ -723,6 +762,13 @@ public sealed class PackageBuilder
                 w.WriteEndArray();
                 if (p.Install.AdoptExistingInstall) w.WriteString("adoptUninstallKey", p.App.Id);
                 WriteStrings(w, "legacyUninstallKeys", p.Install.LegacyUninstallKeys);
+                if (p.Install.LegacyMsi is { } msi && (msi.ProductCodes.Count > 0 || msi.UpgradeCodes.Count > 0))
+                {
+                    w.WriteStartObject("legacyMsi");
+                    WriteStrings(w, "productCodes", msi.ProductCodes.Select(c => c.ToUpperInvariant()).Distinct());
+                    WriteStrings(w, "upgradeCodes", msi.UpgradeCodes.Select(c => c.ToUpperInvariant()).Distinct());
+                    w.WriteEndObject();
+                }
                 WriteStrings(w, "relaunchArgs", p.Install.RelaunchArguments);
                 WriteStrings(w, "addToPath", p.Install.AddToPath.Select(x => x.Replace('/', '\\')));
                 if (p.Install.CloseCommand is { Run.Length: > 0 } cc)
@@ -1101,6 +1147,7 @@ public sealed class PackageBuilder
                 }
                 if (u.Signer.Length > 0) w.WriteString("signer", u.Signer);
                 if (u.Differential) w.WriteBoolean("differential", true);
+                if (u.Channel is { Length: > 0 } channel && channel != UpdateFeed.StableChannel) w.WriteString("channel", channel);
                 w.WriteEndObject();
             }
         }

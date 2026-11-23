@@ -10,6 +10,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Builder.Core\FluentSetup.Builder.Core.csproj" />
+    <!-- Argument parser tests. -->
+    <InternalsVisibleTo Include="FluentSetup.Builder.Core.Tests" />
   </ItemGroup>
   <!-- Runtime assets that get embedded into every Setup.exe. -->
   <ItemGroup>

@@ -43,6 +43,7 @@ paths work but make the project machine-specific.
 | Programs to run after install / before uninstall | `actions[]`: only `.exe` files from the package itself, no shell. |
 | App running while updating? | `install.closeProcesses` (image names) and `install.closeCommand` (e.g. `App.exe --exit` for tray apps). |
 | Replacing another installer (NSIS, Inno, MSI-less)? | `install.adoptExistingInstall` (same uninstall key = app id) or `install.legacyUninstallKeys` (old key names, e.g. Inno `"{GUID}_is1"`), plus `install.cleanup` for old tasks/Run values/shortcuts (`"Folder\\Old.lnk"` for a Start menu folder) and `install.cleanup.removeFiles` for the old uninstaller (`"unins*.exe"`, `"unins*.dat"`). Keep the old Start menu folder with `install.startMenuFolder`, the asset file name the app's updater looks for with `output.fileName`, and its command line (§11). |
+| Replacing an MSI (WiX, InstallShield, VS installer project)? | `install.legacyMsi: { "upgradeCodes": ["{GUID}"] }` (and/or `productCodes`): setup removes those Windows Installer products (no UI, no restart) before writing its files; set `install.machineDir` to the MSI's folder to keep the location. See project-file.md "Moving from WiX / an MSI". |
 | Version (or other values) set by the release pipeline | `"variables": { "Version": "1.0.0" }`, `"version": "$(Version)"`, then `fsetup build p.json -D Version=1.2.3`. |
 | Command-line tool? | `install.addToPath: ["cli"]` (folder relative to the install folder; `""` = the folder itself): user PATH for per-user installs, machine PATH for per-machine; removed on uninstall. |
 | Settings/data to ask about on uninstall | `uninstall.userData: { "paths": ["{LocalAppData}\\App"], "default": false }`: a checkbox on the uninstall page; silent uninstalls keep the data unless `/remove-user-data`. |
@@ -59,7 +60,7 @@ paths work but make the project machine-specific.
 | Write settings into a config file | `configFiles[]`: JSON (dotted keys) or INI (section/key), existing files keep their other settings. |
 | Files the app keeps open during updates | `install.restartManager: "auto"` (default) closes and restarts the programs holding them; `install.lockedFiles: "reboot"` (per-machine) replaces what is still locked at the next restart (exit code 3010). |
 | Signed uninstaller | `signing.signUninstaller: true` (default when signing): uninstall.exe shows the publisher in UAC. |
-| Sign the app's own programs | `signing.files: ["MyApp.exe", "MyApp*.dll"]`: signed copies go into the package (already signed files are skipped). |
+| Sign the app's own programs | `signing.files: ["MyApp.exe", "MyApp*.dll"]`: signed copies go into the package (already signed files are skipped) and are cached, so an unchanged program keeps its bytes across rebuilds (`build --no-cache` signs again). |
 | Languages | Built in: en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT (regional tags such as zh-HK, de-CH, pt-PT use the table of their language). Any other language: a localization file with a `strings` table (§10). |
 
 ## 4. Project file at a glance
@@ -77,7 +78,7 @@ paths work but make the project machine-specific.
                "machineDir": "{ProgramFiles}\\{AppName}", "allowCustomDir": true,
                "desktopShortcut": "optionalOff", "startMenuShortcut": "on", "launchAfterInstall": "optionalOn",
                "allowDowngrade": false, "minWindowsBuild": 17763,
-               "closeProcesses": [], "closeCommand": null, "adoptExistingInstall": false, "legacyUninstallKeys": [],
+               "closeProcesses": [], "closeCommand": null, "adoptExistingInstall": false, "legacyUninstallKeys": [], "legacyMsi": null,
                "ngen": [], "cleanup": { "removeScheduledTasks": [], "removeRunValues": [], "removeShortcuts": [], "removeUninstallKeys": [] } },
   "requirements": { "netFramework": "", "dotNet": [], "windowsAppRuntime": { "required": false }, "webView2": { "required": false } },
   "options": [],
@@ -245,6 +246,10 @@ Built-in updates (instead of writing an updater in the app):
   literal version). A SHA-256 is required: GitHub's asset digest and/or the `checksums` file.
 - Feed: `{ "version", "url", "sha256", "size"?, "notes"? }` over https; `fsetup build --feed latest.json --feed-url
   https://…/{FileName}` writes it with the package.
+- Channels: other releases go under `"channels": { "beta": { …same fields… } }` of the feed (`fsetup build --feed
+  latest.json --feed-channel beta …` updates only that entry). `update.channel` (default `"stable"`) is what installs
+  follow; `uninstall.exe /check-update /channel beta` or `Setup.exe /channel beta` switches one PC (remembered). On
+  GitHub any channel but `stable` includes pre-releases.
 - The download must be the same `app.id`, the advertised (newer) version, and signed by `update.signer` if set.
 - `update.differential: true` (opt-in) makes updates download only what changed: the last Setup.exe is kept on the
   user's PC (one Setup.exe of disk) and unchanged streams are copied from it; the server must answer HTTP range
@@ -286,13 +291,13 @@ committed. Apps & features "Modify" runs `uninstall.exe /modify` (Change page + 
 | Range | Area |
 |---|---|
 | FS10xx | `app` |
-| FS11xx | `files` (FS1101 source, FS1106 bad glob, FS1107–FS1109 bad/duplicate target paths, FS1110 main executable missing, FS1111–FS1116 variants) |
+| FS11xx | `files` (FS1101 source, FS1106 bad glob, FS1107–FS1109 bad/duplicate target paths, FS1110 main executable missing, FS1111–FS1119 variants, FS1120–FS1124 source folder walk: unreadable folder, skipped link, too many files, file and folder clash, nothing to install) |
 | FS12xx | `install` (scope, directory templates, offers, Windows build) |
 | FS13xx | `ui` (FS1304 language, FS1306 license size, FS1311 licenseMode, FS1315 licenseStyle, FS1320–FS1328 localization) |
 | FS14xx | `output` |
 | FS15xx | `signing` (FS1501 no certificate, FS1504 provider, FS1505–FS1509 `trustedSigning`, FS1510–FS1516 `command`, FS1518 thumbprint, FS1519 provider needs Windows) |
-| FS16xx | requirements, options, actions, cleanup, variants filters (FS1640–FS1642: a referenced file is not in the package; FS1670–FS1683 VC++, custom prerequisites, `auto`, download signer) |
-| FS17xx | `update` (FS1701 both sources, FS1702 repository, FS1703 feed URL, FS1704 asset name, FS1705 literal version in the name, FS1706 checksums, FS1707–FS1710 settings without effect, signer) |
+| FS16xx | requirements, options, actions, cleanup, variants filters (FS1640–FS1642: a referenced file is not in the package; FS1670–FS1683 VC++, custom prerequisites, `auto`, download signer; FS1684–FS1685 `install.legacyMsi`) |
+| FS17xx | `update` (FS1701 both sources, FS1702 repository, FS1703 feed URL, FS1704 asset name, FS1705 literal version in the name, FS1706 checksums, FS1707–FS1710 settings without effect, signer, FS1711 `update.channel`) |
 | FS18xx | `variables` |
 | FS19xx | 1.2 sections: FS1901–FS1914 `shortcuts`, FS1920–FS1937 `associations`/`protocols`, FS1940–FS1954 `registry`/`environment`, FS1960–FS1979 `services`/`firewall`, FS1980–FS1999 `inputs`/`configFiles` (FS1998: `{Input:id}` without that input). Also FS1220–FS1226 (`app.appUserModelId`, `install.restartManager`/`lockedFiles`/`appPaths`) and FS1312–FS1314 (`ui.banner`). |
 | FS2xxx | build (installer runtime missing, WinUI front end missing) |

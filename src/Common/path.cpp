@@ -27,6 +27,7 @@ const char* ProblemKey(Problem p) noexcept {
         case Problem::NotWritable: return "path.notWritable";
         case Problem::Space: return "path.space";
         case Problem::Locked: return "path.locked";
+        case Problem::Insecure: return "path.insecure";
     }
     return "";
 }

@@ -12,6 +12,7 @@ public sealed partial class MainWindow : Window
 {
     public MainViewModel VM => App.VM;
     private bool _closeConfirmed;
+    private bool _closing;
 
     private static readonly Dictionary<string, Type> Pages = new()
     {
@@ -79,14 +80,28 @@ public sealed partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// A running build is cancelled first (if the user agrees) and the window closes only after it has removed its
+    /// temporary files; then unsaved changes are saved or discarded.
+    /// </summary>
     private async void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        if (_closeConfirmed || !VM.IsDirty) return;
+        if (_closeConfirmed || (!VM.IsDirty && !VM.IsBuilding)) return;
         args.Cancel = true;
-        if (await VM.ConfirmCloseProjectAsync())
+        if (_closing) return;
+        _closing = true;
+        try
         {
-            _closeConfirmed = true;
-            Close();
+            if (VM.IsBuilding) Navigate("build");
+            if (await VM.ConfirmCloseProjectAsync())
+            {
+                _closeConfirmed = true;
+                Close();
+            }
+        }
+        finally
+        {
+            _closing = false;
         }
     }
 

@@ -141,13 +141,16 @@ public class SignerTests
     private const string FakeSigner = """
         param([string] $In, [string] $Out, [string] $Description)
         if ($env:FS_FAKE_SIGNER_EXIT) { exit [int]$env:FS_FAKE_SIGNER_EXIT }
+        if ($env:FS_FAKE_SIGNER_LOG) { Add-Content -LiteralPath $env:FS_FAKE_SIGNER_LOG -Value ([IO.Path]::GetFileName($In)) }
         $b = [IO.File]::ReadAllBytes($In)
         $opt = [BitConverter]::ToInt32($b, 0x3C) + 24
         $sec = $(if ([BitConverter]::ToUInt16($b, $opt) -eq 0x20B) { $opt + 112 } else { $opt + 96 }) + 32
         [BitConverter]::GetBytes([uint32]$b.Length).CopyTo($b, $sec)
         [BitConverter]::GetBytes([uint32]8).CopyTo($b, $sec + 4)
         $target = $(if ($Out) { $Out } else { $In })
-        [IO.File]::WriteAllBytes($target, [byte[]]($b + [byte[]](8, 0, 0, 0, 0, 2, 2, 0)))
+        # Like a real timestamp, every signature differs.
+        $stamp = [byte](Get-Random -Minimum 1 -Maximum 255)
+        [IO.File]::WriteAllBytes($target, [byte[]]($b + [byte[]](8, 0, 0, 0, 0, 2, 2, $stamp)))
         [IO.File]::WriteAllText("$In.description.txt", "$Description|$env:FS_FAKE_SIGNER_MODE")
         """;
 
@@ -247,6 +250,92 @@ public class SignerTests
         Assert.NotEqual(originals["App.Core.dll"], files["App.Core.dll"]);
         Assert.Equal(originals["Vendor.dll"], files["Vendor.dll"]);
         Assert.Equal(originals["App.config"], files["App.config"]);
+    }
+
+    [Fact]
+    public async Task SignedAppFilesAreReusedFromTheCache()
+    {
+        var shell = PowerShell();
+        var runtime = Path.Combine(AppContext.BaseDirectory, "runtime");
+        if (shell is null || !File.Exists(Path.Combine(runtime, "x64", "FluentSetup.Stub.exe"))) return;
+        using var dir = new TempDir();
+        var app = Path.Combine(dir.Path, "app");
+        Directory.CreateDirectory(app);
+        File.Copy(typeof(PeResources).Assembly.Location, Path.Combine(app, "App.exe"));
+        File.Copy(typeof(global::FluentSetup.Cli.Program).Assembly.Location, Path.Combine(app, "App.Core.dll"));
+        var signerLog = Path.Combine(dir.Path, "signer.log");
+        var secret = "secret-" + Guid.NewGuid().ToString("N");
+        var signing = Command(dir, shell, false, new() { ["FS_FAKE_SIGNER_LOG"] = signerLog, ["FS_FAKE_TOKEN"] = secret });
+        signing.SignUninstaller = false;
+        signing.Files = ["App.exe", "App*.dll"];
+        var project = new SetupProject
+        {
+            App = new AppInfo { Id = "Test.SignCache", Name = "Sign Cache", Publisher = "P", Version = "1.0.0", MainExecutable = "App.exe" },
+            Files = new FileSettings { Source = "app" },
+            Output = new OutputSettings { Directory = "out", Compression = "fast" },
+            Signing = signing,
+        };
+        var projectPath = Path.Combine(dir.Path, "fluentsetup.json");
+        ProjectSerializer.Save(project, projectPath);
+        // The app's files signed so far (Setup.exe itself is signed on every build).
+        int Signed() => File.Exists(signerLog) ? File.ReadAllLines(signerLog).Count(l => l.Trim() is "App.exe" or "App.Core.dll") : 0;
+        async Task<Dictionary<string, string>> Build(bool useCache = true)
+        {
+            var report = await new PackageBuilder().BuildAsync(project, projectPath, new BuildOptions { RuntimeRoot = runtime, UseCache = useCache });
+            Assert.True(report.Success, report.Error);
+            Assert.Equal(2, report.SignedFiles);
+            return PackageInspector.Inspect(report.OutputPath!, verifyStreams: true).Header!.RootElement.GetProperty("payload").GetProperty("files").EnumerateArray()
+                .ToDictionary(f => f.GetProperty("path").GetString()!, f => f.GetProperty("sha256").GetString()!);
+        }
+
+        var first = await Build();
+        Assert.Equal(2, Signed());
+        // Unchanged files: the signed copies of the first build, byte for byte (the fake signer's "timestamp" is random).
+        var second = await Build();
+        Assert.Equal(2, Signed());
+        Assert.Equal(first, second);
+
+        // A changed program is signed again; the unchanged one still comes from the cache.
+        File.AppendAllText(Path.Combine(app, "App.exe"), "changed");
+        var third = await Build();
+        Assert.Equal(3, Signed());
+        Assert.NotEqual(first["App.exe"], third["App.exe"]);
+        Assert.Equal(first["App.Core.dll"], third["App.Core.dll"]);
+
+        // Other signing settings (here the timestamp server) sign again; --no-cache too.
+        project.Signing.TimestampUrl = "http://timestamp.example.com";
+        await Build();
+        Assert.Equal(5, Signed());
+        await Build(useCache: false);
+        Assert.Equal(7, Signed());
+
+        // The cache holds no secret: environment values of the command are not part of the key or the files.
+        var identity = Signer.CacheIdentity(project.Signing, dir.Path, project.App.Name);
+        project.Signing.Command!.Environment["FS_FAKE_TOKEN"] = "another value";
+        Assert.Equal(identity, Signer.CacheIdentity(project.Signing, dir.Path, project.App.Name));
+        foreach (var f in Directory.EnumerateFiles(StreamCache.Root))
+        {
+            Assert.DoesNotContain(secret, File.ReadAllText(f), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void SigningCacheIdentityFollowsTheSettings()
+    {
+        using var dir = new TempDir();
+        var a = new SigningSettings { CertificateThumbprint = new string('a', 40) };
+        var id = Signer.CacheIdentity(a, dir.Path, "App");
+        Assert.Equal(id, Signer.CacheIdentity(new SigningSettings { CertificateThumbprint = new string('A', 40) }, dir.Path, "App"));
+        Assert.NotEqual(id, Signer.CacheIdentity(new SigningSettings { CertificateThumbprint = new string('b', 40) }, dir.Path, "App"));
+        Assert.NotEqual(id, Signer.CacheIdentity(new SigningSettings { CertificateThumbprint = new string('a', 40), TimestampUrl = "http://other" }, dir.Path, "App"));
+        Assert.NotEqual(id, Signer.CacheIdentity(a, dir.Path, "Other description"));
+
+        // A .pfx counts by its content: a renewed certificate in the same file signs again.
+        dir.File("cert.pfx", "one");
+        var pfx = new SigningSettings { CertificateFile = "cert.pfx", PasswordEnvironmentVariable = "PFX_PASSWORD" };
+        var before = Signer.CacheIdentity(pfx, dir.Path, "App");
+        dir.File("cert.pfx", "two");
+        Assert.NotEqual(before, Signer.CacheIdentity(pfx, dir.Path, "App"));
     }
 
     [Fact]

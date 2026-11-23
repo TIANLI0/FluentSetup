@@ -148,6 +148,7 @@
   "error.UnsafePath": "The install location isn't safe to use.",
   "error.AlreadyRunning": "Setup for {0} is already running. Finish it first.",
   "error.peerLost": "The setup process stopped unexpectedly. Run setup again.",
+  "error.installerBusy": "Another program is installing or removing software on this PC (Windows Installer is busy). Wait until it has finished, then run setup again.",
 
   "path.empty": "Enter an install location.",
   "path.notAbsolute": "Enter a full path, for example C:\\Apps\\MyApp.",
@@ -164,6 +165,7 @@
   "path.notWritable": "You can't create files in this location without administrator permission.",
   "path.space": "Not enough free space: {0} required, {1} available.",
   "path.locked": "The app is already installed. Its location can't be changed during an update.",
+  "path.insecure": "Other users can change files in this folder. To install for all users, choose a new or empty folder, or one that only administrators can change.",
 
   "fallback.notice": "Classic view",
   "fallback.accept": "&I accept the terms of the license agreement",
@@ -227,5 +229,5 @@
   "license.inlineLink": "license terms",
   "license.inlineSubtitle": "By installing, you accept these license terms.",
 
-  "usage": "Usage: Setup.exe [options]\n\n/quiet  Install without any user interface\n/passive  Show progress only, ask nothing\n/uninstall  Remove the installed app\n/modify  Change the installed app's options (with /quiet: no questions)\n/repair  Check the installed files and restore damaged ones\n/dir <path>  Install location\n/scope user|machine  Install for the current user or for all users\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Turn a package-defined option on or off\n/input <id>=<value>  Value of a package-defined setting (repeatable)\n/variant <id>  Package variant (e.g. shared or self-contained runtimes)\n/remove-user-data  Uninstall: also delete settings and data\n/relaunch  Start the app after a quiet install (in-app updaters)\n/check-update  Exit code 18 if a newer version is published, 0 if not\n/install-update  Download, check and install the newest version (with /passive or /quiet: no questions)\nInno Setup and NSIS switches (/VERYSILENT, /SUPPRESSMSGBOXES, /DIR=, /TASKS=, /D=...) are accepted.\n/log <file>  Write the log to this file\n/lang <language>  Interface language (en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT)\n/ui auto|winui|win32  Interface technology (diagnostics)\n\nExit code 0 means success; see the documentation for the other codes. 3010 means success, but restart the PC to finish."
+  "usage": "Usage: Setup.exe [options]\n\n/quiet  Install without any user interface\n/passive  Show progress only, ask nothing\n/uninstall  Remove the installed app\n/modify  Change the installed app's options (with /quiet: no questions)\n/repair  Check the installed files and restore damaged ones\n/dir <path>  Install location\n/scope user|machine  Install for the current user or for all users\n/desktop-shortcut yes|no\n/start-menu-shortcut yes|no\n/option <id>=yes|no  Turn a package-defined option on or off\n/input <id>=<value>  Value of a package-defined setting (repeatable)\n/variant <id>  Package variant (e.g. shared or self-contained runtimes)\n/remove-user-data  Uninstall: also delete settings and data\n/relaunch  Start the app after a quiet install (in-app updaters)\n/check-update  Exit code 18 if a newer version is published, 0 if not\n/install-update  Download, check and install the newest version (with /passive or /quiet: no questions)\n/channel <name>  Update channel, e.g. beta (remembered for later updates)\nInno Setup and NSIS switches (/VERYSILENT, /SUPPRESSMSGBOXES, /DIR=, /TASKS=, /D=...) are accepted.\n/log <file>  Write the log to this file\n/lang <language>  Interface language (en-US, zh-CN, zh-TW, ja-JP, ko-KR, de-DE, fr-FR, es-ES, pt-BR, ru-RU, it-IT)\n/ui auto|winui|win32  Interface technology (diagnostics)\n\nExit code 0 means success; see the documentation for the other codes. 3010 means success, but restart the PC to finish."
 }

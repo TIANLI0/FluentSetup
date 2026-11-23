@@ -118,6 +118,8 @@ install::InstallOptions Controller::DefaultOptions() const {
     }
     o.installDir = engine.DefaultInstallDir(o.scope);
     if (!args_.installDir.empty() && !existing_.product && pkg_.allowCustomDir) o.installDir = args_.installDir;
+    o.sourcePackage = args_.sourcePackage;  // the engine records it only if it is identical to this file
+    o.updateChannel = args_.channel;        // /channel: recorded, later update checks follow it
     o.desktopShortcut = install::OfferDefault(pkg_.desktopShortcut);
     o.startMenuShortcut = install::OfferDefault(pkg_.startMenuShortcut);
     if (args_.desktopShortcut && install::OfferVisible(pkg_.desktopShortcut)) o.desktopShortcut = *args_.desktopShortcut;
@@ -865,7 +867,7 @@ void Controller::RunRepair() {
     // The setup takes the per-app lock itself; it reinstalls the same version with the recorded choices.
     if (releaseLock_) releaseLock_();
     DWORD exitCode = 0;
-    const bool started = RunSetup(source.path, args_.quiet, strings_.Language(), exitCode, error);
+    const bool started = RunSetup(source.path, args_.quiet, strings_.Language(), source.original, exitCode, error);
     if (reacquireLock_ && !reacquireLock_()) log::Warn(L"Repair: another setup of %s took the single-instance lock", pkg_.appId.c_str());
     if (!started) {
         out.code = ErrorCode::Internal;
@@ -914,6 +916,8 @@ install::Outcome Controller::RunElevated(const install::InstallOptions& options,
         else log::Warn(L"Cannot read the original uninstaller's process id (%lu); the worker will not wait for it", ::GetLastError());
     }
     if (!logPath_.empty()) params += L" /log " + QuoteArg(logPath_);
+    // The worker duplicates our open log handle (it has PROCESS_DUP_HANDLE on us) instead of opening the path elevated.
+    if (const HANDLE logFile = log::FileHandle()) params += L" --log-handle " + std::to_wstring(reinterpret_cast<uintptr_t>(logFile));
     params += L" /lang " + strings_.Language();
 
     log::Info(L"Requesting elevation for the worker");
@@ -984,7 +988,8 @@ json::Value Controller::DoneMessage(const install::Outcome& o) const {
     m.set("result", o.code == ErrorCode::Ok ? "success" : o.code == ErrorCode::Cancelled ? "cancelled" : "failed");
     m.set("code", static_cast<int64_t>(o.code));
     m.set("codeName", ErrorCodeName(o.code));
-    m.set("message", strings_.Fmt("error." + WideToUtf8(ErrorCodeName(o.code)), {pkg_.name, o.detail}));
+    const std::string key = o.code != ErrorCode::Ok && !o.messageKey.empty() ? o.messageKey : "error." + WideToUtf8(ErrorCodeName(o.code));
+    m.set("message", strings_.Fmt(key, {pkg_.name, o.detail}));
     json::Value warnings = json::Value::MakeArray();
     for (const auto& w : o.warnings) warnings.push(w);
     m.set("warnings", warnings);

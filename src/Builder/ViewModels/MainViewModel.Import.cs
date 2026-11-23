@@ -7,7 +7,7 @@ namespace FluentSetup.Builder.ViewModels;
 /// <summary>Import from an Inno Setup or NSIS script (fsetup import in the GUI).</summary>
 public partial class MainViewModel
 {
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBuilding))]
     private async Task ImportProjectAsync()
     {
         if (!await ConfirmCloseProjectAsync()) return;

@@ -210,9 +210,11 @@ public static partial class ProjectValidator
     {
         var u = p.Update;
         bool github = !string.IsNullOrWhiteSpace(u.GitHub), feed = !string.IsNullOrWhiteSpace(u.Feed);
+        if (u.Channel.Length > 0 && !UpdateFeed.IsValidChannel(u.Channel))
+            d.Error("FS1711", "update.channel", $"'{u.Channel}' is not a channel name: lower-case letters, digits and '-', starting with a letter (e.g. stable or beta).");
         if (!github && !feed)
         {
-            if (u.Asset.Length > 0 || u.Checksums.Length > 0 || u.Signer.Length > 0 || u.Prerelease)
+            if (u.Asset.Length > 0 || u.Checksums.Length > 0 || u.Signer.Length > 0 || u.Prerelease || u.Channel is not ("" or UpdateFeed.StableChannel))
                 d.Warning("FS1709", "update", "Update settings have no effect until update.github or update.feed is set.");
             return;
         }
@@ -230,7 +232,7 @@ public static partial class ProjectValidator
             else if (!asset.Contains("{Version}", StringComparison.Ordinal) && IsValidVersion(p.App.Version) && asset.Contains(p.App.Version, StringComparison.Ordinal))
                 d.Warning("FS1705", string.IsNullOrEmpty(u.Asset) ? "output.fileName" : "update.asset",
                           $"The Setup.exe name '{asset}' contains this version ({p.App.Version}) literally, so the next release is looked for under the same name. " +
-                          "Write {Version} in update.asset (or in output.fileName) instead.");
+                          $"Write {{Version}} in update.asset (or in output.fileName) instead.");
             if (u.Checksums.Length > 0 && !PathRules.IsValidComponent(u.Checksums, out _))
                 d.Error("FS1706", "update.checksums", "update.checksums must be the file name of a release asset, e.g. SHA256SUMS.txt.");
         }

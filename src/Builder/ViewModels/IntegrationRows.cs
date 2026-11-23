@@ -526,6 +526,13 @@ public sealed partial class InputRow : ParentRow<InputChoiceRow>
         }
     }
 
+    internal override IEnumerable<(string Field, List<TextLineError> Errors)> CheckTexts() =>
+    [
+        ("label", TextForms.CheckLocalized(LabelText, _original.Label)),
+        ("description", TextForms.CheckLocalized(DescriptionText, _original.Description)),
+        .. Children.SelectMany((c, j) => c.CheckTexts().Select(t => ($"choices[{j}].{t.Field}", t.Errors))),
+    ];
+
     public static InputRow From(InputSettings i)
     {
         var row = new InputRow
@@ -570,6 +577,8 @@ public sealed partial class InputChoiceRow : ChildRow
 
     [ObservableProperty] public partial string Value { get; set; } = "";
     [ObservableProperty] public partial string LabelText { get; set; } = "";
+
+    internal override IEnumerable<(string Field, List<TextLineError> Errors)> CheckTexts() => [("label", TextForms.CheckLocalized(LabelText, _original.Label))];
 
     public static InputChoiceRow From(InputChoiceSettings c) => new() { _original = c, Value = c.Value ?? "", LabelText = TextForms.Localized(c.Label) };
 

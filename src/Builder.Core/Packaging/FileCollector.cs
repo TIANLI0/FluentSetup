@@ -40,7 +40,8 @@ public static class FileCollector
                 Source = v.Source, Include = project.Files.Include, Exclude = project.Files.Exclude, Preserve = project.Files.Preserve,
                 Extra = project.Files.Extra, EmptyDirectories = project.Files.EmptyDirectories,
             };
-            var r = Collect(new SetupProject { Files = files, Output = project.Output }, projectDirectory, cancellationToken);
+            // App is needed for the output file name ({AppName}, {Version}...) and the main executable check (FS1110).
+            var r = Collect(new SetupProject { App = project.App, Files = files, Output = project.Output }, projectDirectory, cancellationToken);
             result.Diagnostics.AddRange(r.Diagnostics.Items.Select(d => d with { Field = $"files.variants[{v.Id}]: {d.Field}" }));
             perVariant.Add(r);
         }
@@ -143,7 +144,7 @@ public static class FileCollector
                 }
                 catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
                 {
-                    result.Diagnostics.Error("FS1111", "files.source", $"Cannot read folder {dir}: {ex.Message}");
+                    result.Diagnostics.Error("FS1120", "files.source", $"Cannot read folder {dir}: {ex.Message}");
                     continue;
                 }
                 foreach (var entry in entries)
@@ -153,7 +154,7 @@ public static class FileCollector
                     if (PathRules.IsLink(entry))
                     {
                         result.SkippedLinks++;
-                        result.Diagnostics.Warning("FS1112", "files.source", $"Skipped link (symbolic link or junction): {entry.FullName}");
+                        result.Diagnostics.Warning("FS1121", "files.source", $"Skipped link (symbolic link or junction): {entry.FullName}");
                         continue;
                     }
                     if (!OperatingSystem.IsWindows() && entry.Name.Contains('\\'))
@@ -172,7 +173,7 @@ public static class FileCollector
                     if (outputFile is not null && entry.FullName.Equals(outputFile, PathRules.HostPathComparison)) continue;
                     if (result.Files.Count >= MaxFiles)
                     {
-                        result.Diagnostics.Error("FS1113", "files", $"More than {MaxFiles:N0} files.");
+                        result.Diagnostics.Error("FS1122", "files", $"More than {MaxFiles:N0} files.");
                         return;
                     }
                     Add(entry.FullName, target, (FileInfo)entry);
@@ -210,11 +211,11 @@ public static class FileCollector
             for (var i = 1; i < parts.Length; i++)
             {
                 var prefix = string.Join('\\', parts.Take(i));
-                if (seen.ContainsKey(prefix)) result.Diagnostics.Error("FS1114", "files", $"'{prefix}' is both a file and a folder.");
+                if (seen.ContainsKey(prefix)) result.Diagnostics.Error("FS1123", "files", $"'{prefix}' is both a file and a folder.");
             }
         }
 
-        if (result.Files.Count == 0) result.Diagnostics.Error("FS1115", "files.source", "No files to install: the source folder is empty or everything is excluded.");
+        if (result.Files.Count == 0) result.Diagnostics.Error("FS1124", "files.source", "No files to install: the source folder is empty or everything is excluded.");
         if (!string.IsNullOrEmpty(project.App.MainExecutable) &&
             PathRules.TryNormalizeRelative(project.App.MainExecutable, out var main, out _) && !seen.ContainsKey(main))
         {

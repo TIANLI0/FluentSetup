@@ -9,6 +9,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fsetup::install {
@@ -54,7 +55,9 @@ struct InstallRecord {
     std::map<std::string, bool> choices;  // package-defined options as chosen at install time (for beforeUninstall actions)
     std::map<std::string, std::wstring> inputs;  // remembered input values (never passwords), pre-filled on updates
     std::wstring sourcePackage;                  // the Setup.exe that installed this version (for Repair), may be gone
-    std::wstring sourcePackageSha256;
+    std::wstring sourcePackageSha256;            // its header digest (identifies the build; differential update base)
+    std::wstring sourcePackageFileSha256;        // SHA-256 of the whole file; without it (older records) a repair never runs it
+    std::wstring updateChannel;                  // update channel chosen with /channel (kept on updates); "" = update.channel
     std::vector<RegistryItem> registry;          // registry keys/values written (removed on uninstall / when gone)
     std::vector<EnvironmentItem> environment;    // environment variables written
     std::vector<std::wstring> services;          // services created
@@ -74,6 +77,10 @@ bool ForeignArpEntryExists(const std::wstring& appId, Scope scope);
 std::optional<InstalledProduct> QueryForeign(const std::wstring& appId, Scope scope);
 // Removes an ARP key written by another installer (legacy product names). Keys carrying our marker are never touched.
 bool DeleteForeignArpEntry(const std::wstring& keyName, Scope scope);
+
+// An update channel name (update.channel, /channel): lower-case letters, digits and '-', starting with a letter, at
+// most 32 characters.
+bool IsUpdateChannelName(std::wstring_view name) noexcept;
 
 json::Value RecordToJson(const InstallRecord& r);
 // Validates every field; relative paths must be safe, shortcuts must live in Start menu / desktop folders of the scope.

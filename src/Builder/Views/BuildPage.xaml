@@ -118,6 +118,18 @@
                         <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.IncludeWinUI, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="BuildWinUIToggle" />
                     </Grid>
                 </Border>
+                <!-- output.codeFilter: branch filter for programs and DLLs before compression -->
+                <Border Style="{StaticResource RowCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE943;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="BuildCodeFilterTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="BuildCodeFilterDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" IsOn="{x:Bind VM.CodeFilter, Mode=TwoWay}" MinWidth="0" VerticalAlignment="Center" x:Uid="BuildCodeFilterToggle" />
+                    </Grid>
+                </Border>
                 <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                     <Expander.Header>
                         <Grid ColumnSpacing="16" Padding="0,12">
@@ -151,6 +163,9 @@
                             <TextBox x:Uid="SignTrustedProfileBox" Text="{x:Bind VM.TrustedSigningProfile, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
                             <TextBox x:Uid="SignTrustedDlibBox" Text="{x:Bind VM.TrustedSigningDlib, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
                             <TextBox x:Uid="SignTrustedCorrelationBox" Text="{x:Bind VM.TrustedSigningCorrelationId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />
+                            <!-- signing.trustedSigning.excludeCredentials: DefaultAzureCredential sources to skip -->
+                            <TextBox x:Uid="SignTrustedExcludeBox" Text="{x:Bind VM.TrustedSigningExcludeCredentials, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False"
+                                     AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" />
                         </StackPanel>
                         <StackPanel Spacing="16" Visibility="{x:Bind VM.IsCommandProvider, Mode=OneWay}">
                             <TextBox x:Uid="SignCommandRunBox" Text="{x:Bind VM.SigningCommandRun, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSpellCheckEnabled="False" />

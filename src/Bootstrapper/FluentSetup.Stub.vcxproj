@@ -21,9 +21,15 @@
     </ClCompile>
     <Link>
       <AdditionalDependencies>comctl32.lib;uxtheme.lib;dwmapi.lib;wintrust.lib;crypt32.lib;bcrypt.lib;shell32.lib;ole32.lib;oleaut32.lib;advapi32.lib;winhttp.lib;user32.lib;gdi32.lib;shcore.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <!-- Not KnownDLLs: delay-load them so they are resolved after SetDefaultDllDirectories(SYSTEM32), never from the
-           download folder Setup.exe runs in. -->
-      <DelayLoadDLLs>comctl32.dll;uxtheme.dll;dwmapi.dll;wintrust.dll;crypt32.dll;bcrypt.dll;shcore.dll;oleaut32.dll;winhttp.dll;taskschd.dll;wtsapi32.dll</DelayLoadDLLs>
+      <!-- Setup.exe runs from folders other users or downloads can write to (Downloads, the %TEMP% copy of the
+           uninstaller, the kept update folder), and the elevated worker starts from the same file. A static import is
+           resolved by the loader before wWinMain, from the program's own folder first unless it is a KnownDLL, so a
+           planted version.dll there would run inside setup, with administrator rights in the worker. Every import that
+           is not a KnownDLL or an API set is therefore delay-loaded: it loads on first use, after wWinMain has limited
+           the search to System32 (SetDefaultDllDirectories). /DEPENDENTLOADFLAG:0x800 (build/native.props) limits the
+           loader's own search for dependencies to System32 as well. scripts/check-imports.ps1 fails the build when a
+           new static import slips in. -->
+      <DelayLoadDLLs>comctl32.dll;uxtheme.dll;dwmapi.dll;wintrust.dll;crypt32.dll;bcrypt.dll;shcore.dll;oleaut32.dll;winhttp.dll;taskschd.dll;wtsapi32.dll;rstrtmgr.dll;version.dll;propsys.dll;msi.dll</DelayLoadDLLs>
       <!-- Linker map: scripts/size-report.ps1 attributes the stub's bytes to its components. -->
       <GenerateMapFile>true</GenerateMapFile>
       <MapFileName>$(OutDir)FluentSetup.Stub.map</MapFileName>
@@ -36,6 +42,7 @@
     <ClInclude Include="args.h" />
     <ClInclude Include="controller.h" />
     <ClInclude Include="elevation.h" />
+    <ClInclude Include="feed.h" />
     <ClInclude Include="localization.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="runtime_probe.h" />
@@ -49,6 +56,7 @@
     <ClCompile Include="args.cpp" />
     <ClCompile Include="controller.cpp" />
     <ClCompile Include="elevation.cpp" />
+    <ClCompile Include="feed.cpp" />
     <ClCompile Include="localization.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="runtime_probe.cpp" />

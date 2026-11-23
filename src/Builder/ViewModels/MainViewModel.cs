@@ -49,7 +49,7 @@ public sealed partial class FieldErrors : ObservableObject
     {
         _errors = diagnostics.Where(d => d.Severity == Severity.Error)
                              .GroupBy(d => d.Field)
-                             .ToDictionary(g => g.Key, g => string.Join(Environment.NewLine, g.Select(d => d.Message)));
+                             .ToDictionary(g => g.Key, g => string.Join(Environment.NewLine, g.Select(Loc.Diagnostic)));
         OnPropertyChanged(string.Empty);
     }
 
@@ -79,7 +79,7 @@ public sealed partial class FieldErrors : ObservableObject
     // Install, upgrade and uninstall
     public string InstallStartMenuFolder => Get("install.startMenuFolder");
     public string InstallIntegration => Under("install.addToPath", "install.ngen");
-    public string InstallLegacy => Under("install.adoptExistingInstall", "install.legacyUninstallKeys");
+    public string InstallLegacy => Under("install.adoptExistingInstall", "install.legacyUninstallKeys", "install.legacyMsi");
     public string Update => Under("update");
     public string InstallRunning => Under("install.closeProcesses", "install.closeCommand", "install.relaunchArguments");
     public string InstallCleanup => Under("install.cleanup");
@@ -96,6 +96,8 @@ public sealed partial class FieldErrors : ObservableObject
     public string Options => Get("options");
     public string Actions => Get("actions");
     public string FilesVariants => Get("files.variants");
+    public string FilesVariantSelection => Get("files.variantSelection");
+    public string UiDefaultLanguage => Get("ui.defaultLanguage");
     public string OutputVariants => Get("output.variants");
     public string UiLicenses => Under("ui.licenseMode", "ui.licenses");
     public string UiLicenseStyle => Get("ui.licenseStyle");
@@ -111,6 +113,8 @@ public sealed partial class MainViewModel : ObservableObject
     private SetupProject _model = new();
     private bool _loading;
     private CancellationTokenSource? _buildCts;
+    /// <summary>Completes when the running build has finished, including its clean-up (temporary files and folders).</summary>
+    private Task _buildDone = Task.CompletedTask;
     private CancellationTokenSource? _collectCts;
 
     public AppSettings Settings { get; } = AppSettings.Load();
@@ -190,7 +194,10 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial bool UseSystemAccent { get; set; } = true;
     [ObservableProperty] public partial string AccentColor { get; set; } = "";
     [ObservableProperty] public partial string License { get; set; } = "";
-    [ObservableProperty] public partial int LanguageIndex { get; set; }      // auto, en-US, zh-CN
+    /// <summary>auto, the built-in languages (Languages), then "other" (any tag, in <see cref="OtherLanguage"/>).</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsOtherLanguage))] public partial int LanguageIndex { get; set; }
+    [ObservableProperty] public partial string OtherLanguage { get; set; } = "";
+    public bool IsOtherLanguage => LanguageIndex == Languages.Length;
 
     // ---- Output / signing ------------------------------------------------------------------------------------
     [ObservableProperty] public partial string OutputDirectory { get; set; } = "dist";
@@ -198,6 +205,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial int ArchitectureIndex { get; set; }  // x64, arm64
     [ObservableProperty] public partial int CompressionIndex { get; set; } = 1;  // fast, normal, max
     [ObservableProperty] public partial bool IncludeWinUI { get; set; } = true;
+    [ObservableProperty] public partial bool CodeFilter { get; set; } = true;
     [ObservableProperty] public partial bool SigningEnabled { get; set; }
     [ObservableProperty] public partial string CertificateThumbprint { get; set; } = "";
     [ObservableProperty] public partial string CertificateFile { get; set; } = "";
@@ -206,7 +214,10 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial string SignToolPath { get; set; } = "";
 
     // ---- Build state -----------------------------------------------------------------------------------------
-    [ObservableProperty] public partial bool IsBuilding { get; set; }
+    /// <summary>While a build runs, opening or creating another project is disabled (the result belongs to this one).</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(NewProjectCommand), nameof(OpenProjectCommand), nameof(OpenRecentCommand), nameof(ImportProjectCommand))]
+    public partial bool IsBuilding { get; set; }
     [ObservableProperty] public partial double BuildProgressValue { get; set; }
     [ObservableProperty] public partial bool BuildProgressIndeterminate { get; set; }
     [ObservableProperty] public partial string BuildStatus { get; set; } = "";
@@ -247,7 +258,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         get
         {
-            var app = HasProject ? ExpandedModel().App : new AppInfo { Publisher = Publisher, Version = Version };
+            var app = HasProject ? CurrentExpanded().App : new AppInfo { Publisher = Publisher, Version = Version };
             return string.Join("  ·  ", new[] { app.Publisher, string.IsNullOrWhiteSpace(app.Version) ? "" : Loc.Format("Overview_Version", app.Version) }.Where(s => !string.IsNullOrWhiteSpace(s)));
         }
     }
@@ -262,7 +273,8 @@ public sealed partial class MainViewModel : ObservableObject
     {
         get
         {
-            var model = ExpandedModel();
+            if (!HasProject) return "";
+            var model = CurrentExpanded();
             return $"{ProjectValidator.ExpandFileName(model.Output.FileName, model)} · {(ArchitectureIndex == 1 ? "ARM64" : "x64")}";
         }
     }
@@ -324,7 +336,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private static string FormatDiagnostics(IEnumerable<Diagnostic> diagnostics)
     {
-        var errors = diagnostics.Where(d => d.Severity == Severity.Error).Take(8).Select(d => $"• {d.Message} ({d.Code})").ToList();
+        var errors = diagnostics.Where(d => d.Severity == Severity.Error).Take(8).Select(d => $"• {Loc.Diagnostic(d)} ({d.Code})").ToList();
         return errors.Count == 0 ? "" : Environment.NewLine + string.Join(Environment.NewLine, errors);
     }
 
@@ -417,9 +429,13 @@ public sealed partial class MainViewModel : ObservableObject
             LaunchAfterIndex = IndexOf(Offers, p.Install.LaunchAfterInstall, 3); AllowDowngrade = p.Install.AllowDowngrade; MinWindowsBuild = p.Install.MinWindowsBuild;
             UiTitle = p.Ui.Title; WelcomeText = p.Ui.WelcomeText; FinishText = p.Ui.FinishText; ThemeIndex = IndexOf(Themes, p.Ui.Theme);
             BackdropIndex = IndexOf(Backdrops, p.Ui.Backdrop); UseSystemAccent = p.Ui.UseSystemAccent; AccentColor = p.Ui.AccentColor;
-            License = p.Ui.License; LanguageIndex = IndexOf(Languages, p.Ui.DefaultLanguage);
+            License = p.Ui.License;
+            // A language without a built-in table is shown as "other" with its tag (never as Automatic).
+            var language = Array.IndexOf(Languages, p.Ui.DefaultLanguage);
+            LanguageIndex = language >= 0 ? language : Languages.Length;
+            OtherLanguage = language >= 0 ? "" : p.Ui.DefaultLanguage ?? "";
             OutputDirectory = p.Output.Directory; OutputFileName = p.Output.FileName; ArchitectureIndex = IndexOf(Architectures, p.Output.Architecture);
-            CompressionIndex = IndexOf(Compressions, p.Output.Compression, 1); IncludeWinUI = p.Output.IncludeWinUI;
+            CompressionIndex = IndexOf(Compressions, p.Output.Compression, 1); IncludeWinUI = p.Output.IncludeWinUI; CodeFilter = p.Output.CodeFilter;
             SigningEnabled = p.Signing.Enabled; CertificateThumbprint = p.Signing.CertificateThumbprint; CertificateFile = p.Signing.CertificateFile;
             PasswordEnvironmentVariable = p.Signing.PasswordEnvironmentVariable; TimestampUrl = p.Signing.TimestampUrl; SignToolPath = p.Signing.SignToolPath;
             LoadSigning(p);
@@ -430,6 +446,7 @@ public sealed partial class MainViewModel : ObservableObject
             _loading = false;
         }
         IsDirty = false;
+        _expanded = null;
         OnPropertyChanged(string.Empty);
         UpdateIconImage();
         Validate();
@@ -459,9 +476,12 @@ public sealed partial class MainViewModel : ObservableObject
         p.Install.MinWindowsBuild = double.IsNaN(MinWindowsBuild) ? 0 : (int)MinWindowsBuild;
         p.Ui.Title = UiTitle; p.Ui.WelcomeText = WelcomeText; p.Ui.FinishText = FinishText; p.Ui.Theme = PickFrom(Themes, ThemeIndex, p.Ui.Theme, 0);
         p.Ui.Backdrop = PickFrom(Backdrops, BackdropIndex, p.Ui.Backdrop, 0); p.Ui.UseSystemAccent = UseSystemAccent; p.Ui.AccentColor = AccentColor.Trim();
-        p.Ui.License = License.Trim(); p.Ui.DefaultLanguage = PickFrom(Languages, LanguageIndex, p.Ui.DefaultLanguage, 0);
+        p.Ui.License = License.Trim();
+        p.Ui.DefaultLanguage = LanguageIndex == Languages.Length
+            ? (OtherLanguage.Trim().Length == 0 ? "auto" : TextForms.Keep(OtherLanguage, p.Ui.DefaultLanguage))
+            : Languages[Math.Clamp(LanguageIndex, 0, Languages.Length - 1)];
         p.Output.Directory = OutputDirectory.Trim(); p.Output.FileName = OutputFileName.Trim(); p.Output.Architecture = PickFrom(Architectures, ArchitectureIndex, p.Output.Architecture, 0);
-        p.Output.Compression = PickFrom(Compressions, CompressionIndex, p.Output.Compression, 1); p.Output.IncludeWinUI = IncludeWinUI;
+        p.Output.Compression = PickFrom(Compressions, CompressionIndex, p.Output.Compression, 1); p.Output.IncludeWinUI = IncludeWinUI; p.Output.CodeFilter = CodeFilter;
         p.Signing.Enabled = SigningEnabled; p.Signing.CertificateThumbprint = CertificateThumbprint.Trim(); p.Signing.CertificateFile = CertificateFile.Trim();
         p.Signing.PasswordEnvironmentVariable = PasswordEnvironmentVariable.Trim(); p.Signing.TimestampUrl = TimestampUrl.Trim(); p.Signing.SignToolPath = SignToolPath.Trim();
         ApplySigning(p);
@@ -475,14 +495,54 @@ public sealed partial class MainViewModel : ObservableObject
     // ---- validation ------------------------------------------------------------------------------------------
 
     private List<Diagnostic> _collectorDiagnostics = [];
+    /// <summary>The project as the last validation pass expanded it ($(Name) placeholders replaced); null until then.</summary>
+    private SetupProject? _expanded;
+    /// <summary>Counts validation passes: a pass that finishes after a newer one started is discarded.</summary>
+    private int _validationVersion;
 
-    public void Validate()
+    /// <summary>The expansion of the last validation pass (computed here only before the first pass).</summary>
+    private SetupProject CurrentExpanded() => _expanded ??= ExpandedModel();
+
+    /// <summary>Starts a validation pass (results arrive on the UI thread when it is done).</summary>
+    public void Validate() => _ = ValidateAsync();
+
+    /// <summary>
+    /// Validates what a build validates: the project with its $(Name) placeholders replaced. The project is copied on
+    /// the UI thread; expanding it and the checks (which look at files and folders) run on a worker thread.
+    /// </summary>
+    public Task ValidateAsync()
     {
-        if (!HasProject) return;
-        // Validate what a build validates: the project with its $(Name) placeholders replaced.
-        var variableBag = new DiagnosticBag();
-        var bag = ProjectValidator.Validate(ExpandedModel(variableBag), ProjectDirectory);
-        var all = bag.Items.Concat(variableBag.Items).Concat(_collectorDiagnostics).ToList();
+        if (!HasProject) return Task.CompletedTask;
+        var version = ++_validationVersion;
+        var model = BuildModel();
+        var directory = ProjectDirectory;
+        var collector = _collectorDiagnostics;
+        var text = TextDiagnostics();
+        return RunValidationAsync(version, model, directory, collector, text);
+    }
+
+    private async Task RunValidationAsync(int version, SetupProject model, string directory, List<Diagnostic> collector, List<Diagnostic> text)
+    {
+        SetupProject expanded;
+        List<Diagnostic> all;
+        try
+        {
+            (expanded, all) = await Task.Run(() =>
+            {
+                var variableBag = new DiagnosticBag();
+                var x = ProjectVariables.Expand(model, null, variableBag);
+                var bag = ProjectValidator.Validate(x, directory);
+                return (x, text.Concat(bag.Items).Concat(variableBag.Items).Concat(collector).ToList());
+            });
+        }
+        catch (Exception ex)
+        {
+            // A check that throws (an unreadable file, a folder that went away) must not leave stale results behind
+            // silently: it is reported, and the next change validates again.
+            (expanded, all) = (model, [.. text, new Diagnostic(Severity.Error, "FS0900", "", ex.Message)]);
+        }
+        if (version != _validationVersion) return;  // a newer pass is running
+        _expanded = expanded;
         Errors.Set(all);
         UpdateRowErrors();
         OnPropertyChanged(nameof(OutputSummary));
@@ -496,12 +556,59 @@ public sealed partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(CanBuild));
     }
 
+    // ---- text the editors cannot read back -------------------------------------------------------------------
+
+    /// <summary>Diagnostic codes of the Builder's own text checks (the command line never reports them).</summary>
+    private static string TextErrorCode(TextLineProblem problem) => problem switch
+    {
+        TextLineProblem.NotALanguage => "FS0902",
+        TextLineProblem.Duplicate => "FS0903",
+        TextLineProblem.NotANumber => "FS0904",
+        _ => "FS0901",
+    };
+
+    private static string DescribeTextError(string field, TextLineError e) => e.Problem switch
+    {
+        TextLineProblem.NotALanguage => Loc.Format("TextError_NotALanguage", e.Line, e.Value),
+        TextLineProblem.Duplicate => Loc.Format("TextError_Duplicate", e.Line, e.Value),
+        TextLineProblem.NotANumber => Loc.Format("TextError_NotANumber", e.Value),
+        _ => Loc.Format(field == "ui.strings" ? "TextError_StringsNotUnderstood" : "TextError_NotUnderstood", e.Line, e.Text),
+    };
+
+    /// <summary>
+    /// Lines of per-language texts, string overrides and exit code lists that cannot be read back: errors in the
+    /// problem list (they block the build), and saving asks before it leaves them out.
+    /// </summary>
+    private List<Diagnostic> TextDiagnostics()
+    {
+        var list = new List<Diagnostic>();
+        void Add(string field, IEnumerable<TextLineError> errors) =>
+            list.AddRange(errors.Select(e => new Diagnostic(Severity.Error, TextErrorCode(e.Problem), field, DescribeTextError(field, e))));
+        void Rows<T>(IEnumerable<T> rows, string prefix) where T : EditorRow
+        {
+            var i = 0;
+            foreach (var row in rows)
+            {
+                foreach (var (field, errors) in row.CheckTexts()) Add($"{prefix}[{i}].{field}", errors);
+                i++;
+            }
+        }
+        Add("ui.licenses", TextForms.CheckLocalized(LicensesText, _model.Ui.Licenses));
+        Add("ui.strings", TextForms.CheckStrings(StringsText, _model.Ui.Strings));
+        Rows(LinkRows, "app.links");
+        Rows(OptionRows, "options");
+        Rows(ActionRows, "actions");
+        Rows(VariantRows, "files.variants");
+        Rows(InputRows, "inputs");
+        return list;
+    }
+
     private static ProblemRow ToRow(Diagnostic d) => new(
         d.Severity.ToString(), d.Severity == Severity.Error ? "" : d.Severity == Severity.Warning ? "" : "",
-        d.Code, d.Field, d.Message, PageForField(d.Field));
+        d.Code, d.Field, Loc.Diagnostic(d), PageForField(d.Field));
 
     private static readonly string[] UpgradeFields =
-        ["install.allowDowngrade", "install.adoptExistingInstall", "install.legacyUninstallKeys", "install.closeProcesses", "install.closeCommand", "install.relaunchArguments", "install.cleanup"];
+        ["install.allowDowngrade", "install.adoptExistingInstall", "install.legacyUninstallKeys", "install.legacyMsi", "install.closeProcesses", "install.closeCommand", "install.relaunchArguments", "install.cleanup"];
 
     /// <summary>True for <paramref name="prefix"/> itself and anything below it (".x", "[0]", "/file").</summary>
     private static bool IsFieldUnder(string field, string prefix) =>
@@ -639,9 +746,13 @@ public sealed partial class MainViewModel : ObservableObject
 
     // ---- project lifecycle -----------------------------------------------------------------------------------
 
-    /// <summary>Asks to save unsaved changes. Returns false if the user cancelled.</summary>
+    /// <summary>
+    /// Before the project is closed (another one opened, the window closed): a running build is cancelled if the user
+    /// agrees, and only once it has cleaned up; then unsaved changes are saved or discarded. False if the user cancelled.
+    /// </summary>
     public async Task<bool> ConfirmCloseProjectAsync()
     {
+        if (IsBuilding && !await StopBuildAsync()) return false;
         if (!HasProject || !IsDirty) return true;
         var result = await Ui.ConfirmUnsavedAsync();
         if (result == ContentDialogResult.None) return false;
@@ -649,7 +760,7 @@ public sealed partial class MainViewModel : ObservableObject
         return true;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBuilding))]
     private async Task NewProjectAsync()
     {
         if (!await ConfirmCloseProjectAsync()) return;
@@ -689,14 +800,14 @@ public sealed partial class MainViewModel : ObservableObject
     private static bool IsUnder(string path, string parent) =>
         Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent)) + "\\", StringComparison.OrdinalIgnoreCase);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBuilding))]
     private async Task OpenProjectAsync()
     {
         if (!await ConfirmCloseProjectAsync()) return;
         if (await Ui.PickFileAsync(".json") is { } path) OpenPath(path);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanOpenRecent))]
     private async Task OpenRecentAsync(string? path)
     {
         if (string.IsNullOrEmpty(path)) return;
@@ -712,8 +823,11 @@ public sealed partial class MainViewModel : ObservableObject
         OpenPath(path);
     }
 
+    private bool CanOpenRecent(string? path) => !IsBuilding;
+
     public void OpenPath(string path)
     {
+        if (IsBuilding) return;  // the build's result would end up in the other project
         try
         {
             var project = ProjectSerializer.Load(path);
@@ -743,6 +857,13 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task<bool> SaveCoreAsync(bool saveAs)
     {
         if (!HasProject) return false;
+        // Text the editors cannot read back is left out of the file: never without asking.
+        var unreadable = TextDiagnostics();
+        if (unreadable.Count > 0)
+        {
+            var list = string.Join(Environment.NewLine, unreadable.Take(8).Select(d => $"• {d.Field}: {d.Message}"));
+            if (!await Ui.ConfirmAsync(Loc.Get("SaveUnreadable_Title"), Loc.Format("SaveUnreadable_Body", list), Loc.Get("SaveUnreadable_Save"))) return false;
+        }
         var path = ProjectPath;
         if (saveAs || path is null)
         {
@@ -752,10 +873,27 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             var model = BuildModel();
-            ProjectSerializer.Save(model, path);
-            _model = model;
-            ProjectPath = Path.GetFullPath(path);
-            IsDirty = false;
+            var fullPath = Path.GetFullPath(path);
+            var oldDirectory = ProjectDirectory;
+            var newDirectory = Path.GetDirectoryName(fullPath)!;
+            var moved = !string.Equals(Path.TrimEndingDirectorySeparator(oldDirectory), Path.TrimEndingDirectorySeparator(newDirectory), StringComparison.OrdinalIgnoreCase);
+            // Saved into another folder: relative paths (source folders, icon, license, output, certificate, ...) are
+            // rewritten so they still point at the same files.
+            if (moved) ProjectPaths.Rebase(model, oldDirectory, newDirectory);
+            ProjectSerializer.Save(model, fullPath);
+            ProjectPath = fullPath;
+            _isNew = false;
+            if (moved)
+            {
+                // Shows the rewritten paths, and validates and collects the files again from the new folder.
+                LoadFrom(model);
+                OnPropertyChanged(nameof(ProjectDirectory));
+            }
+            else
+            {
+                _model = model;
+                IsDirty = false;
+            }
             Settings.AddRecent(ProjectPath);
             return true;
         }
@@ -773,7 +911,17 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (!HasProject || IsBuilding) return;
         if (IsDirty && !await SaveCoreAsync(saveAs: false)) return;
-        Validate();
+        await ValidateAsync();
+        if (IsBuilding || !HasProject) return;  // started again while validating
+        // Text that cannot be read back would be built without the lines in question.
+        if (TextDiagnostics().Count > 0)
+        {
+            BuildStatus = Loc.Get("Build_UnreadableText");
+            return;
+        }
+        var projectPath = ProjectPath!;
+        var done = new TaskCompletionSource();
+        _buildDone = done.Task;
         BuildLog.Clear();
         IsBuilding = true;
         BuildProgressIndeterminate = true;
@@ -801,7 +949,7 @@ public sealed partial class MainViewModel : ObservableObject
         BuildReport report;
         try
         {
-            report = await new PackageBuilder().BuildAsync(BuildModel(), ProjectPath!, new BuildOptions { Log = log }, progress, _buildCts.Token);
+            report = await new PackageBuilder().BuildAsync(BuildModel(), projectPath, new BuildOptions { Log = log }, progress, _buildCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -816,16 +964,32 @@ public sealed partial class MainViewModel : ObservableObject
             IsBuilding = false;
             _buildCts.Dispose();
             _buildCts = null;
+            done.TrySetResult();
         }
-        foreach (var d in report.Diagnostics.Where(d => d.Severity == Severity.Error)) log($"{d.Code}: {d.Message}");
+        foreach (var d in report.Diagnostics.Where(d => d.Severity == Severity.Error)) log($"{d.Code}: {Loc.Diagnostic(d)}");
+        BuildHistoryStore.Append(report);
+        // Another project cannot be opened while a build runs; this only makes sure a result never shows in one.
+        if (!string.Equals(ProjectPath, projectPath, StringComparison.OrdinalIgnoreCase)) return;
         BuildStatus = report.Success ? Loc.Get("Build_Done") : report.Error ?? "";
         LastReport = report;
-        BuildHistoryStore.Append(report);
         LoadHistory();
     }
 
     [RelayCommand]
     private void CancelBuild() => _buildCts?.Cancel();
+
+    /// <summary>
+    /// Asks whether to cancel the running build; if so, cancels it and waits until it has stopped and removed its
+    /// temporary files and folders. False if the user lets the build go on.
+    /// </summary>
+    public async Task<bool> StopBuildAsync()
+    {
+        if (!IsBuilding) return true;
+        if (!await Ui.ConfirmAsync(Loc.Get("BuildRunning_Title"), Loc.Get("BuildRunning_Body"), Loc.Get("BuildRunning_Cancel"), Loc.Get("BuildRunning_Keep"))) return false;
+        _buildCts?.Cancel();
+        await _buildDone;
+        return true;
+    }
 
     [RelayCommand]
     private void OpenOutputFolder()

@@ -28,6 +28,11 @@
     </PropertyGroup>
     <ItemGroup>
       <_FluentSetupDefine Include="$(FluentSetupDefines)" />
+      <!-- A value ending in "\" would escape the closing quote: trailing backslashes are doubled (as for -o above),
+           so "Dir=C:\out\" reaches fsetup unchanged. -->
+      <_FluentSetupDefine>
+        <Arg>%(Identity)$([System.String]::Copy('%(Identity)').Substring($([System.String]::Copy('%(Identity)').TrimEnd('\').Length)))</Arg>
+      </_FluentSetupDefine>
     </ItemGroup>
 
     <Error Condition="!Exists('$(_FluentSetupProjectPath)')" File="$(MSBuildProjectFullPath)"
@@ -36,7 +41,7 @@
            Text="FluentSetupCliPath: $(_FluentSetupCliPath) does not exist." />
 
     <Message Importance="high" Text="FluentSetup: building the installer of $(MSBuildProjectName) from $(_FluentSetupProjectPath)" />
-    <Exec Command="$(_FluentSetupCommand) build &quot;$(_FluentSetupProjectPath)&quot; $(_FluentSetupArgs) @(_FluentSetupDefine->'-D &quot;%(Identity)&quot;', ' ') $(FluentSetupArguments)"
+    <Exec Command="$(_FluentSetupCommand) build &quot;$(_FluentSetupProjectPath)&quot; $(_FluentSetupArgs) @(_FluentSetupDefine->'-D &quot;%(Arg)&quot;', ' ') $(FluentSetupArguments)"
           WorkingDirectory="$(MSBuildProjectDirectory)"
           StandardOutputImportance="high"
           StandardErrorImportance="high"

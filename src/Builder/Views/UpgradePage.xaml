@@ -56,6 +56,17 @@
                         <TextBlock Text="{x:Bind VM.Errors.InstallLegacy, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.InstallLegacy), Mode=OneWay}" />
                     </StackPanel>
                 </Border>
+                <!-- An older version installed by an MSI (install.legacyMsi): removed through Windows Installer -->
+                <Border Style="{StaticResource RowCardStyle}" Padding="20,16,20,20">
+                    <StackPanel Spacing="12">
+                        <TextBlock x:Uid="UpgradeLegacyMsiDescription" Style="{StaticResource RowDescriptionStyle}" />
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBox x:Uid="UpgradeLegacyMsiUpgradeCodesBox" Text="{x:Bind VM.LegacyMsiUpgradeCodesText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                            <TextBox x:Uid="UpgradeLegacyMsiProductCodesBox" Grid.Column="1" Text="{x:Bind VM.LegacyMsiProductCodesText, Mode=TwoWay}" MinHeight="72" Style="{StaticResource LinesBoxStyle}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- A running copy of the app -->
@@ -133,6 +144,7 @@
                         </Grid>
                         <TextBox x:Uid="UpdateFeedBox" Text="{x:Bind VM.UpdateFeed, Mode=TwoWay}" Visibility="{x:Bind VM.UpdateIsFeed, Mode=OneWay}" />
                         <TextBox x:Uid="UpdateSignerBox" Text="{x:Bind VM.UpdateSigner, Mode=TwoWay}" />
+                        <TextBox x:Uid="UpdateChannelBox" Text="{x:Bind VM.UpdateChannel, Mode=TwoWay}" />
                         <ToggleSwitch x:Uid="UpdateDifferentialToggle" IsOn="{x:Bind VM.UpdateDifferential, Mode=TwoWay}" />
                         <TextBlock x:Uid="UpdateDifferentialDescription" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />
                         <TextBlock x:Uid="UpdateHowToUse" Style="{StaticResource RowDescriptionStyle}" IsTextSelectionEnabled="True" />

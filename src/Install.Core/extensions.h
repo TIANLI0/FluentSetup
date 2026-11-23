@@ -243,6 +243,9 @@ struct Extensions {
     std::vector<std::wstring> closeCommandArgs;
     std::wstring adoptUninstallKey;
     std::vector<std::wstring> legacyUninstallKeys;  // older product names: adopted if found, removed after install
+    // install.legacyMsi: Windows Installer products this package replaces (normalized "{GUID}"), removed through
+    // Windows Installer before the files are written (legacy_msi.h).
+    std::vector<std::wstring> legacyMsiProductCodes, legacyMsiUpgradeCodes;
     std::vector<std::wstring> ngen;                 // relative payload paths of .NET Framework assemblies
     Cleanup installCleanup;
     ElevatedCleanup elevatedCleanup;

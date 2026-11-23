@@ -170,7 +170,21 @@
                             <ComboBoxItem Content="Português (pt-BR)" />
                             <ComboBoxItem Content="Русский (ru-RU)" />
                             <ComboBoxItem Content="Italiano (it-IT)" />
+                            <!-- any other language tag: the package brings its strings (ui.strings or ui.localization) -->
+                            <ComboBoxItem x:Uid="LanguageOther" />
                         </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource RowCardStyle}" Visibility="{x:Bind VM.IsOtherLanguage, Mode=OneWay}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE775;" Style="{StaticResource RowIconStyle}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Uid="AppOtherLanguageTitle" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock x:Uid="AppOtherLanguageDescription" Style="{StaticResource RowDescriptionStyle}" />
+                            <TextBlock Text="{x:Bind VM.Errors.UiDefaultLanguage, Mode=OneWay}" Style="{StaticResource FieldErrorStyle}" Visibility="{x:Bind local:Converters.VisibleIfText(VM.Errors.UiDefaultLanguage), Mode=OneWay}" />
+                        </StackPanel>
+                        <TextBox Grid.Column="2" Text="{x:Bind VM.OtherLanguage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160" VerticalAlignment="Center" IsSpellCheckEnabled="False" x:Uid="AppOtherLanguageBox" />
                     </Grid>
                 </Border>
             </StackPanel>

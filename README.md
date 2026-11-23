@@ -46,13 +46,15 @@ with a Fluent WinUI 3 interface and no .NET, VC++ redistributable, WebView2 or n
   signer) and installs; `/check-update` only reports. Updates leave unchanged files alone and, with
   `update.differential`, download only what changed. No updater code in the app.
 - **Variants.** One package can carry a self-contained and a framework-dependent build of the same app (shared files
-  stored once); the user picks at install time, or `--variant` builds a single-variant package.
+  stored once); the user picks at install time or setup picks from the runtimes already on the PC
+  (`files.variantSelection: "auto"`), or `--variant` builds a single-variant package.
 - **Accessible and localized.** English, Simplified and Traditional Chinese, Japanese, Korean, German, French, Spanish,
   Brazilian Portuguese, Russian and Italian built in, following the Windows display language; any other language can be
   added by a package (`fsetup locale add nl-NL`). UI Automation names, keyboard navigation,
   light/dark/high-contrast themes, and per-monitor DPI.
-- **Three ways to build:** the Builder app, the `fsetup` CLI (`fluentsetup` works too; also as a GitHub Action),
-  or the `Builder.Core` library.
+- **Three ways to build:** the Builder app, the `fsetup` CLI (also as a GitHub Action), or the `Builder.Core`
+  library. The command's original name `fluentsetup` still works with FluentSetup's installer, the Linux and macOS
+  archives and the GitHub Action, but not with the Windows zip or the .NET tool.
 - **Made for AI-assisted authoring.** `fsetup guide` prints a complete authoring guide, `fsetup schema` the
   JSON Schema, and `fsetup validate --json` machine-readable diagnostics with codes and field paths.
 
@@ -162,12 +164,16 @@ uninstall.exe /check-update | /install-update [/passive | /quiet] [/relaunch]   
 ```
 
 Exit code 0 means success. All other codes are listed in [docs/diagnostics.md](docs/diagnostics.md). Inno Setup and
-NSIS switches are understood too ([details](docs/project-file.md#setupexe-command-line)).
+NSIS switches are understood too ([details](docs/project-file.md#setupexe-command-line)). For Intune, Configuration
+Manager and scripts, see [deploying](docs/enterprise.md).
 
 ## Documentation
 
 - [Project file reference](docs/project-file.md)
 - [Migrating from Inno Setup and NSIS: case studies](docs/thrm.md), and [importing an .iss or .nsi script](docs/import.md)
+- [Updating from inside the app](docs/updates.md): `/check-update` and `/install-update` from the app, with a C# example
+- [Deploying with Intune, Configuration Manager and scripts](docs/enterprise.md): silent commands, detection rule,
+  return codes
 - [winget and Microsoft Store](docs/winget.md), [MSBuild, .NET tool and library](docs/msbuild.md),
   [building on Linux and macOS](docs/cross-platform.md)
 - [Diagnostics](docs/diagnostics.md): exit codes, logs, recovery

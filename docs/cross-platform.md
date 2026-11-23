@@ -12,8 +12,8 @@ result still needs Windows.
   .NET needed), with the installer runtime in `runtime/` next to the executable:
 
   ```sh
-  mkdir -p ~/fluentsetup && tar -xzf fluentsetup-1.2.0-linux-x64.tar.gz -C ~/fluentsetup
-  ~/fluentsetup/fluentsetup --version
+  mkdir -p ~/fluentsetup && tar -xzf fluentsetup-1.5.0-linux-x64.tar.gz -C ~/fluentsetup
+  ~/fluentsetup/fsetup --version
   ```
 
   On macOS a browser download is quarantined; clear it with `xattr -dr com.apple.quarantine ~/fluentsetup`.
@@ -34,7 +34,7 @@ Nothing in the package depends on the build machine. The builder applies Windows
 |---|---|
 | Paths in the project | `\` and `/` both separate folders, so `"source": "bin\\Release\\publish"` written on Windows works on Linux. Relative paths are relative to the project file. Absolute Windows paths (`C:\...`) do not exist on Linux and macOS. |
 | File names | Installed names follow Windows rules: names that differ only in case are the same file (FS1109), `\ : * ? " < > \|`, control characters, trailing dots or spaces and device names such as `CON` or `nul.txt` are rejected (FS1107). A file whose Linux name contains `\` is rejected rather than turned into a folder. |
-| Links | Symbolic links are skipped with a warning (FS1112), as junctions and symbolic links are on Windows. |
+| Links | Symbolic links are skipped with a warning (FS1121), as junctions and symbolic links are on Windows. |
 | Attributes | A file without write permission is installed read-only. A leading dot does not make a file hidden (only the Windows hidden attribute does). Unix permissions and owners are not stored. |
 | Output name | `output.fileName` placeholders drop the characters Windows forbids in file names, whatever the build system allows. |
 | Signing | `signtool` and `trustedSigning` need Windows (FS1519); use the `command` provider. |

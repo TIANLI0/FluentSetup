@@ -521,6 +521,11 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="UpgradeAdoptToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Take over an existing installation</value></data>
   <data name="UpgradeLegacyKeysDescription.Text" xml:space="preserve"><value>Uninstall keys of older product names, e.g. before a rename or an Inno Setup {GUID}_is1 key. Their folder is upgraded and the keys are removed after installing.</value></data>
   <data name="UpgradeLegacyKeysBox.Header" xml:space="preserve"><value>Older uninstall keys (one per line)</value></data>
+  <data name="UpgradeLegacyMsiDescription.Text" xml:space="preserve"><value>An older version installed by an MSI (WiX, InstallShield, Visual Studio installer projects): its upgrade code or product codes. Setup removes it through Windows Installer, without a window and without restarting, before the new files are written. A version installed for all users needs administrator rights for that.</value></data>
+  <data name="UpgradeLegacyMsiUpgradeCodesBox.Header" xml:space="preserve"><value>MSI upgrade codes (one per line)</value></data>
+  <data name="UpgradeLegacyMsiUpgradeCodesBox.PlaceholderText" xml:space="preserve"><value>{12345678-1234-1234-1234-123456789ABC}</value></data>
+  <data name="UpgradeLegacyMsiProductCodesBox.Header" xml:space="preserve"><value>MSI product codes (one per line)</value></data>
+  <data name="UpgradeLegacyMsiProductCodesBox.PlaceholderText" xml:space="preserve"><value>{12345678-1234-1234-1234-123456789ABC}</value></data>
   <data name="UpgradeRunningSection.Text" xml:space="preserve"><value>When the app is running</value></data>
   <data name="UpgradeCloseProcessesBox.Header" xml:space="preserve"><value>Programs to close before installing or uninstalling (one .exe name per line)</value></data>
   <data name="UpgradeCloseProcessesBox.PlaceholderText" xml:space="preserve"><value>MyApp.exe</value></data>
@@ -623,6 +628,8 @@ zh-CN = 正在安装驱动程序</value></data>
   <data name="UpdateFeedBox.PlaceholderText" xml:space="preserve"><value>https://example.com/myapp/latest.json</value></data>
   <data name="UpdateSignerBox.Header" xml:space="preserve"><value>Required signer (optional)</value></data>
   <data name="UpdateSignerBox.PlaceholderText" xml:space="preserve"><value>Certificate subject, e.g. Contoso Ltd</value></data>
+  <data name="UpdateChannelBox.Header" xml:space="preserve"><value>Update channel</value></data>
+  <data name="UpdateChannelBox.PlaceholderText" xml:space="preserve"><value>stable (or e.g. beta: the feed entry of that name; on GitHub, pre-releases)</value></data>
   <data name="UpdateDifferentialToggle.Header" xml:space="preserve"><value>Download only what changed (differential updates)</value></data>
   <data name="UpdateDifferentialDescription.Text" xml:space="preserve"><value>Keeps the last downloaded Setup.exe on the user's PC (one Setup.exe of disk space, per user) and fetches only the changed parts next time. Worth it for large apps; the update server must answer range requests (GitHub does).</value></data>
   <data name="UpdateHowToUse.Text" xml:space="preserve"><value>In the app, run "uninstall.exe /install-update /relaunch" from the install folder for "Check for updates" (a small window asks first), or "uninstall.exe /check-update" in the background (exit code 18 = update available). Downloads must match the published SHA-256 and be a newer version of this app; {Version} in the file name stands for the release's version.</value></data>
@@ -955,4 +962,336 @@ MyApp*.dll</value></data>
   <data name="BuildRunSetup.Content" xml:space="preserve"><value>Run setup</value></data>
   <data name="BuildInspect.Content" xml:space="preserve"><value>Inspect</value></data>
   <data name="Build_RunSetupErrorTitle" xml:space="preserve"><value>Setup could not be started</value></data>
+  <data name="BuildCodeFilterTitle.Text" xml:space="preserve"><value>Branch filter for programs and DLLs</value></data>
+  <data name="BuildCodeFilterDescription.Text" xml:space="preserve"><value>Run x86/x64 and Arm64 programs and DLLs through a branch filter before compression (setup undoes it): native code compresses about 4-8 % smaller, .NET assemblies about 1 %. Off stores them as they are.</value></data>
+  <data name="BuildCodeFilterToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Branch filter for programs and DLLs</value></data>
+  <data name="SignTrustedExcludeBox.Header" xml:space="preserve"><value>Credentials to skip (optional)</value></data>
+  <data name="SignTrustedExcludeBox.PlaceholderText" xml:space="preserve"><value>e.g. ManagedIdentityCredential</value></data>
+  <data name="SignTrustedExcludeBox.Description" xml:space="preserve"><value>DefaultAzureCredential sources to skip, one per line: EnvironmentCredential, WorkloadIdentityCredential, ManagedIdentityCredential, SharedTokenCacheCredential, VisualStudioCredential, VisualStudioCodeCredential, AzureCliCredential, AzurePowerShellCredential, AzureDeveloperCliCredential, InteractiveBrowserCredential.</value></data>
+  <data name="FilesExtraSourceBox.PlaceholderText" xml:space="preserve"><value>C:\path\to\folder</value></data>
+  <data name="FilesExtraSourceBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Folder to add</value></data>
+  <data name="FilesExtraTargetBox.PlaceholderText" xml:space="preserve"><value>subfolder</value></data>
+  <data name="FilesExtraTargetBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Folder in the install folder</value></data>
+  <data name="VariantSelectionTitle.Text" xml:space="preserve"><value>Choosing the variant</value></data>
+  <data name="VariantSelectionDescription.Text" xml:space="preserve"><value>The user picks, or setup picks a variant whose requirements are already installed (else the default).</value></data>
+  <data name="VariantSelectionCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Choosing the variant</value></data>
+  <data name="VariantSelectionCombo.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>user: radio buttons, the default variant pre-selected. auto: setup pre-selects a variant other than the default when every requirement limited to it (requirements.*.variants) is already installed, else the default, so nothing extra is installed; only variants this PC can run are offered (one left = no choice shown). A variant the user picked is kept on updates while the PC can run it; one setup picked is picked again. /variant still wins.</value></data>
+  <data name="VariantSelectionUser.Content" xml:space="preserve"><value>The user picks (user)</value></data>
+  <data name="VariantSelectionAuto.Content" xml:space="preserve"><value>Setup picks from what is installed (auto)</value></data>
+  <data name="LanguageOther.Content" xml:space="preserve"><value>Other language</value></data>
+  <data name="AppLanguageCombo.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Installer language. auto = the user's Windows display languages, the first one the installer has strings for, else en-US. A regional tag uses the table of its language (zh-HK, zh-MO, zh-Hant -&gt; zh-TW, other zh -&gt; zh-CN, de-AT -&gt; de-DE, fr-CA -&gt; fr-FR, es-MX -&gt; es-ES, pt-PT -&gt; pt-BR). Any other tag needs strings from the package (ui.strings or ui.localization). Setup.exe /lang overrides it.</value></data>
+  <data name="AppOtherLanguageTitle.Text" xml:space="preserve"><value>Language tag</value></data>
+  <data name="AppOtherLanguageDescription.Text" xml:space="preserve"><value>A language without a built-in table, e.g. nl-NL; the package must bring its strings (ui.strings or ui.localization).</value></data>
+  <data name="AppOtherLanguageBox.PlaceholderText" xml:space="preserve"><value>nl-NL</value></data>
+  <data name="AppOtherLanguageBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Language tag</value></data>
+  <data name="TextError_NotUnderstood" xml:space="preserve"><value>Line {0} cannot be read: "{1}". Write one language per line as language = text, e.g. en-US = Hello.</value></data>
+  <data name="TextError_StringsNotUnderstood" xml:space="preserve"><value>Line {0} cannot be read: "{1}". Write one string per line as language: key = text, e.g. zh-CN: welcome.title = Welcome.</value></data>
+  <data name="TextError_NotALanguage" xml:space="preserve"><value>Line {0}: "{1}" is not a language tag such as en-US or zh-CN. For English text that contains "=", write en-US = in front of it.</value></data>
+  <data name="TextError_Duplicate" xml:space="preserve"><value>Line {0}: {1} is given more than once; only the last line is used.</value></data>
+  <data name="TextError_NotANumber" xml:space="preserve"><value>"{0}" is not a whole number. Use whole numbers separated by commas, e.g. 0, 3010.</value></data>
+  <data name="SaveUnreadable_Title" xml:space="preserve"><value>Some text cannot be saved</value></data>
+  <data name="SaveUnreadable_Body" xml:space="preserve"><value>These lines cannot be read and are left out of the saved project:
+{0}
+
+Save anyway?</value></data>
+  <data name="SaveUnreadable_Save" xml:space="preserve"><value>Save anyway</value></data>
+  <data name="Build_UnreadableText" xml:space="preserve"><value>Fix the lines listed under Problems that cannot be read before building.</value></data>
+  <data name="BuildRunning_Title" xml:space="preserve"><value>A build is running</value></data>
+  <data name="BuildRunning_Body" xml:space="preserve"><value>Cancel the build? Its temporary files are removed before the project is closed.</value></data>
+  <data name="BuildRunning_Cancel" xml:space="preserve"><value>Cancel build</value></data>
+  <data name="BuildRunning_Keep" xml:space="preserve"><value>Keep building</value></data>
+  <data name="Diag_FS1802_2949166c" xml:space="preserve"><value>'{0}' is not a valid variable name (letters, digits, _, . and -, starting with a letter or _).</value></data>
+  <data name="Diag_FS1801_3c55b209" xml:space="preserve"><value>Unknown variable $({0}). Define it in "variables" or with -D {1}=value.</value></data>
+  <data name="Diag_FS1107_ec2de20e" xml:space="preserve"><value>'{0}' cannot be installed: {1}.</value></data>
+  <data name="Diag_FS1108_442f137e" xml:space="preserve"><value>'{0}' is reserved by the installer (uninstall.exe, uninstall.json and .fsetup).</value></data>
+  <data name="Diag_FS1109_617b9426" xml:space="preserve"><value>Two sources map to '{0}': {1} and {2}.</value></data>
+  <data name="Diag_FS1120_eda08ad1" xml:space="preserve"><value>Cannot read folder {0}: {1}</value></data>
+  <data name="Diag_FS1121_c8ea5591" xml:space="preserve"><value>Skipped link (symbolic link or junction): {0}</value></data>
+  <data name="Diag_FS1107_b414ea2e" xml:space="preserve"><value>'{0}' cannot be installed: the name contains '\'.</value></data>
+  <data name="Diag_FS1122_94237ba8" xml:space="preserve"><value>More than {0} files.</value></data>
+  <data name="Diag_FS1123_0c8dfcb5" xml:space="preserve"><value>'{0}' is both a file and a folder.</value></data>
+  <data name="Diag_FS1124_ab181c28" xml:space="preserve"><value>No files to install: the source folder is empty or everything is excluded.</value></data>
+  <data name="Diag_FS1110_4a03037f" xml:space="preserve"><value>Main executable '{0}' is not among the files to install.</value></data>
+  <data name="Diag_FS1320_49662a67" xml:space="preserve"><value>Localization folder not found: {0}</value></data>
+  <data name="Diag_FS1321_b7ab8594" xml:space="preserve"><value>'{0}' is not a language tag (use e.g. fr-FR); the file is ignored.</value></data>
+  <data name="Diag_FS1322_7c45afa2" xml:space="preserve"><value>Invalid JSON: {0}</value></data>
+  <data name="Diag_FS1323_a25edb6c" xml:space="preserve"><value>No option '{0}' in the project.</value></data>
+  <data name="Diag_FS1324_a0512886" xml:space="preserve"><value>No action with id '{0}' in the project.</value></data>
+  <data name="Diag_FS1326_326d11a5" xml:space="preserve"><value>No variant '{0}' in files.variants.</value></data>
+  <data name="Diag_FS1325_31b8f65d" xml:space="preserve"><value>License file not found: {0}</value></data>
+  <data name="Diag_FS1306_1ea0e6d8" xml:space="preserve"><value>License file is larger than 1 MB.</value></data>
+  <data name="Diag_FS1327_4dad3be9" xml:space="preserve"><value>{0} of {1} installer strings translated; missing ones are shown in English (e.g. {2}). fsetup locale add {3} lists them all.</value></data>
+  <data name="Diag_FS1328_711b7011" xml:space="preserve"><value>Texts for ''{0}'' exist, but the installer has no strings for it, so it is never shown in {1}. Add a "strings" table to {2}.json.</value></data>
+  <data name="Diag_FS1662_500fb1f1" xml:space="preserve"><value>No variant {0} in files.variants.</value></data>
+  <data name="Diag_FS2001_9706c0a4" xml:space="preserve"><value>The installer runtime for {0} is missing: {1}</value></data>
+  <data name="Diag_FS2002_8d2d5591" xml:space="preserve"><value>The WinUI front end for {0} is not available; the package will use the Win32 interface only.</value></data>
+  <data name="Diag_FS2004_33718df4" xml:space="preserve"><value>No official installer for this prerequisite.</value></data>
+  <data name="Diag_FS2005_5d5f1797" xml:space="preserve"><value>{0} is not a Windows program or DLL and is not signed.</value></data>
+  <data name="Diag_FS2006_37377b96" xml:space="preserve"><value>No file to sign: the patterns match no unsigned program or DLL of the package.</value></data>
+  <data name="Diag_FS1604_363ec432" xml:space="preserve"><value>Not a valid relative path: {0}.</value></data>
+  <data name="Diag_FS1605_106759db" xml:space="preserve"><value>Too many or too long arguments.</value></data>
+  <data name="Diag_FS1606_375de1bf" xml:space="preserve"><value>Downloads must use an https URL.</value></data>
+  <data name="Diag_FS1607_22ff34c4" xml:space="preserve"><value>Give the SHA-256 of the file (64 hex characters) or a signer; setup refuses to run anything that does not match.</value></data>
+  <data name="Diag_FS1683_29de3a50" xml:space="preserve"><value>The certificate's subject name, e.g. Microsoft Corporation (max 256 characters, no surrounding spaces).</value></data>
+  <data name="Diag_FS1608_5d90acde" xml:space="preserve"><value>Size must be the file size in bytes, or 0 if unknown.</value></data>
+  <data name="Diag_FS1609_d68a6760" xml:space="preserve"><value>Both a bundled installer and a download are set; the bundled installer is used.</value></data>
+  <data name="Diag_FS1660_d28caa2f" xml:space="preserve"><value>Use warn or fail.</value></data>
+  <data name="Diag_FS1615_79237558" xml:space="preserve"><value>The help link must be an https URL.</value></data>
+  <data name="Diag_FS1601_2bc0891f" xml:space="preserve"><value>'{0}' must be a file name ending in .exe (no folder).</value></data>
+  <data name="Diag_FS1602_f29e9631" xml:space="preserve"><value>At most 32 process names.</value></data>
+  <data name="Diag_FS1603_f8669cae" xml:space="preserve"><value>Unknown .NET Framework version. Use one of: {0}.</value></data>
+  <data name="Diag_FS1614_aeb7f987" xml:space="preserve"><value>Not a valid version.</value></data>
+  <data name="Diag_FS1616_e482a4af" xml:space="preserve"><value>Ignored: requirements.netFramework is not set.</value></data>
+  <data name="Diag_FS1617_54491ce6" xml:space="preserve"><value>Use desktop, core or aspnetcore.</value></data>
+  <data name="Diag_FS1618_34e903cd" xml:space="preserve"><value>Give the minimum runtime version, e.g. 8.0.0.</value></data>
+  <data name="Diag_FS1619_8d79343d" xml:space="preserve"><value>Use patch, minor or major.</value></data>
+  <data name="Diag_FS1661_326d11a5" xml:space="preserve"><value>No variant '{0}' in files.variants.</value></data>
+  <data name="Diag_FS1663_9193a9ed" xml:space="preserve"><value>Use the Windows App SDK version, e.g. 2.5.1 (or 1.6 for a 1.x runtime).</value></data>
+  <data name="Diag_FS1666_40c4f264" xml:space="preserve"><value>Needs run (relative path of an .exe of the app) and at most 32 arguments.</value></data>
+  <data name="Diag_FS1650_a385636d" xml:space="preserve"><value>An uninstall key name of an older product (not this app's id).</value></data>
+  <data name="Diag_FS1651_b907a67e" xml:space="preserve"><value>A relative path of an .exe or .dll among the files to install.</value></data>
+  <data name="Diag_FS1652_e8fae2da" xml:space="preserve"><value>At most 32 entries.</value></data>
+  <data name="Diag_FS1653_37d17fae" xml:space="preserve"><value>'{0}' is not a valid name here.</value></data>
+  <data name="Diag_FS1667_2935001e" xml:space="preserve"><value>A single folder name (max 64 characters), e.g. the publisher or app name.</value></data>
+  <data name="Diag_FS1610_c8746bc5" xml:space="preserve"><value>Option ids use letters, digits, '-' and '_' (max 32).</value></data>
+  <data name="Diag_FS1611_3bf90c8c" xml:space="preserve"><value>Duplicate option id '{0}'.</value></data>
+  <data name="Diag_FS1664_8760427c" xml:space="preserve"><value>Needs a Run value name and at most 32 arguments.</value></data>
+  <data name="Diag_FS1665_015b5406" xml:space="preserve"><value>Needs app.mainExecutable (the program that is started).</value></data>
+  <data name="Diag_FS1612_ff9d9c60" xml:space="preserve"><value>Give the option a label (per language, or in the localization files plus one here).</value></data>
+  <data name="Diag_FS1668_b7945ceb" xml:space="preserve"><value>runValue is a Run value name, scheduledTask a task name (folders: "Folder\Task").</value></data>
+  <data name="Diag_FS1669_6b49f7b1" xml:space="preserve"><value>A required option is always selected: detect and quietDefault are ignored.</value></data>
+  <data name="Diag_FS1613_32c6edce" xml:space="preserve"><value>At most 16 options.</value></data>
+  <data name="Diag_FS1620_cce4ac65" xml:space="preserve"><value>Use afterInstall or beforeUninstall.</value></data>
+  <data name="Diag_FS1621_95da8f78" xml:space="preserve"><value>Actions run an .exe from the installed files, given as a relative path ({0}).</value></data>
+  <data name="Diag_FS1622_106759db" xml:space="preserve"><value>Too many or too long arguments.</value></data>
+  <data name="Diag_FS1623_54835d36" xml:space="preserve"><value>Timeout must be 1-3600 seconds.</value></data>
+  <data name="Diag_FS1624_a71d8ea1" xml:space="preserve"><value>Use fail, warn or ignore.</value></data>
+  <data name="Diag_FS1625_0f9aab3d" xml:space="preserve"><value>No option '{0}'.</value></data>
+  <data name="Diag_FS1626_30b257de" xml:space="preserve"><value>Needs hive HKLM|HKCU, a key below it (up to 255 characters), a value name (up to 128 characters; empty = the key's default value) and a version.</value></data>
+  <data name="Diag_FS1629_05148afc" xml:space="preserve"><value>Action ids use letters, digits, '-' and '_' (max 32).</value></data>
+  <data name="Diag_FS1633_8760427c" xml:space="preserve"><value>Needs a Run value name and at most 32 arguments.</value></data>
+  <data name="Diag_FS1627_6955c77c" xml:space="preserve"><value>If this step fails the installation is rolled back; effects of the program itself (drivers, tasks) cannot be undone by setup.</value></data>
+  <data name="Diag_FS1628_9858b00f" xml:space="preserve"><value>At most 32 actions.</value></data>
+  <data name="Diag_FS1630_5ec2dc05" xml:space="preserve"><value>Must be {{CommonAppData}}\Folder, {{LocalAppData}}\Folder, {{AppData}}\Folder or {{InstallDir}}\Folder.</value></data>
+  <data name="Diag_FS1631_6b01e3a2" xml:space="preserve"><value>Invalid scheduled task name (folders: "Folder\Task").</value></data>
+  <data name="Diag_FS1632_46c8a41b" xml:space="preserve"><value>Invalid Run value name.</value></data>
+  <data name="Diag_FS1654_e8fae2da" xml:space="preserve"><value>At most 32 entries.</value></data>
+  <data name="Diag_FS1655_4e633b26" xml:space="preserve"><value>'{0}' must be {1}.</value></data>
+  <data name="Diag_FS1656_aefa05d1" xml:space="preserve"><value>Needs a service name and 1-8 SDDL rights strings such as LCRPWP.</value></data>
+  <data name="Diag_FS1657_cbd6511e" xml:space="preserve"><value>At most 32 arguments.</value></data>
+  <data name="Diag_FS1658_616e5c0c" xml:space="preserve"><value>At most 8 folders.</value></data>
+  <data name="Diag_FS1659_43d2fa68" xml:space="preserve"><value>A folder inside the install folder (relative), or "" for the install folder itself.</value></data>
+  <data name="Diag_FS1640_8e2d1b16" xml:space="preserve"><value>'{0}' is not among the files to install.</value></data>
+  <data name="Diag_FS1641_8e2d1b16" xml:space="preserve"><value>'{0}' is not among the files to install.</value></data>
+  <data name="Diag_FS1642_8e2d1b16" xml:space="preserve"><value>'{0}' is not among the files to install.</value></data>
+  <data name="Diag_FS1220_abf8fe58" xml:space="preserve"><value>An AppUserModelID has up to 128 letters, digits, '.', '-' or '_' (no spaces), e.g. Contoso.Notes.</value></data>
+  <data name="Diag_FS1221_2b195ed4" xml:space="preserve"><value>Write the CLSID as {{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}}.</value></data>
+  <data name="Diag_FS1222_546b81b9" xml:space="preserve"><value>A toast activator only works together with app.appUserModelId.</value></data>
+  <data name="Diag_FS1223_553d57d9" xml:space="preserve"><value>Use auto or off.</value></data>
+  <data name="Diag_FS1224_9f99b0ec" xml:space="preserve"><value>Use fail or reboot.</value></data>
+  <data name="Diag_FS1225_c14530bc" xml:space="preserve"><value>Replacing files at the next restart needs administrator rights; per-user installs fail instead.</value></data>
+  <data name="Diag_FS1226_494dc11a" xml:space="preserve"><value>App Paths registers app.mainExecutable; set it first.</value></data>
+  <data name="Diag_FS1312_f9f81945" xml:space="preserve"><value>Banner image not found: {0}</value></data>
+  <data name="Diag_FS1313_d9581180" xml:space="preserve"><value>The banner must be a .png, .jpg or .bmp image.</value></data>
+  <data name="Diag_FS1314_43e4eca7" xml:space="preserve"><value>The banner image is larger than 1 MB.</value></data>
+  <data name="Diag_FS1901_27cb19e1" xml:space="preserve"><value>At most 16 shortcuts.</value></data>
+  <data name="Diag_FS1902_2426424b" xml:space="preserve"><value>A shortcut name (without .lnk, max 128 characters) that is a valid file name.</value></data>
+  <data name="Diag_FS1903_566daa79" xml:space="preserve"><value>Set the target (or app.mainExecutable).</value></data>
+  <data name="Diag_FS1904_b032f1dd" xml:space="preserve"><value>The target is a relative path among the installed files.</value></data>
+  <data name="Diag_FS1905_cbb9d8e5" xml:space="preserve"><value>The icon is a relative path among the installed files.</value></data>
+  <data name="Diag_FS1906_06f3aafb" xml:space="preserve"><value>A folder inside the install folder (relative).</value></data>
+  <data name="Diag_FS1907_fb32e51f" xml:space="preserve"><value>Use startMenu, desktop or startup.</value></data>
+  <data name="Diag_FS1908_168cfc42" xml:space="preserve"><value>A single folder name (max 64 characters).</value></data>
+  <data name="Diag_FS1910_187405b4" xml:space="preserve"><value>Up to 128 letters, digits, '.', '-' or '_'.</value></data>
+  <data name="Diag_FS1911_a5646924" xml:space="preserve"><value>At most 32 arguments of up to 1024 characters.</value></data>
+  <data name="Diag_FS1911_96538fca" xml:space="preserve"><value>At most 259 characters on one line.</value></data>
+  <data name="Diag_FS1912_96a20d77" xml:space="preserve"><value>Another shortcut has the name '{0}' in the same place.</value></data>
+  <data name="Diag_FS1912_f93b87c7" xml:space="preserve"><value>This name is the app's own Start menu shortcut; it would replace it.</value></data>
+  <data name="Diag_FS1920_948dee89" xml:space="preserve"><value>At most 16 file types.</value></data>
+  <data name="Diag_FS1921_3f825c75" xml:space="preserve"><value>List 1-16 extensions, e.g. [".cnote"].</value></data>
+  <data name="Diag_FS1922_7dfeace8" xml:space="preserve"><value>'{0}' is not an extension the installer may register ('.' + 1-32 letters, digits, '-', '_'; not a program or shell type such as .exe or .lnk).</value></data>
+  <data name="Diag_FS1930_3ab9e16f" xml:space="preserve"><value>'{0}' is associated twice.</value></data>
+  <data name="Diag_FS1923_20ae0a9b" xml:space="preserve"><value>A ProgID such as Contoso.Notes.Document (letters and digits in dot-separated parts, max 39 characters, not Microsoft.* or Windows.*).</value></data>
+  <data name="Diag_FS1930_50406d17" xml:space="preserve"><value>ProgID '{0}' is used twice.</value></data>
+  <data name="Diag_FS1924_b30554cf" xml:space="preserve"><value>At most 256 characters on one line.</value></data>
+  <data name="Diag_FS1925_566daa79" xml:space="preserve"><value>Set the target (or app.mainExecutable).</value></data>
+  <data name="Diag_FS1925_6d72d562" xml:space="preserve"><value>The program is a relative path of an .exe among the installed files.</value></data>
+  <data name="Diag_FS1926_cbb9d8e5" xml:space="preserve"><value>The icon is a relative path among the installed files.</value></data>
+  <data name="Diag_FS1927_a5646924" xml:space="preserve"><value>At most 32 arguments of up to 1024 characters.</value></data>
+  <data name="Diag_FS1927_7d7e0183" xml:space="preserve"><value>No argument contains %1, so the program is not told which file to open.</value></data>
+  <data name="Diag_FS1928_3f487741" xml:space="preserve"><value>A MIME type such as application/x-contoso-note.</value></data>
+  <data name="Diag_FS1932_9003579f" xml:space="preserve"><value>At most 16 protocols.</value></data>
+  <data name="Diag_FS1933_c072d78b" xml:space="preserve"><value>'{0}' is not a scheme the installer may register (lowercase, 2-32 characters; not http, https, file, mailto, ms-*, …).</value></data>
+  <data name="Diag_FS1936_e3ca004d" xml:space="preserve"><value>'{0}' is registered twice.</value></data>
+  <data name="Diag_FS1933_b30554cf" xml:space="preserve"><value>At most 256 characters on one line.</value></data>
+  <data name="Diag_FS1934_566daa79" xml:space="preserve"><value>Set the target (or app.mainExecutable).</value></data>
+  <data name="Diag_FS1934_6d72d562" xml:space="preserve"><value>The program is a relative path of an .exe among the installed files.</value></data>
+  <data name="Diag_FS1934_cbb9d8e5" xml:space="preserve"><value>The icon is a relative path among the installed files.</value></data>
+  <data name="Diag_FS1934_a5646924" xml:space="preserve"><value>At most 32 arguments of up to 1024 characters.</value></data>
+  <data name="Diag_FS1940_51c195c9" xml:space="preserve"><value>At most 32 registry keys.</value></data>
+  <data name="Diag_FS1941_60635715" xml:space="preserve"><value>A key below the scope's hive such as Software\Contoso\Notes (Software\&lt;Vendor&gt; or deeper; not Microsoft, Classes, Policies, Wow6432Node, RegisteredApplications, Clients or FluentSetup). Use associations and protocols for Software\Classes.</value></data>
+  <data name="Diag_FS1942_3a063a8c" xml:space="preserve"><value>At most 32 values per key.</value></data>
+  <data name="Diag_FS1946_829642bb" xml:space="preserve"><value>Use values, key or keep.</value></data>
+  <data name="Diag_FS1943_e8210409" xml:space="preserve"><value>At most 255 characters, no control characters.</value></data>
+  <data name="Diag_FS1944_4bab3122" xml:space="preserve"><value>Use string, expandString, dword, qword or multiString.</value></data>
+  <data name="Diag_FS1945_5ebfcf85" xml:space="preserve"><value>'{0}' is not a {1}-bit number (decimal or 0x hex).</value></data>
+  <data name="Diag_FS1948_a1ee57e1" xml:space="preserve"><value>At most 16384 characters.</value></data>
+  <data name="Diag_FS1948_05623ea8" xml:space="preserve"><value>A key without values is created and removed again on uninstall once it is empty.</value></data>
+  <data name="Diag_FS1950_e669ede4" xml:space="preserve"><value>At most 16 environment variables.</value></data>
+  <data name="Diag_FS1951_367f0b05" xml:space="preserve"><value>Use install.addToPath to put folders on PATH.</value></data>
+  <data name="Diag_FS1951_8f72f7ba" xml:space="preserve"><value>'{0}' is not a name the installer may set (letters, digits, _ . ( ) -; not a Windows variable such as TEMP or SystemRoot).</value></data>
+  <data name="Diag_FS1954_bc6c9bd7" xml:space="preserve"><value>'{0}' is set twice.</value></data>
+  <data name="Diag_FS1952_9117b70f" xml:space="preserve"><value>At most 8192 characters.</value></data>
+  <data name="Diag_FS1960_f4241301" xml:space="preserve"><value>At most 8 services.</value></data>
+  <data name="Diag_FS1966_82cf7dd1" xml:space="preserve"><value>Services need a per-machine install (install.scope machine or userOrMachine).</value></data>
+  <data name="Diag_FS1967_5935e3aa" xml:space="preserve"><value>Services are only installed when the user chooses "All users".</value></data>
+  <data name="Diag_FS1961_074fa0ac" xml:space="preserve"><value>Letters, digits, '.', '-' and '_' (max 80).</value></data>
+  <data name="Diag_FS1968_fd808a36" xml:space="preserve"><value>Service '{0}' is declared twice.</value></data>
+  <data name="Diag_FS1962_b64f2a57" xml:space="preserve"><value>The service program is a relative path of an .exe among the installed files.</value></data>
+  <data name="Diag_FS1963_d33c5e51" xml:space="preserve"><value>Use auto, delayedAuto, manual or disabled.</value></data>
+  <data name="Diag_FS1964_21e1b524" xml:space="preserve"><value>Use localSystem, localService or networkService.</value></data>
+  <data name="Diag_FS1965_05a81c2d" xml:space="preserve"><value>At most 16 service names.</value></data>
+  <data name="Diag_FS1970_a5646924" xml:space="preserve"><value>At most 32 arguments of up to 1024 characters.</value></data>
+  <data name="Diag_FS1970_64119daa" xml:space="preserve"><value>Display name up to 256 and description up to 1024 characters, on one line.</value></data>
+  <data name="Diag_FS1971_77b0e409" xml:space="preserve"><value>At most 16 firewall rules.</value></data>
+  <data name="Diag_FS1978_af0ebcc4" xml:space="preserve"><value>Firewall rules need a per-machine install (install.scope machine or userOrMachine).</value></data>
+  <data name="Diag_FS1978_a9b9929d" xml:space="preserve"><value>Firewall rules are only added when the user chooses "All users".</value></data>
+  <data name="Diag_FS1972_fa329023" xml:space="preserve"><value>A rule name of 1-128 characters (no '|').</value></data>
+  <data name="Diag_FS1973_e7477196" xml:space="preserve"><value>Set the program (or app.mainExecutable).</value></data>
+  <data name="Diag_FS1973_46a664bd" xml:space="preserve"><value>A relative path of an .exe among the installed files.</value></data>
+  <data name="Diag_FS1974_a1437c9e" xml:space="preserve"><value>Use in or out.</value></data>
+  <data name="Diag_FS1975_b41000f1" xml:space="preserve"><value>Use any, tcp or udp.</value></data>
+  <data name="Diag_FS1976_3f143f12" xml:space="preserve"><value>Ports (1-65535, ranges with '-', separated by ',') need protocol tcp or udp.</value></data>
+  <data name="Diag_FS1977_4c6da3c3" xml:space="preserve"><value>Use domain, private and/or public.</value></data>
+  <data name="Diag_FS1980_b50c7402" xml:space="preserve"><value>At most 8 inputs.</value></data>
+  <data name="Diag_FS1981_b71283a8" xml:space="preserve"><value>Input ids use letters, digits, '-' and '_' (max 32).</value></data>
+  <data name="Diag_FS1982_803e1d91" xml:space="preserve"><value>Duplicate input id '{0}'.</value></data>
+  <data name="Diag_FS1983_2292adc6" xml:space="preserve"><value>Give the field a label (per language).</value></data>
+  <data name="Diag_FS1984_e389df50" xml:space="preserve"><value>Use text, password or choice.</value></data>
+  <data name="Diag_FS1985_99588a4f" xml:space="preserve"><value>A choice needs at least one value.</value></data>
+  <data name="Diag_FS1985_d21742b2" xml:space="preserve"><value>At most 32 choices.</value></data>
+  <data name="Diag_FS1986_778ab0a9" xml:space="preserve"><value>At most 512 characters.</value></data>
+  <data name="Diag_FS1986_2b37e231" xml:space="preserve"><value>Not a valid regular expression: {0}</value></data>
+  <data name="Diag_FS1987_c28eae68" xml:space="preserve"><value>At most 4096 characters.</value></data>
+  <data name="Diag_FS1988_80fe6d4c" xml:space="preserve"><value>The default value is not accepted by the field (pattern or choices).</value></data>
+  <data name="Diag_FS1989_b680eaea" xml:space="preserve"><value>Passwords are never remembered for updates.</value></data>
+  <data name="Diag_FS1990_4d6d8e2f" xml:space="preserve"><value>At most 16 config files.</value></data>
+  <data name="Diag_FS1991_40152488" xml:space="preserve"><value>A path relative to the install folder, or {{LocalAppData}}\X, {{AppData}}\X, {{CommonAppData}}\X.</value></data>
+  <data name="Diag_FS1992_2668e5c1" xml:space="preserve"><value>Use json or ini.</value></data>
+  <data name="Diag_FS1993_adb21053" xml:space="preserve"><value>List 1-64 values.</value></data>
+  <data name="Diag_FS1994_5887357e" xml:space="preserve"><value>An INI key (no '=').</value></data>
+  <data name="Diag_FS1994_d6092c3e" xml:space="preserve"><value>A dotted JSON path such as server.url.</value></data>
+  <data name="Diag_FS1995_19f53303" xml:space="preserve"><value>INI values need a section.</value></data>
+  <data name="Diag_FS1996_aa8653bb" xml:space="preserve"><value>Use string, number or bool.</value></data>
+  <data name="Diag_FS1999_c28eae68" xml:space="preserve"><value>At most 4096 characters.</value></data>
+  <data name="Diag_FS1998_f0e131dc" xml:space="preserve"><value>{{Input:{0}}} refers to no input in inputs[].</value></data>
+  <data name="Diag_FS1670_51257bbe" xml:space="preserve"><value>Not a valid version, e.g. 14.40.</value></data>
+  <data name="Diag_FS1671_f3dc36df" xml:space="preserve"><value>Use x64, x86, arm64 or leave it empty (the package architecture).</value></data>
+  <data name="Diag_FS1672_7dabf8e9" xml:space="preserve"><value>At most 8 custom prerequisites.</value></data>
+  <data name="Diag_FS1673_7774e79f" xml:space="preserve"><value>Letters, digits, '-' and '_' (max 32).</value></data>
+  <data name="Diag_FS1674_3870c721" xml:space="preserve"><value>Duplicate id '{0}'.</value></data>
+  <data name="Diag_FS1675_dbab7785" xml:space="preserve"><value>A name of 1-128 characters shown to the user.</value></data>
+  <data name="Diag_FS1676_e8d8db59" xml:space="preserve"><value>Detect the prerequisite either through a registry value (detect.registry) or a file (detect.file).</value></data>
+  <data name="Diag_FS1677_02ae7939" xml:space="preserve"><value>Needs hive HKLM|HKCU, a key, a value name (empty = the key itself when no version is given) and optionally a minimum version.</value></data>
+  <data name="Diag_FS1678_73f644fa" xml:space="preserve"><value>{{ProgramFiles}}\X, {{ProgramFilesX86}}\X, {{System}}\X, {{CommonAppData}}\X, {{LocalAppData}}\X or {{AppData}}\X.</value></data>
+  <data name="Diag_FS1679_aeb7f987" xml:space="preserve"><value>Not a valid version.</value></data>
+  <data name="Diag_FS1681_f0875b8c" xml:space="preserve"><value>Official installers exist only for the built-in prerequisites; give an installer or a download.</value></data>
+  <data name="Diag_FS1680_dc84f5bc" xml:space="preserve"><value>Use bundle, download or leave it empty.</value></data>
+  <data name="Diag_FS1680_a7477691" xml:space="preserve"><value>The official installer is chosen by the version; set the version first.</value></data>
+  <data name="Diag_FS1682_bb493467" xml:space="preserve"><value>Both an installer among the app's files and an official installer are set; the app's installer is used.</value></data>
+  <data name="Diag_FS1682_c6398130" xml:space="preserve"><value>The download URL is used instead of Microsoft's official installer.</value></data>
+  <data name="Diag_FS1001_bc5f9df2" xml:space="preserve"><value>App ID is required (for example "Contoso.Notes").</value></data>
+  <data name="Diag_FS1002_3cf6fe7e" xml:space="preserve"><value>App ID may only contain letters, digits, '.', '-' and '_' (max 64) and must not start or end with '.'.</value></data>
+  <data name="Diag_FS1003_28965cd4" xml:space="preserve"><value>App name is required.</value></data>
+  <data name="Diag_FS1004_3ecf35be" xml:space="preserve"><value>App name is longer than 128 characters.</value></data>
+  <data name="Diag_FS1005_bb04e09e" xml:space="preserve"><value>Publisher is longer than 128 characters.</value></data>
+  <data name="Diag_FS1006_9bf63fd6" xml:space="preserve"><value>No publisher: Windows Settings will show the app without a publisher.</value></data>
+  <data name="Diag_FS1007_5addcec3" xml:space="preserve"><value>'{0}' is not a valid version. Use 1-4 numbers separated by dots, optionally followed by -tag (for example 1.2.0 or 2.0.0-beta.1).</value></data>
+  <data name="Diag_FS1008_8eca990c" xml:space="preserve"><value>Description is longer than 1024 characters.</value></data>
+  <data name="Diag_FS1009_f46e3819" xml:space="preserve"><value>Website must be an absolute http:// or https:// URL.</value></data>
+  <data name="Diag_FS1016_209b2b10" xml:space="preserve"><value>Support URL must be an absolute http:// or https:// URL.</value></data>
+  <data name="Diag_FS1017_6450fe6d" xml:space="preserve"><value>Release notes URL must be an absolute http:// or https:// URL.</value></data>
+  <data name="Diag_FS1018_9e720041" xml:space="preserve"><value>At most {0} links: the installer shows them in one line with the website, release notes and support links.</value></data>
+  <data name="Diag_FS1019_8bd811f0" xml:space="preserve"><value>Link must be an absolute http:// or https:// URL.</value></data>
+  <data name="Diag_FS1020_0efd5166" xml:space="preserve"><value>Label for {0} must be 1-64 characters (leave the label out to show the site's name).</value></data>
+  <data name="Diag_FS1010_d1d653b9" xml:space="preserve"><value>Icon file not found: {0}</value></data>
+  <data name="Diag_FS1011_8f474d42" xml:space="preserve"><value>Icon must be an .ico or .png file.</value></data>
+  <data name="Diag_FS1012_29ad0d6c" xml:space="preserve"><value>No icon set: the default FluentSetup icon is used.</value></data>
+  <data name="Diag_FS1013_068aa1d4" xml:space="preserve"><value>Main executable path is not valid: {0}.</value></data>
+  <data name="Diag_FS1014_b2a6d655" xml:space="preserve"><value>Main executable must be an .exe file.</value></data>
+  <data name="Diag_FS1015_206e26da" xml:space="preserve"><value>No main executable: no shortcuts are created and the app cannot be launched after installation.</value></data>
+  <data name="Diag_FS1116_ce78e58b" xml:space="preserve"><value>Variant ids use letters, digits, - and _ (max 32).</value></data>
+  <data name="Diag_FS1111_e19ee0c0" xml:space="preserve"><value>Duplicate variant id '{0}'.</value></data>
+  <data name="Diag_FS1112_659c887c" xml:space="preserve"><value>Give the variant a label (per language, or in the localization files).</value></data>
+  <data name="Diag_FS1101_72ae4771" xml:space="preserve"><value>Choose the folder with this build.</value></data>
+  <data name="Diag_FS1102_405c87af" xml:space="preserve"><value>Source folder not found: {0}</value></data>
+  <data name="Diag_FS1113_b4c13193" xml:space="preserve"><value>At most 8 variants.</value></data>
+  <data name="Diag_FS1114_1c96270b" xml:space="preserve"><value>Only one variant can be the default.</value></data>
+  <data name="Diag_FS1115_ec700cd7" xml:space="preserve"><value>Ignored: with files.variants each variant has its own source.</value></data>
+  <data name="Diag_FS1117_e65aea24" xml:space="preserve"><value>Use "user" (the user picks) or "auto" (setup picks from what is installed).</value></data>
+  <data name="Diag_FS1118_089e8fe5" xml:space="preserve"><value>Has no effect with fewer than two variants.</value></data>
+  <data name="Diag_FS1119_604d348e" xml:space="preserve"><value>With variantSelection "auto" variant '{0}' has no requirement limited to it (requirements.*.variants), so it is always chosen over the default '{1}'.</value></data>
+  <data name="Diag_FS1662_326d11a5" xml:space="preserve"><value>No variant '{0}' in files.variants.</value></data>
+  <data name="Diag_FS1101_81d3d5b0" xml:space="preserve"><value>Choose the folder that contains the app's files.</value></data>
+  <data name="Diag_FS1103_c0415c61" xml:space="preserve"><value>Extra source not found: {0}</value></data>
+  <data name="Diag_FS1104_3c14c0dd" xml:space="preserve"><value>Target folder is not a valid relative path: {0}.</value></data>
+  <data name="Diag_FS1105_c3b90f9d" xml:space="preserve"><value>Not a valid relative folder: {0}.</value></data>
+  <data name="Diag_FS1106_1e051ff5" xml:space="preserve"><value>Pattern '{0}' is not a relative glob.</value></data>
+  <data name="Diag_FS1201_ab16d755" xml:space="preserve"><value>Scope must be user, machine or userOrMachine.</value></data>
+  <data name="Diag_FS1202_b9ad5e71" xml:space="preserve"><value>Default scope must be user or machine.</value></data>
+  <data name="Diag_FS1203_00dc9a43" xml:space="preserve"><value>A per-user install cannot go to Program Files (it requires administrator rights). Use {{LocalAppData}}\Programs.</value></data>
+  <data name="Diag_FS1204_34659542" xml:space="preserve"><value>A per-machine install must not go into one user's profile.</value></data>
+  <data name="Diag_FS1205_31aea915" xml:space="preserve"><value>'{0}' is not one of off, on, optionalOff, optionalOn.</value></data>
+  <data name="Diag_FS1206_d2bf178f" xml:space="preserve"><value>Launching without asking is not supported; use optionalOn.</value></data>
+  <data name="Diag_FS1207_cd9ab828" xml:space="preserve"><value>Minimum Windows build is out of range.</value></data>
+  <data name="Diag_FS1208_dbcc04fc" xml:space="preserve"><value>FluentSetup itself needs Windows 10 version 1809 (build 17763) or later.</value></data>
+  <data name="Diag_FS1301_bbf8877e" xml:space="preserve"><value>Theme must be system, light or dark.</value></data>
+  <data name="Diag_FS1302_50c4018b" xml:space="preserve"><value>Backdrop must be mica, micaAlt or none.</value></data>
+  <data name="Diag_FS1303_85bf3d73" xml:space="preserve"><value>Accent colour must look like #0067C0 when the system accent is not used.</value></data>
+  <data name="Diag_FS1304_caa00382" xml:space="preserve"><value>Default language must be auto or a language tag such as zh-CN.</value></data>
+  <data name="Diag_FS1311_fb4a57a7" xml:space="preserve"><value>Use firstInstall or always.</value></data>
+  <data name="Diag_FS1315_3ebf8175" xml:space="preserve"><value>Use page or inline.</value></data>
+  <data name="Diag_FS1305_31b8f65d" xml:space="preserve"><value>License file not found: {0}</value></data>
+  <data name="Diag_FS1307_fcfa0aa4" xml:space="preserve"><value>Strings for '{0}' are ignored: '{1}' is not a language tag such as en-US, zh-CN or fr-FR.</value></data>
+  <data name="Diag_FS1308_34c49ea2" xml:space="preserve"><value>Text is longer than {0} characters.</value></data>
+  <data name="Diag_FS1401_1f3cf50b" xml:space="preserve"><value>Architecture must be x64 or arm64.</value></data>
+  <data name="Diag_FS1402_74ce7fff" xml:space="preserve"><value>Compression must be fast, normal or max.</value></data>
+  <data name="Diag_FS1403_ef68473d" xml:space="preserve"><value>Output file name must be a valid file name ending in .exe.</value></data>
+  <data name="Diag_FS1404_f3e580e2" xml:space="preserve"><value>Choose an output folder.</value></data>
+  <data name="Diag_FS1309_cf51d925" xml:space="preserve"><value>'{0}' is not a language tag; this license is ignored.</value></data>
+  <data name="Diag_FS1310_31b8f65d" xml:space="preserve"><value>License file not found: {0}</value></data>
+  <data name="Diag_FS1709_0e4fd44b" xml:space="preserve"><value>Update settings have no effect until update.github or update.feed is set.</value></data>
+  <data name="Diag_FS1701_b149380e" xml:space="preserve"><value>Choose GitHub releases (update.github) or a feed (update.feed), not both.</value></data>
+  <data name="Diag_FS1702_acb8a9a8" xml:space="preserve"><value>'{0}' is not a GitHub repository; write owner/name, e.g. contoso/notes.</value></data>
+  <data name="Diag_FS1703_19d350e2" xml:space="preserve"><value>The update feed must be an https URL.</value></data>
+  <data name="Diag_FS1704_85cfc8ad" xml:space="preserve"><value>'{0}' is not a file name ending in .exe ({{Version}} is the only placeholder).</value></data>
+  <data name="Diag_FS1705_57642589" xml:space="preserve"><value>The Setup.exe name '{0}' contains this version ({1}) literally, so the next release is looked for under the same name. Write {{Version}} in update.asset (or in output.fileName) instead.</value></data>
+  <data name="Diag_FS1706_8abf55c2" xml:space="preserve"><value>update.checksums must be the file name of a release asset, e.g. SHA256SUMS.txt.</value></data>
+  <data name="Diag_FS1707_c8678d4e" xml:space="preserve"><value>update.asset, update.checksums and update.prerelease are only used with update.github; the feed names the file and its SHA-256.</value></data>
+  <data name="Diag_FS1708_26acf44e" xml:space="preserve"><value>update.signer must be the certificate's subject name without surrounding spaces (max 256 characters).</value></data>
+  <data name="Diag_FS1710_2986cbdd" xml:space="preserve"><value>update.signer is set but this project is not signed: updates without that signature will be refused.</value></data>
+  <data name="Diag_FS1210_238393f1" xml:space="preserve"><value>Install folder is required.</value></data>
+  <data name="Diag_FS1211_ac5980e3" xml:space="preserve"><value>Unknown placeholder in '{0}'. Known: {1}.</value></data>
+  <data name="Diag_FS1212_2dfddb16" xml:space="preserve"><value>Install folder must start with a known folder placeholder such as {{ProgramFiles}} or an absolute path.</value></data>
+  <data name="Diag_FS1504_24bce567" xml:space="preserve"><value>'{0}' is not a signing provider. Use signtool, trustedSigning or command.</value></data>
+  <data name="Diag_FS1503_eec10168" xml:space="preserve"><value>Timestamp URL is not valid (an http:// or https:// URL, or empty for no timestamp).</value></data>
+  <data name="Diag_FS1520_80862c47" xml:space="preserve"><value>Empty pattern: name the app's programs to sign, e.g. "MyApp.exe" or "MyApp*.dll".</value></data>
+  <data name="Diag_FS1517_a35157e9" xml:space="preserve"><value>certificateThumbprint, certificateFile and passwordEnvironmentVariable are ignored with the {0} provider.</value></data>
+  <data name="Diag_FS1517_ca7686bb" xml:space="preserve"><value>Ignored with the {0} provider.</value></data>
+  <data name="Diag_FS1501_9423723a" xml:space="preserve"><value>Signing needs a certificate thumbprint (from the certificate store) or a .pfx file.</value></data>
+  <data name="Diag_FS1518_39c7bd76" xml:space="preserve"><value>The thumbprint must be the certificate's SHA-1 hash: 40 hexadecimal characters (spaces are allowed).</value></data>
+  <data name="Diag_FS1502_9debb3b9" xml:space="preserve"><value>Certificate file not found: {0}</value></data>
+  <data name="Diag_FS1505_63a63dec" xml:space="preserve"><value>Give the account's regional endpoint, e.g. https://eus.codesigning.azure.net.</value></data>
+  <data name="Diag_FS1506_88442560" xml:space="preserve"><value>Give the Artifact Signing account name.</value></data>
+  <data name="Diag_FS1507_824dd7e6" xml:space="preserve"><value>Give the certificate profile name.</value></data>
+  <data name="Diag_FS1508_8f1d3ca8" xml:space="preserve"><value>Give the path of Azure.CodeSigning.Dlib.dll (NuGet package Microsoft.ArtifactSigning.Client, bin\x64).</value></data>
+  <data name="Diag_FS1508_ddf94ed6" xml:space="preserve"><value>File not found: {0}</value></data>
+  <data name="Diag_FS1509_f1d975f6" xml:space="preserve"><value>Unknown credential type(s): {0}. Known: {1}.</value></data>
+  <data name="Diag_FS1510_ca024bf0" xml:space="preserve"><value>Give the signing program (a name on PATH or a path).</value></data>
+  <data name="Diag_FS1513_00a8276b" xml:space="preserve"><value>Signing program not found: {0}</value></data>
+  <data name="Diag_FS1514_3116d031" xml:space="preserve"><value>'{0}' was not found on PATH.</value></data>
+  <data name="Diag_FS1511_ece3f3f7" xml:space="preserve"><value>The arguments must contain {{file}} (the file to sign).</value></data>
+  <data name="Diag_FS1512_c2a833aa" xml:space="preserve"><value>Unknown placeholder(s) {0}. Known: {1}.</value></data>
+  <data name="Diag_FS1515_4216721d" xml:space="preserve"><value>Not a valid environment variable name.</value></data>
+  <data name="Diag_FS1516_c0d2ebd9" xml:space="preserve"><value>The timeout must be between 10 and 3600 seconds.</value></data>
 </root>

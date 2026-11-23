@@ -34,7 +34,8 @@ std::function<UpdateCheckResult()> MakeUpdateCheck(const install::Package& pkg, 
 struct RepairPackage {
     std::wstring path;
     UniqueHandle lock;
-    bool downloaded = false;
+    bool downloaded = false;  // a temporary file (download or private copy): deleted with its folder
+    std::wstring original;    // `path` is a private copy of this recorded original, which the setup records instead
     RepairPackage() = default;
     RepairPackage(const RepairPackage&) = delete;
     RepairPackage& operator=(const RepairPackage&) = delete;
@@ -42,16 +43,20 @@ struct RepairPackage {
 };
 enum class RepairLookup { Found, None, Failed };
 
-// Looks for the setup of `version`: first the Setup.exe recorded at install time (record->sourcePackage, only while its
-// SHA-256 still matches the record), then the package's update source: the GitHub release tagged v<version> or
+// Looks for the setup of `version`: first the Setup.exe recorded at install time (record->sourcePackage, only while the
+// SHA-256 of the whole file still matches the record, and only from a publisher's setup when update.signer is set or the
+// installed uninstall.exe is signed), then the package's update source: the GitHub release tagged v<version> or
 // <version>, or the feed if it advertises exactly that version. A download gets the same checks as an update (https,
-// published SHA-256, a FluentSetup package of this app id, architecture and version, update.signer). None: no source has
-// it (`error` says why); Failed: a source could not be read or the download was refused.
+// published SHA-256, a FluentSetup package of this app id, architecture and version, update.signer). With administrator
+// rights the setup is copied to a folder only administrators can change and runs from there. None: no source has it
+// (`error` says why); Failed: a source could not be read or the download was refused.
 RepairLookup FindRepairPackage(const install::Package& pkg, const std::wstring& version, const install::InstallRecord* record,
                                const std::atomic<bool>& cancel, const std::function<void(uint64_t, uint64_t)>& progress,
                                RepairPackage& out, std::wstring& error);
 
 // Runs a setup with /passive (or /quiet) and the UI language, and waits for it. False if it could not be started.
-bool RunSetup(const std::wstring& file, bool quiet, const std::wstring& language, DWORD& exitCode, std::wstring& error);
+// `recordAs`: when `file` is a private copy, the original it was made from (--source-package).
+bool RunSetup(const std::wstring& file, bool quiet, const std::wstring& language, const std::wstring& recordAs, DWORD& exitCode,
+              std::wstring& error);
 
 }  // namespace fsetup::boot

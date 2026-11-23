@@ -41,6 +41,12 @@ jobs:
         shell: pwsh
         run: ./scripts/build.ps1 -Configuration Release -Platforms x64,ARM64
 
+      # Setup.exe, the worker, the relocated uninstaller and the WinUI front end run from user-writable folders: only
+      # KnownDLLs and API sets may be static imports (everything else is delay-loaded after SetDefaultDllDirectories).
+      - name: Static imports (no DLL planting before wWinMain)
+        shell: pwsh
+        run: ./scripts/check-imports.ps1 -Platforms x64,ARM64
+
       - name: Native unit tests
         shell: pwsh
         run: |
@@ -125,6 +131,10 @@ jobs:
         # Without the WinUI precompiled header: this runner sometimes cannot reserve the memory for it (C3859/C1076),
         # even with one compiler at a time.
         run: ./scripts/build.ps1 -Configuration Release -Platforms ARM64 -Skip Builder -NoPch -MaxCompilers 2
+
+      - name: Static imports (ARM64)
+        shell: pwsh
+        run: ./scripts/check-imports.ps1 -Platforms ARM64
 
       - name: Native unit tests (ARM64)
         shell: pwsh

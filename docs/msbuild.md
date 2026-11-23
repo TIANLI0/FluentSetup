@@ -89,7 +89,7 @@ dotnet tool run fsetup build installer\fluentsetup.json
 ```
 
 The tool is the same `fsetup` as in the release zip and FluentSetup's own installer (all commands, see the
-[CLI reference](project-file.md#cli-fluentsetup)); it needs the .NET runtime instead of being self-contained. Its
+[CLI reference](project-file.md#cli-fsetup)); it needs the .NET runtime instead of being self-contained. Its
 installer runtime is part of the tool's files.
 
 ## FluentSetup.Builder.Core: the library

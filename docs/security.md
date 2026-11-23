@@ -33,22 +33,32 @@ and `HKCU|HKLM\Software\FluentSetup\Pending\<appId>`.
 ### 2.1 DLL search-order hijacking
 
 `Setup.exe` usually runs from the Downloads folder, where a malicious `version.dll`, `uxtheme.dll` etc. could be planted.
+The same file also runs from other folders the user (or a download) can write to: the `%TEMP%` copy of `uninstall.exe`
+(phase 2), the kept update folder, and the elevated worker, which is started from the very same path with
+administrator rights.
 
 * The first statement of `wWinMain` restricts the process DLL search to System32:
-  `SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32)` (`src/Bootstrapper/main.cpp:113`).
-* Imports that are not KnownDLLs are **delay-loaded** so they are resolved only after that call:
-  `comctl32.dll; uxtheme.dll; dwmapi.dll; wintrust.dll; bcrypt.dll; shcore.dll; oleaut32.dll`
-  (`src/Bootstrapper/FluentSetup.Stub.vcxproj:24-26`). Statically imported DLLs (kernel32, user32, gdi32, advapi32,
-  shell32, ole32) are KnownDLLs.
-* Every native project linked through `build/native.props` gets `/DEPENDENTLOADFLAG:0x800`
-  (`LOAD_LIBRARY_SEARCH_SYSTEM32`) for load-time dependencies (`build/native.props:91`).
+  `SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32)` (`src/Bootstrapper/main.cpp`). That call cannot help with
+  static imports: the loader resolves them before `wWinMain`, from the program's folder first unless the DLL is a
+  KnownDLL.
+* Every import that is not a KnownDLL or an API set is therefore **delay-loaded**, so it is resolved only after that
+  call: `comctl32, uxtheme, dwmapi, wintrust, crypt32, bcrypt, oleaut32, winhttp, wtsapi32, rstrtmgr, version, propsys,
+  msi` (msi.dll only loads in setups that use `install.legacyMsi`)
+  (`DelayLoadDLLs` in `src/Bootstrapper/FluentSetup.Stub.vcxproj`). Statically imported DLLs (kernel32, user32, gdi32,
+  advapi32, shell32, ole32) are KnownDLLs; the rest are `api-ms-win-*` API sets.
+* `scripts/check-imports.ps1` reads the PE import table of `FluentSetup.Stub.exe` and `ui\FluentSetup.UI.exe` and fails
+  CI (after the build, x64 and ARM64) if either statically imports anything other than a KnownDLL or an API set, or
+  lacks `/DEPENDENTLOADFLAG:0x800` (gap G20: up to 1.5.0, `rstrtmgr.dll`, `version.dll` and `propsys.dll` were static
+  imports and could be planted next to `Setup.exe`, also for the elevated worker).
+* Every native project linked through `build/native.props`, and the WinUI front end, gets `/DEPENDENTLOADFLAG:0x800`
+  (`LOAD_LIBRARY_SEARCH_SYSTEM32`) for load-time dependencies.
 * The fallback UI loads `shcore.dll` explicitly from System32 (`src/Setup.Win32/fallback_ui.cpp:184`).
 * The binaries use the hybrid CRT (static VC runtime + system UCRT, `build/native.props:68-70, 94-99`), so there is no
   `vcruntime140.dll`/`msvcp140.dll` to plant next to `Setup.exe`.
 * The WinUI front end runs from a freshly created private temp directory whose files are hash-verified and locked
   (2.2); it loads `Microsoft.WindowsAppRuntime.Bootstrap.dll` by absolute path from that directory
-  (`src/Setup.WinUI/main.cpp:63-66`). `FluentSetup.UI.vcxproj` does not import `native.props`, so the UI does not get
-  `/DEPENDENTLOADFLAG` or `SetDefaultDllDirectories`; it relies on its directory being private.
+  (`src/Setup.WinUI/main.cpp:63-66`). The UI does not call `SetDefaultDllDirectories`; it relies on its directory being
+  private, and its static imports are KnownDLLs and API sets only (`check-imports.ps1`).
 
 Additional hardening: heap termination on corruption (`main.cpp:114`), `/sdl`, Control Flow Guard and `/GS`
 (`build/native.props:63, 71, 83`), `asInvoker` manifests for both executables (`src/Bootstrapper/stub.manifest:9`,
@@ -73,6 +83,22 @@ Three things are written to temp: the WinUI front-end bundle, the phase-2 copy o
   (`src/Common/fs.cpp:101-126`).
 
 The log file is opened with `FILE_FLAG_OPEN_REPARSE_POINT` and must be a regular disk file with a single hard link. In an elevated process (the worker), any link in the log path, or a final path that differs from the requested one, makes `log::Open` skip the log (and delete the file if it had just created it) instead of writing through the link (`src/Common/log.cpp`; gap G1, fixed).
+
+The elevated worker does not open the log path its unelevated parent chose when it can avoid it: the parent passes its
+open log handle (`--log-handle`), and the worker duplicates it from the parent (`PROCESS_DUP_HANDLE`, which it has on a
+process of its own user) and writes through that copy, which carries only the rights the parent had (`AdoptParentLog`
+in `main.cpp`, `log::Adopt`). Without the handle (over-the-shoulder elevation as another account), it opens a `/log`
+path only below its own `%TEMP%\FluentSetup` (`boot::IsWorkerLogPath`); anything else is ignored and the worker logs to
+its default file there (gap G16).
+
+Files that run with administrator rights get a folder of their own (`security::CreateRunDirectory`): prerequisite
+installers that setup downloads or extracts, the setup a repair runs, and the new Setup.exe that an elevated
+`/install-update` starts (2.8). Unelevated it is a private folder in the
+user's `%TEMP%` as above; elevated it is `%SystemRoot%\Temp\<prefix><16 hex>`, owned by Administrators with only
+Administrators and SYSTEM in a protected DACL. The user's own `%TEMP%` would not do for elevated processes: the user's
+unelevated programs can write there, could plant DLLs next to what runs, and may rename any folder in it (they hold
+`FILE_DELETE_CHILD` on `%TEMP%`) and put another in its place. In `%SystemRoot%\Temp` standard users may create entries
+but cannot rename or delete those of others.
 
 ### 2.3 Path traversal, absolute, UNC and device paths in packages
 
@@ -123,13 +149,23 @@ All untrusted path text (package header, install record, journal, command line, 
   opened, so a link would be moved as a link. A folder goes to the trash as a whole only if it holds nothing but
   recorded, non-preserved files and recorded folders and no link (`MoveOwnedSubtrees`); user files next to the app's
   keep their folder in place.
-* **Recursive deletion** (`fs::DeleteTree` in `fs.cpp`) unlinks a reparse-point directory with
-  `RemoveDirectoryW` and never recurses into it. `removeData` targets that are links are skipped (`engine.cpp:954`).
+* **Recursive deletion** (`fs::DeleteTree` in `fs.cpp`) is handle-based. The root is opened with
+  `FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS`; a directory is listed through its handle
+  (`GetFileInformationByHandleEx`), and every entry is opened relative to that handle (`NtCreateFile` with
+  `RootDirectory` and `FILE_OPEN_REPARSE_POINT`), so no path is looked up again. Whether an entry is a directory, a link
+  or a file is decided from the opened handle, never from the listing: a reparse point is deleted as itself and never
+  entered. Entries are deleted through their handle (`FileDispositionInfoEx` with POSIX semantics and read-only
+  ignored; the classic disposition where the file system lacks it). Swapping a folder for a junction while the tree is
+  deleted therefore removes only the junction, whatever the timing (a native test races it). An elevated caller also
+  checks that the root's final path is the requested one, so a parent folder swapped meanwhile does not redirect the
+  whole deletion. Files of one directory are still deleted from several threads, all relative to the same handle.
+  `removeData` targets that are links are skipped; single files in `removeData` are deleted the same way (gap G3).
 * **Rollback:** only moves between `.fsetup` and the install directory/shortcut folders (`journal.cpp:141-157`).
 * **Action executables** must not have a link in their parent path (`engine.cpp:549`).
 * The builder does not follow junctions when collecting files (`src/Builder.Core/Packaging/FileCollector.cs:85`).
 
-These are path-based checks followed by path-based operations; see gap G3 for the race this leaves.
+Apart from `fs::DeleteTree`, these are path-based checks followed by path-based operations; see gap G3 for the race
+this leaves.
 
 ### 2.5 Refusing unsafe install locations
 
@@ -144,19 +180,28 @@ These are path-based checks followed by path-based operations; see gap G3 for th
 * a different directory than the one an existing installation uses (`Locked`);
 * a file instead of a directory, or a non-empty directory that holds another app's `uninstall.json`/`uninstall.exe`
   (`OtherApp`) or any file this package would overwrite that is not marked `preserve` (`NotEmpty`);
+* for per-machine scope, an existing folder that already holds files and is not controlled by administrators alone
+  (`Insecure`, `path.insecure`): its owner must be Administrators, SYSTEM or TrustedInstaller, and no entry of its DACL
+  (inheritable ones included) may give anyone else write, delete or permission rights
+  (`security::IsAdministratorControlled`). Such a folder keeps its permissions, so files a standard user put there or
+  could change would otherwise run elevated. The folder of the installation being updated is exempt (see G2);
 * for per-user scope, a location the user cannot create a directory in (`NotWritable`), and insufficient free space.
 
 The checks run in the controller for UI feedback and again in `Engine::Install` immediately before anything is changed
 (`engine.cpp:609-616`), in whichever process (user or elevated worker) performs the install. The e2e test covers the
 Windows folder, the profile root and a junction (`tests/Integration/e2e.ps1:215-228`).
 
-For per-machine installs, a newly created top-level directory outside Program Files receives a protected DACL
-`D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)(A;OICI;0x1200a9;;;AC)` (SYSTEM and Administrators full
-control; Users and ALL APPLICATION PACKAGES read & execute) (`src/Common/security.cpp:60-77`, `engine.cpp:640-647`).
-An existing but empty directory chosen outside Program Files gets the same DACL. Directories under Program Files keep
-the inherited (already protected) ACL. A pre-existing, non-empty directory (an upgrade in place, possibly of an app
-another installer put there) keeps its ACL, because the app may rely on writing into it; the log records a warning.
-See gap G2.
+For per-machine installs, directories setup creates outside Program Files are created with owner Administrators and the
+protected DACL `D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)(A;OICI;0x1200a9;;;AC)` (SYSTEM and
+Administrators full control; Users and ALL APPLICATION PACKAGES read & execute) in the `CreateDirectory` call itself
+(`security::MachineInstallSecurity`), so nothing can be planted between creation and protection. An existing but empty
+directory chosen outside Program Files gets the same owner and DACL (`security::ApplyMachineInstallAcl`) before
+anything is written into it; if that fails, the install stops (`UnsafePath`). The owner matters: a standard user who
+created the folder beforehand would otherwise stay its owner and could grant themselves access again. Directories under
+Program Files keep the inherited (already protected) ACL. A fresh install into an existing non-empty folder needs a
+folder that only administrators control (`Insecure` above); the folder of the installation being updated keeps its
+ACL, because the app may rely on writing into it, and the log records a warning when other users can change it. See
+gap G2.
 
 ### 2.6 Elevated worker authentication
 
@@ -231,6 +276,29 @@ Individual pipes are single-instance (`FILE_FLAG_FIRST_PIPE_INSTANCE`, one insta
 * **Install record:** `uninstall.json`'s SHA-256 is stored in the ARP key as `FluentSetupRecordSha256`
   (`engine.cpp:786`); upgrade and uninstall refuse a record that does not match it, belongs to another app, scope or
   directory (`installed.cpp:183-207`).
+* **The setup a repair runs:** the record names the Setup.exe that installed the version (`sourcePackage`) with the
+  SHA-256 of the **whole file** (`fileSha256`, hashed through the container's deny-write handle at install time) next
+  to its header digest. Repair opens that file with writes and deletion denied, hashes it through the handle and runs
+  it only if the hash matches; the header digest alone covers the header, not the code in front of it, so a user could
+  replace `Downloads\Setup.exe` with their own program carrying the original package. When `update.signer` is set, or
+  the installed `uninstall.exe` carries a trusted signature, the file must also be signed by that publisher (subject
+  CN, checked through the same handle). With administrator rights the verified file is copied through the handle into
+  a `CreateRunDirectory` folder (2.2), hashed again there and run from the copy (with `--source-package <original>`,
+  which the reinstall records instead of the copy only if that file still hashes to exactly the running setup); a
+  download from the update source is copied the same way. A record written by 1.5.0 or older has no whole-file hash: repair then never runs the file and
+  downloads the setup from the update source instead, as when the file is gone (gap G15).
+* **The setup an update runs:** `/install-update` downloads into a private folder in the user's `%TEMP%` (or, with
+  `update.differential`, the user's `%LocalAppData%\FluentSetup\updates\<app id>`) and verifies the file through a
+  deny-write handle (published SHA-256, package of the same app id and architecture, advertised version,
+  `update.signer`). Run with administrator rights (an elevated prompt, a deployment tool running it as SYSTEM), it then
+  copies the verified file through that handle into a `CreateRunDirectory` folder (`FluentSetup-n-<16 hex>` in
+  `%SystemRoot%\Temp`), hashes the copy against the published SHA-256 again and starts the setup from there; a temporary
+  download is deleted at once, a kept one stays the file the setup records (`--source-package`). Neither folder of the
+  download is one where the user's unelevated programs could plant DLLs next to an elevated setup or swap the file. The
+  running copy cannot delete itself: it and its folder are registered for deletion at the next restart
+  (`MOVEFILE_DELAY_UNTIL_REBOOT`), and the next elevated update removes the copies of finished ones (only folders that
+  administrators control, never through a link). Without administrator rights the setup runs from the download as
+  before: it has no more rights than the user who could change it (gap G21).
 
 Without a signature these hashes detect accidental damage only: the header hash is stored in the footer of the same
 file, so anyone who can rewrite the file can recompute it.
@@ -256,7 +324,9 @@ the footer; any change to a signed package becomes `Tampered`. The signature sta
 
 * JSON (`src/Common/json.h:86-92`, `json.cpp`): recursive descent with a depth limit and a byte limit
   (`json.cpp:410`), strict grammar (no comments, trailing commas or control characters in strings, surrogates validated,
-  non-finite numbers rejected), never throws on bad input. Limits used: package header depth 16 and 64 MiB
+  non-finite numbers rejected), never throws on bad input. A number is an integer only if it was written as one (no
+  fraction or exponent) and fits `int64`; `asInt`/`asUint` return their fallback for anything else instead of
+  converting it (gap G19). Limits used: package header depth 16 and 64 MiB
   (`package.cpp:155-157`, `container.h:24`); IPC depth 32 and 16 MiB (`pipe.cpp:185-188`); install record 256 MiB file
   (`installed.cpp:189`); journal 512 MiB (`journal.cpp:94`). Duplicate keys are accepted and the first one wins.
 * Header semantics: at most 1,000,000 streams and 2,000,000 files, total 16 TiB sanity bound
@@ -311,6 +381,22 @@ package explicitly adopts it (`engine.cpp:598-600`).
 * Actions run with the installer's rights: as the user for per-user installs, and **as administrator** inside the
   elevated worker for per-machine installs.
 
+### 2.14 Removing an older MSI (`install.legacyMsi`)
+
+* The package names Windows Installer product and upgrade codes only (GUIDs, checked by the builder and again by
+  `ParseExtensions`); there is no command line, path or program to inject. Setup removes what Windows Installer has
+  registered under those codes, which can be any MSI product on the PC: like actions, this is the package author's
+  decision (section 3).
+* With administrator rights (per-machine installs, in the elevated worker) and for the current user's per-user products,
+  the removal runs in-process through `MsiConfigureProductEx` with the internal UI off (`INSTALLUILEVEL_NONE`) and
+  `REBOOT=ReallySuppress`. The product's own uninstall custom actions run as in any uninstall.
+* A per-machine product in a per-user install is removed by `%SystemRoot%\System32\msiexec.exe` (absolute path from
+  `GetSystemDirectoryW`, never a search) started with `runas`: Windows shows the UAC prompt for Microsoft's signed
+  msiexec, and the elevated process gets only `/x {code} /qn REBOOT=ReallySuppress`. A declined prompt stops setup
+  before it has changed anything (exit code 6).
+* The removal happens before setup writes its own files and is not undone by its rollback (documented in
+  project-file.md); a failure to remove stops the install before the journal starts.
+
 ## 3. What is not protected
 
 * **A malicious or compromised package author.** The author chooses the payload, the actions (which may run elevated
@@ -356,22 +442,27 @@ access FluentSetup ever makes, and only when that prerequisite is missing on the
 
 * https only: the builder and the installer engine both reject other schemes, TLS 1.2 or 1.3 is required, and
   redirects from https to http are refused (`WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP`).
-* The package must state the file's SHA-256 (and may state its exact size). The download is streamed into a new file
-  (`CREATE_NEW`) in a private directory (`security::CreatePrivateDirectory`), hashed while it is written, capped at the
-  declared size (512 MiB if unknown), and run only if size and hash match. Otherwise setup stops before anything is
-  installed (exit code 17). The folder is deleted afterwards.
+* The package must state the file's SHA-256 (and may state its exact size), or pin the publisher (`download.signer`:
+  the subject CN, compared exactly and case-insensitively, of a valid signature with a trusted chain). The download is
+  streamed into a new file (`CREATE_NEW`) in a folder of its own (`security::CreateRunDirectory`: private in the user's
+  `%TEMP%`, or admin-only in `%SystemRoot%\Temp` when elevated, so nothing can be planted next to it), hashed while it
+  is written and capped at the declared size (512 MiB if unknown). If size, hash or signer do not match, setup stops
+  before anything is installed (exit code 17). The folder is deleted afterwards.
+* Downloaded and bundled installers run after the app's files are in place, so from their check until they have
+  started they are kept open with writes and deletion denied: the SHA-256 and the signature are checked through that
+  handle, and the file is hashed through it again right before it runs; a difference stops the install (gap G17).
 * The download happens before the install is started, so a network failure never leaves a half-installed app.
 * The downloaded installer runs like an action: `CreateProcess` without a shell, in a job object, with a timeout. For
   per-machine installs it runs elevated, so the SHA-256 in the (ideally signed) package is what authorises it.
 ## 5. Known gaps and weaknesses
 
-Found while reading the code for this document. G1, G5, G6, G7, G8, G10, G11 and G14 have been fixed since, and G2 partly; the rows say so.
+Found while reading the code for this document. G1, G5, G6, G7, G8, G10, G11 and G14 to G21 have been fixed since, and G2 and G3 partly; the rows say so.
 
 | Id | Severity (estimate) | Location | Description |
 |---|---|---|---|
 | G1 | Fixed | `src/Common/log.cpp` | *Was:* the elevated worker opened its log at a path supplied by the unelevated parent (default: the user's `%TEMP%\FluentSetup`) with `OPEN_ALWAYS` and without `FILE_FLAG_OPEN_REPARSE_POINT`, so a planted junction/symlink/hard link could make the administrator create or append to an arbitrary file. *Now:* reparse points and multiply-linked files are refused, and an elevated process also refuses links anywhere in the path and verifies the final path of the opened handle. |
-| G2 | Medium (partly fixed) | `src/Install.Core/engine.cpp` (Preparing) | For per-machine installs outside Program Files the protected ACL is applied to directories setup creates and to an existing *empty* directory the user picked. A pre-existing non-empty directory (upgrade in place, adopted install) keeps its ACL; if a standard user can write there, they can replace binaries installed by the administrator, including `uninstall.exe` and the executables that `afterInstall` actions run elevated, and they control the `.fsetup` journal (see G4). The engine logs a warning in that case. |
-| G3 | Medium (only with G2-type locations or user-created `ProgramData` folders) | `src/Install.Core/engine.cpp:378-385, 398, 903-920, 952-956`; `src/Common/fs.cpp:163-189` | Link checks are path-based and done before the operation (and cached per directory during extraction); the subsequent create/move/delete is again path-based. In a directory a standard user can modify, a directory can be swapped for a junction between check and use (time-of-check/time-of-use), redirecting elevated writes, moves or the recursive `DeleteTree` of `removeData` (for example a folder under `C:\ProgramData` that a user pre-created). |
+| G2 | Medium (partly fixed) | `src/Install.Core/engine.cpp` (Preparing, `CheckInstallDir`) | For per-machine installs outside Program Files, directories setup creates get owner Administrators and the protected ACL as they are created, and an existing *empty* directory the user picked gets both before anything is written. A fresh install into an existing non-empty folder is refused (`path.insecure`) unless only administrators own and can change it. *Remaining:* the folder of the installation being updated (upgrade in place, adopted install of another installer) keeps its ACL; if a standard user can write there, they can replace binaries installed by the administrator, including `uninstall.exe` and the executables that `afterInstall` actions run elevated, and they control the `.fsetup` journal (see G4). The engine logs a warning in that case. A handle that a standard user opened on an empty folder before setup protected it keeps the access it was opened with. |
+| G3 | Medium (partly fixed; only with G2-type locations or user-created `ProgramData` folders) | `src/Install.Core/engine.cpp`; `src/Common/fs.cpp` | *Fixed:* the recursive `DeleteTree` (staging, backup and work folders, `removeData` on uninstall, the elevated cleanup) works through handles and never follows a reparse point (2.4), so a folder swapped for a junction under `C:\ProgramData` during an elevated uninstall loses only the link. *Remaining:* the other link checks are path-based and done before the operation (and cached per directory during extraction); the subsequent create/move is again path-based. In a directory a standard user can modify, a directory can be swapped for a junction between check and use (time-of-check/time-of-use), redirecting elevated writes or moves. |
 | G4 | Low | `src/Install.Core/engine.cpp:343-364`; `src/Install.Core/journal.cpp:161-163` | Recovery runs elevated over `<dir>\.fsetup\journal.jsonl`. If the install directory is user-writable (G2) and a machine-scope pending marker exists (after a crash), a user can edit the journal: rollback stays inside the install directory and shortcut folders, but `reg` entries restore arbitrary values into the app's HKLM ARP key. |
 | G5 | Fixed | `src/Archive/container.cpp` (`CheckSignature`) | *Was:* `CERT_E_REVOKED` and `TRUST_E_EXPLICIT_DISTRUST` were accepted and the signature state was not shown. *Now:* a certificate the PC knows to be revoked or that is explicitly distrusted is refused (`PackageCorrupt`, also for updates and Repair packages), and the first page shows "Verified publisher: <name>" for a trusted signature (nothing for an unsigned or untrusted one: Windows already warns in SmartScreen and UAC). Revocation is still not checked online. |
 | G6 | Fixed | `src/Install.Worker/worker.cpp`; `Engine::SanitizeOptions` | *Was:* the worker did not re-apply the package's option policy. *Now:* the worker rejects options that `Engine::SanitizeOptions` refuses (scope, custom folder when `allowCustomDir` is false, undeclared option ids) and forces hidden shortcut offers to their defaults. |
@@ -383,6 +474,13 @@ Found while reading the code for this document. G1, G5, G6, G7, G8, G10, G11 and
 | G12 | Informational | `src/Bootstrapper/winui_host.cpp:177`; `src/Setup.WinUI/app.manifest` | The UI manifest comment says the UI "never runs elevated", but if `Setup.exe` itself is started elevated the WinUI child inherits the elevated token. |
 | G13 | Informational | `src/Install.Core/extensions.cpp:399-408`; `src/Install.Core/engine.cpp:952-956` | `removeRunValues` deletes from both HKCU and HKLM regardless of scope, and in an over-the-shoulder elevated uninstall HKCU, `{LocalAppData}` and `{AppData}` refer to the administrator's profile, not the user who installed the app. |
 | G14 | Fixed | `src/Common/json.cpp` | *Was:* duplicate JSON object keys were accepted (first one wins). *Now:* they are a parse error (package headers, install records, journals, IPC messages, update feeds). |
+| G15 | Fixed | `src/Bootstrapper/updater.cpp` (`RecordedPackage`); `src/Install.Core/engine.cpp` (install record) | *Was:* a repair ran the recorded original Setup.exe after comparing only the header digest (which does not cover the stub code) and without a signer check, from wherever it was (typically `Downloads`). A standard user could replace it with their own program followed by the original package, and a later elevated or SYSTEM `/repair` ran it. *Now:* the record holds the SHA-256 of the whole file, checked through a deny-write handle kept open until the setup has started; `update.signer` and the trusted signer of the installed `uninstall.exe` must match; an elevated repair runs a verified copy from an admin-only folder; records without the whole-file hash fall back to the download (2.8). |
+| G16 | Fixed | `src/Bootstrapper/main.cpp`, `controller.cpp`; `src/Common/log.cpp` | *Was:* the elevated worker opened the `/log` path its unelevated parent passed, wherever it pointed (links were refused, G1, but any plain path was created or appended to with administrator rights). *Now:* it writes through a duplicate of the parent's own log handle, or, failing that, opens a path only below its own `%TEMP%\FluentSetup` (2.2). |
+| G17 | Fixed | `src/Install.Core/engine.cpp` (prerequisites) | *Was:* downloaded and bundled prerequisite installers were verified, then run after the payload by path from the user's `%TEMP%`, unlocked: they could be swapped in between, and DLLs could be planted next to them. *Now:* they stay open with writes and deletion denied from verification until they have started, are hashed again through that handle right before they run, and when elevated live in an admin-only folder (Prerequisite downloads). |
+| G18 | Fixed | `src/Archive/container.cpp` (`TrustedSignerName`) | *Was:* pinned signers (`update.signer`, `download.signer`) were compared with the certificate's simple display name, which falls back to other subject fields (OU, O, e-mail) when there is no CN, and prerequisite downloads compared it case-sensitively. *Now:* only the subject common name counts, compared exactly and case-insensitively (`archive::SignedBy`); the first page still shows the display name. |
+| G19 | Fixed | `src/Common/json.h` | *Was:* `Value(double)` converted to `int64` with `static_cast` (undefined behaviour out of range) and `asInt`/`asUint` truncated `1.5` to `1`. *Now:* see 2.10. |
+| G20 | Fixed (was high) | `src/Bootstrapper/FluentSetup.Stub.vcxproj` | *Was:* `rstrtmgr.dll`, `version.dll` and `propsys.dll` were static imports of the stub, resolved from the folder `Setup.exe` (or the elevated worker started from it, or the relocated uninstaller) runs in before `wWinMain` restricted the DLL search. *Now:* they are delay-loaded, and `scripts/check-imports.ps1` fails CI on any static import that is not a KnownDLL or an API set (2.1). |
+| G21 | Fixed | `src/Bootstrapper/updater.cpp` (`StartVerified`) | *Was:* an elevated `/install-update` (an administrator's prompt, a deployment tool running it as SYSTEM) verified the download and then started it where it was downloaded, the user's `%TEMP%` or `%LocalAppData%\FluentSetup\updates`, which the user's unelevated programs can write to (planted DLLs next to an elevated setup; the kept file could be replaced between the check and the start once the handle was gone). *Now:* it runs a private copy from an admin-only `CreateRunDirectory` folder, made through the deny-write handle and hashed again, as an elevated repair does (2.8). |
 
 ## 6. System integration (1.2)
 
@@ -401,9 +499,10 @@ Found while reading the code for this document. G1, G5, G6, G7, G8, G10, G11 and
   at programs among the installed files, and are removed by name (services) or by the app's own rule group (firewall;
   a rule name another program also uses is never removed).
 * **Bundled and downloaded prerequisite installers.** Official installers are bundled after the builder checked their
-  Microsoft signature, and verified by SHA-256 like every stream when setup extracts them into a private temporary
-  folder. A download without a pinned SHA-256 (`"auto": "download"`, or `download.signer`) only runs if it carries a
-  valid Authenticode signature with a trusted chain issued to the pinned name.
+  Microsoft signature, and verified by SHA-256 like every stream when setup extracts them into a folder of their own
+  (admin-only when elevated). A download without a pinned SHA-256 (`"auto": "download"`, or `download.signer`) only runs
+  if it carries a valid Authenticode signature with a trusted chain whose subject CN is the pinned name. Both stay
+  locked from their check until they run (gap G17).
 * **Pre-signed uninstaller.** Setup writes the signed `uninstall.exe` only if the reproduced file matches the SHA-256
   the (signed) package recorded; otherwise it writes the unsigned one, as before.
 * **Rollback is never repeated.** If some steps of a rollback fail, the journal is rewritten to hold only those steps,

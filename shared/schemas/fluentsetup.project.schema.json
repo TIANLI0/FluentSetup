@@ -167,15 +167,29 @@
     },
     "version": {
       "type": "string",
-      "maxLength": 64,
-      "pattern": "^[0-9]{1,10}(\\.[0-9]{1,10}){0,3}(-[0-9A-Za-z.\\-]+)?$",
+      "anyOf": [
+        {
+          "pattern": "^[0-9]{1,10}(\\.[0-9]{1,10}){0,3}(-[0-9A-Za-z.\\-]+)?$",
+          "maxLength": 64
+        },
+        {
+          "$ref": "#/$defs/placeholder"
+        }
+      ],
       "description": "1 to 4 dot-separated numbers, optionally followed by -tag (letters, digits, '.', '-'). Examples: 1.2.0, 2.0.0-beta.1. Each number must also fit in 32 bits (checked by the installer engine). Compared numerically part by part; a release sorts after its pre-releases."
     },
     "relativePath": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 1024,
-      "pattern": "^(?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*[^<>:\"/\\\\|?*\\x00-\\x1F. ](?:[\\\\/](?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*[^<>:\"/\\\\|?*\\x00-\\x1F. ])*$",
+      "anyOf": [
+        {
+          "pattern": "^(?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*[^<>:\"/\\\\|?*\\x00-\\x1F. ](?:[\\\\/](?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*[^<>:\"/\\\\|?*\\x00-\\x1F. ])*$",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        {
+          "$ref": "#/$defs/placeholder"
+        }
+      ],
       "description": "Relative path inside the install folder, '/' or '\\' as separator. No drive, no leading separator, no '.' or '..' components, no characters <>:\"|?* or control characters, no component starting with a space or ending with a dot or space, no reserved device names (CON, PRN, AUX, NUL, COM0-9, LPT0-9, CONIN$, CONOUT$), at most 255 characters per component, 64 levels and 1024 characters."
     },
     "relativeExePath": {
@@ -185,25 +199,53 @@
         },
         {
           "type": "string",
-          "pattern": "\\.[Ee][Xx][Ee]$"
+          "anyOf": [
+            {
+              "pattern": "\\.[Ee][Xx][Ee]$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ]
         }
       ],
       "description": "Relative path of an .exe inside the installed files (see relativePath rules)."
     },
     "exeFileName": {
       "type": "string",
-      "maxLength": 255,
-      "pattern": "^(?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*\\.[Ee][Xx][Ee]$",
+      "anyOf": [
+        {
+          "pattern": "^(?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*\\.[Ee][Xx][Ee]$",
+          "maxLength": 255
+        },
+        {
+          "$ref": "#/$defs/placeholder"
+        }
+      ],
       "description": "Bare file name ending in .exe, no folder (for example \"MyApp.exe\")."
     },
     "glob": {
       "type": "string",
-      "pattern": "^(?![\\\\/])(?![A-Za-z]:)(?!.*\\.\\.).*\\S",
+      "anyOf": [
+        {
+          "pattern": "^(?![\\\\/])(?![A-Za-z]:)(?!.*\\.\\.).*\\S"
+        },
+        {
+          "$ref": "#/$defs/placeholder"
+        }
+      ],
       "description": "Case-insensitive relative glob ('/' or '\\'): * = any characters within one folder level, ** = any number of levels, ? = one character. A pattern without a separator matches the file name in any folder (\"*.pdb\" == \"**/*.pdb\"); a pattern ending in '/' matches everything below that folder. Must not be blank, rooted or contain '..'."
     },
     "dirTemplate": {
       "type": "string",
-      "pattern": "^(?=\\{|.:.)(?:[^{}]|\\{(?:LocalAppData|UserProgramFiles|AppData|ProgramFiles|ProgramData|AppName|Publisher|AppId)\\})+$",
+      "anyOf": [
+        {
+          "pattern": "^(?=\\{|.:.)(?:[^{}]|\\{(?:LocalAppData|UserProgramFiles|AppData|ProgramFiles|ProgramData|AppName|Publisher|AppId)\\})+$"
+        },
+        {
+          "$ref": "#/$defs/placeholder"
+        }
+      ],
       "description": "Install folder template. Must start with a placeholder or be an absolute path (\"C:...\"). Placeholders (case-sensitive): {LocalAppData}, {UserProgramFiles} (%LocalAppData%\\Programs), {AppData} (roaming), {ProgramFiles} (native Program Files), {ProgramData}, {AppName} (app.name made file-name safe), {Publisher} (app.publisher, or app.name when empty, made file-name safe), {AppId}. Any other {...} is an error."
     },
     "localizedText": {
@@ -224,7 +266,14 @@
       "properties": {
         "url": {
           "type": "string",
-          "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[^\\s\"<>\\\\^`{}|]+$",
+          "anyOf": [
+            {
+              "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[^\\s\"<>\\\\^`{}|]+$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "Absolute http:// or https:// URL, e.g. https://github.com/owner/repo."
         },
         "label": {
@@ -243,8 +292,15 @@
       "properties": {
         "id": {
           "type": "string",
-          "maxLength": 64,
-          "pattern": "^[A-Za-z0-9_-]([A-Za-z0-9._-]*[A-Za-z0-9_-])?$",
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]([A-Za-z0-9._-]*[A-Za-z0-9_-])?$",
+              "maxLength": 64
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Stable app identifier, e.g. \"Contoso.Notes\". ASCII letters, digits, '.', '-', '_' (max 64), must not start or end with '.'. Used as the uninstall registry key name; never change it between versions."
         },
@@ -278,19 +334,40 @@
         },
         "website": {
           "type": "string",
-          "pattern": "^(|[Hh][Tt][Tt][Pp][Ss]?://.+)$",
+          "anyOf": [
+            {
+              "pattern": "^(|[Hh][Tt][Tt][Pp][Ss]?://.+)$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Optional absolute http:// or https:// URL (Windows Settings \"About\" link). Shown as the first link in the installer (\"Website\")."
         },
         "supportUrl": {
           "type": "string",
-          "pattern": "^(|[Hh][Tt][Tt][Pp][Ss]?://.+)$",
+          "anyOf": [
+            {
+              "pattern": "^(|[Hh][Tt][Tt][Pp][Ss]?://.+)$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Optional help/support page: a link in the installer (\"Help and support\") and the \"Help link\" of Windows Settings > Apps (HelpLink). winget: PublisherSupportUrl."
         },
         "releaseNotesUrl": {
           "type": "string",
-          "pattern": "^(|[Hh][Tt][Tt][Pp][Ss]?://.+)$",
+          "anyOf": [
+            {
+              "pattern": "^(|[Hh][Tt][Tt][Pp][Ss]?://.+)$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Optional page about what is new, e.g. https://github.com/owner/repo/releases: a link in the installer (\"Release notes\", also on the finish page) and \"Update information\" in Windows Settings > Apps (URLUpdateInfo). winget: ReleaseNotesUrl."
         },
@@ -305,7 +382,14 @@
         },
         "icon": {
           "type": "string",
-          "pattern": "^(|.*\\.([Ii][Cc][Oo]|[Pp][Nn][Gg]))$",
+          "anyOf": [
+            {
+              "pattern": "^(|.*\\.([Ii][Cc][Oo]|[Pp][Nn][Gg]))$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Optional .ico or .png (up to 256x256) file, relative to the project file or absolute. Used for Setup.exe and the installer window; empty = default FluentSetup icon."
         },
@@ -324,13 +408,27 @@
         },
         "appUserModelId": {
           "type": "string",
-          "pattern": "^([A-Za-z0-9._-]{1,128})?$",
+          "anyOf": [
+            {
+              "pattern": "^([A-Za-z0-9._-]{1,128})?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "AppUserModelID set on the app's Start menu and desktop shortcuts (toast notifications of unpackaged apps need it), e.g. \"Contoso.Notes\"."
         },
         "toastActivatorClsid": {
           "type": "string",
-          "pattern": "^(\\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\})?$",
+          "anyOf": [
+            {
+              "pattern": "^(\\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\})?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "CLSID of the app's toast activator COM server, set on those shortcuts together with appUserModelId."
         }
@@ -528,9 +626,16 @@
         },
         "startMenuFolder": {
           "type": "string",
-          "maxLength": 64,
+          "anyOf": [
+            {
+              "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]*$",
+              "maxLength": 64
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
-          "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]*$",
           "description": "Start menu folder for the app's shortcut, e.g. \"Contoso\" (Programs\\\\Contoso\\\\<App>.lnk), like installers that create a program group. Empty = directly in Programs. Removed on uninstall once empty."
         },
         "launchAfterInstall": {
@@ -576,9 +681,44 @@
           "description": "Uninstall key names of older product names. Their install folder is adopted (upgraded in place) and the keys are removed after installing.",
           "items": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-            "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$"
+            "anyOf": [
+              {
+                "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
+          }
+        },
+        "legacyMsi": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "default": null,
+          "description": "An older version installed by an MSI (WiX, InstallShield, Visual Studio installer projects). Setup finds the products Windows Installer has registered under these codes (per machine, or for the current user) and removes them through Windows Installer, with no UI and no restart, after its checks and before the new files are written; a restart Windows Installer asks for makes setup exit with 3010. The removal is not undone if the install fails later. null = none.",
+          "properties": {
+            "productCodes": {
+              "type": "array",
+              "maxItems": 16,
+              "default": [],
+              "description": "ProductCode GUIDs in braces, e.g. \"{12345678-1234-1234-1234-123456789ABC}\".",
+              "items": {
+                "$ref": "#/$defs/msiCode"
+              }
+            },
+            "upgradeCodes": {
+              "type": "array",
+              "maxItems": 16,
+              "default": [],
+              "description": "UpgradeCode GUIDs in braces: every installed product of the family, whatever its version (WiX: Package/@UpgradeCode).",
+              "items": {
+                "$ref": "#/$defs/msiCode"
+              }
+            }
           }
         },
         "ngen": {
@@ -602,9 +742,16 @@
               "description": "Scheduled tasks (root folder).",
               "items": {
                 "type": "string",
-                "minLength": 1,
-                "maxLength": 128,
-                "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$"
+                "anyOf": [
+                  {
+                    "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  {
+                    "$ref": "#/$defs/placeholder"
+                  }
+                ]
               }
             },
             "removeRunValues": {
@@ -614,9 +761,16 @@
               "description": "HKCU/HKLM ...\\CurrentVersion\\Run value names.",
               "items": {
                 "type": "string",
-                "minLength": 1,
-                "maxLength": 128,
-                "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$"
+                "anyOf": [
+                  {
+                    "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  {
+                    "$ref": "#/$defs/placeholder"
+                  }
+                ]
               }
             },
             "removeShortcuts": {
@@ -626,9 +780,16 @@
               "description": "Shortcut file names removed from the Start menu, Desktop and Startup folders; \"Folder\\\\App.lnk\" for a Start menu folder of an older installer (removed once empty).",
               "items": {
                 "type": "string",
-                "minLength": 1,
-                "maxLength": 200,
-                "pattern": "^([^\\\\/:*?\"<>|\\u0000-\\u001f]+\\\\)?[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$"
+                "anyOf": [
+                  {
+                    "pattern": "^([^\\\\/:*?\"<>|\\u0000-\\u001f]+\\\\)?[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  {
+                    "$ref": "#/$defs/placeholder"
+                  }
+                ]
               }
             },
             "removeUninstallKeys": {
@@ -638,9 +799,16 @@
               "description": "Uninstall entries of other product names (never this app's id).",
               "items": {
                 "type": "string",
-                "minLength": 1,
-                "maxLength": 128,
-                "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$"
+                "anyOf": [
+                  {
+                    "pattern": "^[^\\\\/:*?\"<>|\\u0000-\\u001f]+$",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  {
+                    "$ref": "#/$defs/placeholder"
+                  }
+                ]
               }
             },
             "removeFiles": {
@@ -657,7 +825,10 @@
           }
         },
         "closeCommand": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "required": [
             "run"
           ],
@@ -773,19 +944,26 @@
       "properties": {
         "netFramework": {
           "type": "string",
-          "enum": [
-            "",
-            "4.5",
-            "4.5.1",
-            "4.5.2",
-            "4.6",
-            "4.6.1",
-            "4.6.2",
-            "4.7",
-            "4.7.1",
-            "4.7.2",
-            "4.8",
-            "4.8.1"
+          "anyOf": [
+            {
+              "enum": [
+                "",
+                "4.5",
+                "4.5.1",
+                "4.5.2",
+                "4.6",
+                "4.6.1",
+                "4.6.2",
+                "4.7",
+                "4.7.1",
+                "4.7.2",
+                "4.8",
+                "4.8.1"
+              ]
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
           ],
           "default": "",
           "description": "Minimum .NET Framework 4.x version; empty = not required. When missing, setup stops with exit code 17 (PrerequisiteMissing)."
@@ -798,6 +976,15 @@
               "type": "boolean",
               "default": false,
               "description": "The app needs the WebView2 runtime."
+            },
+            "auto": {
+              "enum": [
+                "",
+                "bundle",
+                "download"
+              ],
+              "default": "",
+              "description": "Microsoft's official installer without adding it yourself. bundle: downloaded when the package is built and stored in Setup.exe (extracted only when needed, never installed into the app folder). download: downloaded by setup when needed; it must carry a valid signature from Microsoft. Not for custom prerequisites."
             },
             "installer": {
               "type": "string",
@@ -826,16 +1013,41 @@
               "description": "Command-line arguments for the bundled installer."
             },
             "minVersion": {
-              "$ref": "#/$defs/version",
-              "description": "Minimum WebView2 runtime version (empty = any)."
+              "type": "string",
+              "description": "Minimum WebView2 runtime version (empty = any).",
+              "anyOf": [
+                {
+                  "const": ""
+                },
+                {
+                  "$ref": "#/$defs/version"
+                }
+              ]
             },
             "download": {
-              "$ref": "#/$defs/download"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/download"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "helpUrl": {
               "type": "string",
-              "pattern": "^https://",
-              "maxLength": 2048,
+              "anyOf": [
+                {
+                  "const": ""
+                },
+                {
+                  "pattern": "^https://",
+                  "maxLength": 2048
+                },
+                {
+                  "$ref": "#/$defs/placeholder"
+                }
+              ],
               "description": "Link shown when the runtime is missing and cannot be installed."
             },
             "onFailure": {
@@ -851,14 +1063,28 @@
               "maxItems": 8,
               "items": {
                 "type": "string",
-                "pattern": "^[A-Za-z0-9_-]{1,32}$"
+                "anyOf": [
+                  {
+                    "pattern": "^[A-Za-z0-9_-]{1,32}$"
+                  },
+                  {
+                    "$ref": "#/$defs/placeholder"
+                  }
+                ]
               },
               "description": "Only needed for these variants (empty = always)."
             }
           }
         },
         "netFrameworkSetup": {
-          "$ref": "#/$defs/prerequisiteSource",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/prerequisiteSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "description": "How to obtain .NET Framework when requirements.netFramework is not met."
         },
         "dotNet": {
@@ -924,7 +1150,17 @@
             },
             "version": {
               "type": "string",
-              "pattern": "^(1\\.\\d+|[2-9]\\d*\\.\\d+(\\.\\d+){0,2})$",
+              "anyOf": [
+                {
+                  "const": ""
+                },
+                {
+                  "pattern": "^(1\\.\\d+|[2-9]\\d*\\.\\d+(\\.\\d+){0,2})$"
+                },
+                {
+                  "$ref": "#/$defs/placeholder"
+                }
+              ],
               "description": "Windows App SDK version, e.g. 2.5.1 (2.x: that version or newer); 1.6 = any 1.6 runtime."
             },
             "installer": true,
@@ -957,7 +1193,14 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,32}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "Unique option id: letters, digits, '-', '_' (max 32). Used by actions[].ifOption and Setup.exe /option id=yes|no."
         },
         "label": {
@@ -971,7 +1214,10 @@
           "description": "Initial state of the checkbox on a first install, and the value used in /quiet and /passive mode unless quietDefault or /option overrides it. Updates start from the previous choice (or detect)."
         },
         "quietDefault": {
-          "type": "boolean",
+          "type": [
+            "boolean",
+            "null"
+          ],
           "description": "Value in quiet and passive first installs (not updates), e.g. false for an \"Enable now\" checkbox that is checked in the UI but must not run in scripted installs (Inno Setup \"skipifsilent\"). Unset = default."
         },
         "required": {
@@ -980,7 +1226,10 @@
           "description": "A component that is always installed: shown checked and locked."
         },
         "startup": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "required": [
             "name"
           ],
@@ -1002,7 +1251,10 @@
           }
         },
         "detect": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "description": "On updates the option starts from what is on the PC: selected if this Run value (HKCU or HKLM) or scheduled task exists, so an app that turns its own autostart on and off is updated in its current state. A startup option detects its own Run value without this.",
           "properties": {
             "runValue": {
@@ -1035,8 +1287,15 @@
         },
         "key": {
           "type": "string",
-          "maxLength": 255,
-          "pattern": "^[^\\\\].*\\S",
+          "anyOf": [
+            {
+              "pattern": "^[^\\\\].*\\S",
+              "maxLength": 255
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "Key path below the hive, without a leading backslash, e.g. SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PawnIO. Both the 64-bit and 32-bit registry views are checked."
         },
         "value": {
@@ -1133,11 +1392,24 @@
         },
         "id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "anyOf": [
+            {
+              "const": ""
+            },
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,32}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "Optional id, used to translate the name in localization files."
         },
         "fallbackArguments": {
-          "type": "array",
+          "type": [
+            "array",
+            "null"
+          ],
           "maxItems": 32,
           "items": {
             "type": "string",
@@ -1146,7 +1418,10 @@
           "description": "If the program does not succeed, run it again visibly with these arguments (e.g. an installer's interactive mode)."
         },
         "fallbackRunValue": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "required": [
             "name"
           ],
@@ -1177,7 +1452,14 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^\\{(CommonAppData|LocalAppData|AppData|InstallDir)\\}\\\\.+"
+            "anyOf": [
+              {
+                "pattern": "^\\{(CommonAppData|LocalAppData|AppData|InstallDir)\\}\\\\.+"
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
           },
           "default": [],
           "description": "Files or folders deleted after uninstalling: {CommonAppData}\\\\X, {LocalAppData}\\\\X, {AppData}\\\\X, or {InstallDir}\\\\X for something the app writes into its own folder (logs, caches)."
@@ -1186,9 +1468,16 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-            "pattern": "^[^\\\\/:*?\"<>|\\x00-\\x1F]+$"
+            "anyOf": [
+              {
+                "pattern": "^[^\\\\/:*?\"<>|\\x00-\\x1F]+$",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
           },
           "default": [],
           "description": "Scheduled tasks to delete; folders allowed (\"Folder\\\\Task\"), an emptied folder is removed."
@@ -1197,9 +1486,16 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-            "pattern": "^[^\\\\/:*?\"<>|\\x00-\\x1F]+$"
+            "anyOf": [
+              {
+                "pattern": "^[^\\\\/:*?\"<>|\\x00-\\x1F]+$",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
           },
           "default": [],
           "description": "Value names deleted from HKCU and HKLM Software\\Microsoft\\Windows\\CurrentVersion\\Run."
@@ -1211,9 +1507,16 @@
           "description": "Shortcut file names removed from the Start menu, Desktop and Startup folders.",
           "items": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 200,
-            "pattern": "^([^\\\\/:*?\"<>|\\u0000-\\u001f]+\\\\)?[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$"
+            "anyOf": [
+              {
+                "pattern": "^([^\\\\/:*?\"<>|\\u0000-\\u001f]+\\\\)?[^\\\\/:*?\"<>|\\u0000-\\u001f]+\\.[lL][nN][kK]$",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
           }
         },
         "removeRegistryKeys": {
@@ -1223,8 +1526,15 @@
           "description": "Per-user registry keys deleted with all their values and subkeys, e.g. \"HKCU\\\\Software\\\\Contoso\\\\App\". Software\\\\<Vendor> or deeper; never Software\\\\Microsoft, Classes or Policies.",
           "items": {
             "type": "string",
-            "maxLength": 255,
-            "pattern": "^HKCU\\\\Software\\\\[^\\\\]+(\\\\[^\\\\]+)*$"
+            "anyOf": [
+              {
+                "pattern": "^HKCU\\\\Software\\\\[^\\\\]+(\\\\[^\\\\]+)*$",
+                "maxLength": 255
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
           }
         },
         "userData": {
@@ -1238,7 +1548,14 @@
               "default": [],
               "items": {
                 "type": "string",
-                "pattern": "^\\{(CommonAppData|LocalAppData|AppData|InstallDir)\\}\\\\.+",
+                "anyOf": [
+                  {
+                    "pattern": "^\\{(CommonAppData|LocalAppData|AppData|InstallDir)\\}\\\\.+"
+                  },
+                  {
+                    "$ref": "#/$defs/placeholder"
+                  }
+                ],
                 "description": "{CommonAppData}|{LocalAppData}|{AppData}|{InstallDir}\\\\<path> (file or folder)"
               }
             },
@@ -1260,7 +1577,14 @@
               "default": [],
               "items": {
                 "type": "string",
-                "pattern": "^\\{(CommonAppData|LocalAppData|AppData)\\}\\\\.+",
+                "anyOf": [
+                  {
+                    "pattern": "^\\{(CommonAppData|LocalAppData|AppData)\\}\\\\.+"
+                  },
+                  {
+                    "$ref": "#/$defs/placeholder"
+                  }
+                ],
                 "description": "{CommonAppData}|{LocalAppData}|{AppData}\\<path> (file or folder)"
               },
               "description": "Only when one of these exists (checked before user data is removed). Empty = always."
@@ -1310,7 +1634,14 @@
                     "maxItems": 8,
                     "items": {
                       "type": "string",
-                      "pattern": "^[A-Z]{1,32}$"
+                      "anyOf": [
+                        {
+                          "pattern": "^[A-Z]{1,32}$"
+                        },
+                        {
+                          "$ref": "#/$defs/placeholder"
+                        }
+                      ]
                     }
                   }
                 }
@@ -1322,7 +1653,14 @@
               "default": [],
               "items": {
                 "type": "string",
-                "pattern": "^\\{(CommonAppData|LocalAppData|AppData)\\}\\\\.+",
+                "anyOf": [
+                  {
+                    "pattern": "^\\{(CommonAppData|LocalAppData|AppData)\\}\\\\.+"
+                  },
+                  {
+                    "$ref": "#/$defs/placeholder"
+                  }
+                ],
                 "description": "{CommonAppData}|{LocalAppData}|{AppData}\\<path> (file or folder)"
               },
               "description": "Files or folders removed with administrator rights."
@@ -1334,8 +1672,15 @@
               "description": "Registry keys removed with administrator rights, e.g. \"HKLM\\\\Software\\\\Contoso\\\\App\".",
               "items": {
                 "type": "string",
-                "maxLength": 255,
-                "pattern": "^HK(LM|CU)\\\\Software\\\\[^\\\\]+(\\\\[^\\\\]+)*$"
+                "anyOf": [
+                  {
+                    "pattern": "^HK(LM|CU)\\\\Software\\\\[^\\\\]+(\\\\[^\\\\]+)*$",
+                    "maxLength": 255
+                  },
+                  {
+                    "$ref": "#/$defs/placeholder"
+                  }
+                ]
               }
             }
           }
@@ -1348,14 +1693,28 @@
       "properties": {
         "github": {
           "type": "string",
+          "anyOf": [
+            {
+              "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
-          "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$",
           "description": "GitHub repository 'owner/name' whose releases carry Setup.exe (the latest release, or pre-releases too with prerelease)."
         },
         "feed": {
           "type": "string",
+          "anyOf": [
+            {
+              "pattern": "^$|^https://"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
-          "pattern": "^$|^https://",
           "description": "Instead of github: an https URL of a JSON document { \"version\": \"1.2.0\", \"url\": \"https://.../Setup.exe\", \"sha256\": \"<64 hex digits>\", \"size\": 12345678, \"notes\": \"https://...\" } (size and notes optional)."
         },
         "asset": {
@@ -1378,6 +1737,19 @@
           "default": "",
           "maxLength": 256,
           "description": "If set, an update is only run when its Authenticode signature is valid and the signing certificate is issued to this name (subject common name, e.g. \"Contoso Ltd\")."
+        },
+        "channel": {
+          "type": "string",
+          "anyOf": [
+            {
+              "pattern": "^$|^[a-z][a-z0-9-]{0,31}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
+          "default": "stable",
+          "description": "Update channel installations follow unless the user picks another one (uninstall.exe /check-update /channel beta; remembered once an update of that channel is installed). \"stable\" (default, also \"\") or a name such as \"beta\": lower-case letters, digits and '-'. feed: the entry of that name in the feed's \"channels\" object, or the stable release (the top-level fields) when that is newer. github: any channel but stable also offers pre-releases."
         },
         "differential": {
           "type": "boolean",
@@ -1508,6 +1880,9 @@
             },
             {
               "pattern": "^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8}){0,3}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
             }
           ],
           "default": "auto",
@@ -1567,7 +1942,14 @@
         ],
         "properties": {
           "accentColor": {
-            "pattern": "^#[0-9A-Fa-f]{6}$"
+            "anyOf": [
+              {
+                "pattern": "^#[0-9A-Fa-f]{6}$"
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
           }
         }
       }
@@ -1588,7 +1970,14 @@
         },
         "fileName": {
           "type": "string",
-          "pattern": "^(?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*\\.[Ee][Xx][Ee]$",
+          "anyOf": [
+            {
+              "pattern": "^(?! )[^<>:\"/\\\\|?*\\x00-\\x1F]*\\.[Ee][Xx][Ee]$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "{AppName}-{Version}-Setup.exe",
           "description": "Output file name ending in .exe. Placeholders: {AppName}, {AppId}, {Version} (made file-name safe) and {Architecture} (x64 or arm64). The expanded name must be a valid file name."
         },
@@ -1626,7 +2015,14 @@
           "default": [],
           "items": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{1,32}$"
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_-]{1,32}$"
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
           },
           "description": "Variants to put into this package (empty = all). One variant = no choice at install time. CLI: --variant."
         }
@@ -1697,7 +2093,14 @@
           "properties": {
             "endpoint": {
               "type": "string",
-              "pattern": "^https://",
+              "anyOf": [
+                {
+                  "pattern": "^https://"
+                },
+                {
+                  "$ref": "#/$defs/placeholder"
+                }
+              ],
               "description": "Regional endpoint of the account, e.g. https://eus.codesigning.azure.net."
             },
             "accountName": {
@@ -1900,13 +2303,30 @@
       "properties": {
         "url": {
           "type": "string",
-          "pattern": "^https://",
-          "maxLength": 2048,
+          "anyOf": [
+            {
+              "pattern": "^https://",
+              "maxLength": 2048
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "https URL of the installer."
         },
         "sha256": {
           "type": "string",
-          "pattern": "^[0-9a-fA-F]{64}$",
+          "anyOf": [
+            {
+              "const": ""
+            },
+            {
+              "pattern": "^[0-9a-fA-F]{64}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "SHA-256 of the file (hex). Anything else is refused."
         },
         "size": {
@@ -1928,8 +2348,16 @@
       "description": "Where setup gets a missing prerequisite: the bundled installer first, then the download. With neither, setup stops and shows helpUrl.",
       "properties": {
         "installer": {
-          "$ref": "#/$defs/relativeExePath",
-          "description": "Installer inside the installed files (add it with files.extra)."
+          "type": "string",
+          "description": "Installer inside the installed files (add it with files.extra).",
+          "anyOf": [
+            {
+              "const": ""
+            },
+            {
+              "$ref": "#/$defs/relativeExePath"
+            }
+          ]
         },
         "arguments": {
           "type": "array",
@@ -1941,12 +2369,29 @@
           "description": "Installer arguments."
         },
         "download": {
-          "$ref": "#/$defs/download"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/download"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "helpUrl": {
           "type": "string",
-          "pattern": "^https://",
-          "maxLength": 2048,
+          "anyOf": [
+            {
+              "const": ""
+            },
+            {
+              "pattern": "^https://",
+              "maxLength": 2048
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "Link shown when the prerequisite is missing and cannot be installed by setup."
         },
         "onFailure": {
@@ -1962,7 +2407,14 @@
           "maxItems": 8,
           "items": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{1,32}$"
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_-]{1,32}$"
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
           },
           "description": "Only needed for these variants (empty = always)."
         },
@@ -1987,7 +2439,14 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,32}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "Used by Setup.exe /variant, output.variants and requirements.*.variants."
         },
         "label": {
@@ -2056,7 +2515,14 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,32}$"
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,32}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ]
         },
         "name": {
           "type": "string",
@@ -2069,18 +2535,35 @@
           "description": "registry or file.",
           "properties": {
             "registry": {
-              "$ref": "#/$defs/registryVersionCondition",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/registryVersionCondition"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "Present when this value exists (version empty) or holds at least version."
             },
             "file": {
-              "type": "object",
+              "type": [
+                "object",
+                "null"
+              ],
               "required": [
                 "path"
               ],
               "properties": {
                 "path": {
                   "type": "string",
-                  "pattern": "^\\{(ProgramFiles|ProgramFilesX86|System|CommonAppData|LocalAppData|AppData)\\}\\\\",
+                  "anyOf": [
+                    {
+                      "pattern": "^\\{(ProgramFiles|ProgramFilesX86|System|CommonAppData|LocalAppData|AppData)\\}\\\\"
+                    },
+                    {
+                      "$ref": "#/$defs/placeholder"
+                    }
+                  ],
                   "description": "{ProgramFiles}\\X, {ProgramFilesX86}\\X, {System}\\X, {CommonAppData}\\X, {LocalAppData}\\X or {AppData}\\X."
                 },
                 "version": {
@@ -2152,13 +2635,27 @@
         },
         "ifOption": {
           "type": "string",
-          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "anyOf": [
+            {
+              "pattern": "^([A-Za-z0-9_-]{1,32})?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Only while this option (options[].id) is selected."
         },
         "appUserModelId": {
           "type": "string",
-          "pattern": "^([A-Za-z0-9._-]{1,128})?$",
+          "anyOf": [
+            {
+              "pattern": "^([A-Za-z0-9._-]{1,128})?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": ""
         }
       }
@@ -2176,14 +2673,28 @@
           "maxItems": 16,
           "items": {
             "type": "string",
-            "pattern": "^\\.[A-Za-z0-9_-]{1,32}$"
+            "anyOf": [
+              {
+                "pattern": "^\\.[A-Za-z0-9_-]{1,32}$"
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
           },
           "description": "Extensions including the dot, e.g. [\".cnote\"]. Program and shell types (.exe, .lnk, .bat, ...) are refused."
         },
         "progId": {
           "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z0-9]+)+$",
-          "maxLength": 39,
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z0-9]+)+$",
+              "maxLength": 39
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "e.g. \"Contoso.Notes.Document\"."
         },
         "description": {
@@ -2224,7 +2735,14 @@
         },
         "ifOption": {
           "type": "string",
-          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "anyOf": [
+            {
+              "pattern": "^([A-Za-z0-9_-]{1,32})?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Only while this option (options[].id) is selected."
         }
@@ -2238,7 +2756,14 @@
       "properties": {
         "scheme": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9+.-]{1,31}$",
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9+.-]{1,31}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "e.g. \"contoso-notes\". Schemes of Windows and browsers (http, file, mailto, ms-*, ...) are refused."
         },
         "description": {
@@ -2273,7 +2798,14 @@
         },
         "ifOption": {
           "type": "string",
-          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "anyOf": [
+            {
+              "pattern": "^([A-Za-z0-9_-]{1,32})?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Only while this option (options[].id) is selected."
         }
@@ -2335,7 +2867,14 @@
         },
         "ifOption": {
           "type": "string",
-          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "anyOf": [
+            {
+              "pattern": "^([A-Za-z0-9_-]{1,32})?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Only while this option (options[].id) is selected."
         }
@@ -2349,7 +2888,14 @@
       "properties": {
         "name": {
           "type": "string",
-          "pattern": "^[A-Za-z_][A-Za-z0-9_.()-]{0,127}$",
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.()-]{0,127}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "Not Path (use install.addToPath) or a Windows variable such as TEMP or SystemRoot."
         },
         "value": {
@@ -2364,7 +2910,14 @@
         },
         "ifOption": {
           "type": "string",
-          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "anyOf": [
+            {
+              "pattern": "^([A-Za-z0-9_-]{1,32})?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Only while this option (options[].id) is selected."
         }
@@ -2379,7 +2932,14 @@
       "properties": {
         "name": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_.-]{1,80}$"
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_.-]{1,80}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ]
         },
         "displayName": {
           "type": "string",
@@ -2428,7 +2988,14 @@
           "maxItems": 16,
           "items": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_.-]{1,80}$"
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_.-]{1,80}$"
+              },
+              {
+                "$ref": "#/$defs/placeholder"
+              }
+            ]
           }
         },
         "restartOnFailure": {
@@ -2470,7 +3037,14 @@
         },
         "localPorts": {
           "type": "string",
-          "pattern": "^([0-9]{1,5}(-[0-9]{1,5})?(,[0-9]{1,5}(-[0-9]{1,5})?)*)?$",
+          "anyOf": [
+            {
+              "pattern": "^([0-9]{1,5}(-[0-9]{1,5})?(,[0-9]{1,5}(-[0-9]{1,5})?)*)?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "tcp/udp only, e.g. \"8080\" or \"8000-8010,9000\"."
         },
@@ -2488,7 +3062,14 @@
         },
         "ifOption": {
           "type": "string",
-          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "anyOf": [
+            {
+              "pattern": "^([A-Za-z0-9_-]{1,32})?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Only while this option (options[].id) is selected."
         }
@@ -2518,7 +3099,14 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,32}$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "description": "Referenced as {Input:id}; Setup.exe /input id=value."
         },
         "label": {
@@ -2626,11 +3214,35 @@
         },
         "ifOption": {
           "type": "string",
-          "pattern": "^([A-Za-z0-9_-]{1,32})?$",
+          "anyOf": [
+            {
+              "pattern": "^([A-Za-z0-9_-]{1,32})?$"
+            },
+            {
+              "$ref": "#/$defs/placeholder"
+            }
+          ],
           "default": "",
           "description": "Only while this option (options[].id) is selected."
         }
       }
+    },
+    "msiCode": {
+      "type": "string",
+      "anyOf": [
+        {
+          "pattern": "^\\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\}$"
+        },
+        {
+          "$ref": "#/$defs/placeholder"
+        }
+      ],
+      "description": "A Windows Installer product or upgrade code: a GUID in braces."
+    },
+    "placeholder": {
+      "type": "string",
+      "pattern": "\\$\\(",
+      "description": "A value with a $(Name) placeholder (see variables). It is checked once the placeholders are filled in, when the project is built."
     }
   }
 }

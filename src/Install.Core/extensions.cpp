@@ -5,6 +5,7 @@
 #include "Common/log.h"
 #include "Common/path.h"
 #include "Common/text.h"
+#include "Install.Core/legacy_msi.h"
 #include "Install.Core/package.h"
 
 #include <comdef.h>
@@ -20,6 +21,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <regex>
+#include <tuple>
 #include <unordered_set>
 
 #pragma comment(lib, "taskschd.lib")
@@ -476,6 +478,17 @@ Extensions ParseExtensions(const json::Value& root, const std::function<bool(con
     e.adoptUninstallKey = inst["adoptUninstallKey"].asWide();
     if (!e.adoptUninstallKey.empty() && !ValidTaskOrValueName(e.adoptUninstallKey)) Bad(L"invalid adoptUninstallKey");
     ParseNames(inst["legacyUninstallKeys"], e.legacyUninstallKeys, ValidTaskOrValueName, L"legacyUninstallKeys");
+    if (const json::Value& msi = inst["legacyMsi"]; msi.isObject()) {
+        for (auto [list, out, what] : {std::tuple{&msi["productCodes"], &e.legacyMsiProductCodes, L"legacyMsi.productCodes"},
+                                       std::tuple{&msi["upgradeCodes"], &e.legacyMsiUpgradeCodes, L"legacyMsi.upgradeCodes"}}) {
+            if (list->array().size() > 16) Bad(std::wstring(L"too many ") + what + L" entries");
+            for (const auto& v : list->array()) {
+                std::wstring code;
+                if (!v.isString() || !NormalizeMsiCode(v.asWide(), code)) Bad(std::wstring(L"invalid ") + what + L": " + v.asWide());
+                if (std::find(out->begin(), out->end(), code) == out->end()) out->push_back(code);
+            }
+        }
+    }
     if (const json::Value& cc = inst["closeCommand"]; cc.isObject()) {
         // Runs a file of the *installed* app (checked at run time like an action).
         if (!path::ValidateRelative(cc["run"].asWide(), e.closeCommand) || !IsExeName(path::FileName(e.closeCommand))) Bad(L"invalid closeCommand");
@@ -1588,13 +1601,9 @@ bool DeleteScheduledTask(const std::wstring& name) {
 bool RemoveDataPath(const std::wstring& tpl, const std::wstring& installDir) {
     const std::wstring target = ExpandDataTemplate(tpl, installDir);
     if (target.empty() || !fs::Exists(target) || fs::IsLinkLike(target) || fs::HasLinkInPath(path::Parent(target))) return false;
-    bool ok = false;
-    if (fs::IsDirectory(target)) {
-        ok = fs::DeleteTree(target);
-    } else {
-        ::SetFileAttributesW(path::Long(target).c_str(), FILE_ATTRIBUTE_NORMAL);
-        ok = ::DeleteFileW(path::Long(target).c_str()) != FALSE;
-    }
+    // A folder or a single file, deleted through handles: a folder in it swapped for a junction meanwhile (ProgramData
+    // is writable by standard users, and this runs with administrator rights for per-machine apps) loses only the link.
+    const bool ok = fs::DeleteTree(target);
     if (ok) log::Info(L"Removed %s", target.c_str());
     else log::Warn(L"Could not fully remove %s", target.c_str());
     return ok;

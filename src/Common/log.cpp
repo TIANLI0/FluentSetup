@@ -90,6 +90,27 @@ bool Open(const std::wstring& path, std::wstring_view tag) {
     return true;
 }
 
+bool Adopt(HANDLE file, const std::wstring& path, std::wstring_view tag) {
+    UniqueHandle h(file);
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!h || ::GetFileType(h.get()) != FILE_TYPE_DISK || !::GetFileInformationByHandle(h.get(), &info) ||
+        (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))) {
+        return false;
+    }
+    State& s = S();
+    std::lock_guard lock(s.mutex);
+    s.file = std::move(h);
+    s.path = path;
+    s.tag = tag;
+    return true;
+}
+
+HANDLE FileHandle() {
+    State& s = S();
+    std::lock_guard lock(s.mutex);
+    return s.file.get();
+}
+
 void Close() {
     State& s = S();
     std::lock_guard lock(s.mutex);

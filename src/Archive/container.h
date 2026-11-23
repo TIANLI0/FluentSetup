@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace fsetup::archive {
 
@@ -59,6 +60,9 @@ public:
         return out;
     }
     [[nodiscard]] uint64_t FileSize() const noexcept { return fileSize_; }
+    // SHA-256 of the whole file (stub code, overlay and signature), read through the handle that keeps it from changing.
+    // Identifies exactly this file, unlike the header digest, which says nothing about the code in front of it.
+    [[nodiscard]] Sha256Digest FileDigest() const;
     [[nodiscard]] bool HasSignature() const noexcept { return signatureOffset_ != 0; }
 
     // True if [offset, offset+size) relative to the overlay lies entirely in the stream area (before the header).
@@ -135,9 +139,14 @@ enum class SignatureState {
 // WinVerifyTrust on the file, offline (no revocation network fetch).
 SignatureState CheckSignature(const std::wstring& path, long* status = nullptr);
 
-// Subject name (simple display name) of the certificate that signed the file, if the signature is valid and its chain
-// trusted; "" otherwise.
-std::wstring TrustedSignerName(const std::wstring& path);
+// Subject common name (CN) of the certificate that signed the file, if the signature is valid and its chain trusted;
+// "" otherwise (also when the certificate has no CN). With `file`, the open handle is verified instead of reopening
+// `path` (the caller keeps it locked against writes).
+std::wstring TrustedSignerName(const std::wstring& path, HANDLE file = nullptr);
+
+// True when the file carries a valid, trusted signature whose subject CN equals `expected` (exact, case-insensitive).
+// `actual` receives the CN found ("" without a trusted signature).
+bool SignedBy(const std::wstring& path, std::wstring_view expected, std::wstring* actual = nullptr, HANDLE file = nullptr);
 
 // For the first page: whether the file is signed by a trusted publisher, and that publisher's name.
 struct SignerInfo {

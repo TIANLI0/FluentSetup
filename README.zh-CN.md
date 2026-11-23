@@ -19,9 +19,9 @@
 - **全程签名**：支持证书、Azure 可信签名或任意签名命令；安装时写入的卸载程序同样带签名，安装界面会显示已验证的发布者。
 - **声明式扩展**：关闭正在运行的进程；必需（锁定）组件与可选组件；安装后或卸载前运行安装包内的程序（支持失败后的备用方式）；NGen；PATH；清理旧版本的计划任务、Run 启动项、快捷方式、文件、注册表项和卸载项。
 - **内置更新**：在项目里指定 GitHub Releases 或 JSON 源，已安装的应用即可自行更新：`uninstall.exe /install-update` 负责检查、询问、下载、校验（SHA-256、同一应用、更高版本、可选的签名者）并安装；`/check-update` 只检查。更新不会改动没变的文件；开启 `update.differential` 后只下载有变化的部分。应用里无需编写更新代码。
-- **多变体**：一个安装包可同时带自包含版和依赖共享运行时的版本（相同文件只存一份），安装时由用户选择，或用 `--variant` 只打其中一种。
+- **多变体**：一个安装包可同时带自包含版和依赖共享运行时的版本（相同文件只存一份），安装时由用户选择，或由安装程序按电脑上已有的运行时自动选择（`files.variantSelection: "auto"`），也可用 `--variant` 只打其中一种。
 - **无障碍与本地化**：内置英文、简体中文、繁体中文、日文、韩文、德文、法文、西班牙文、巴西葡萄牙文、俄文、意大利文，跟随 Windows 显示语言；其他语言可由安装包自行补齐（`fsetup locale add nl-NL`）；UI 自动化名称、键盘导航、浅色/深色/高对比度主题、按显示器 DPI 缩放。
-- **三种制作方式**：图形化 Builder 应用、`fsetup` 命令行（原名 `fluentsetup` 仍可用；也提供 GitHub Action），或直接调用 `Builder.Core` 库。
+- **三种制作方式**：图形化 Builder 应用、`fsetup` 命令行（也提供 GitHub Action；原名 `fluentsetup` 在 FluentSetup 自身的安装程序、Linux/macOS 压缩包和 GitHub Action 中仍可用，Windows zip 和 .NET 工具中没有），或直接调用 `Builder.Core` 库。
 - **便于 AI 编写**：`fsetup guide` 输出完整的编写指南，`fsetup schema` 输出 JSON Schema，`fsetup validate --json` 给出带代码和字段路径的诊断。
 
 ## 快速开始
@@ -116,7 +116,7 @@ uninstall.exe /modify | /repair [/quiet]                                        
 uninstall.exe /check-update | /install-update [/passive | /quiet] [/relaunch]   （配置了更新来源时）
 ```
 
-退出代码 0 表示成功，其余代码见 [docs/diagnostics.md](docs/diagnostics.md)。也支持 Inno Setup 和 NSIS 的常用参数（[详情](docs/project-file.md#setupexe-command-line)）。
+退出代码 0 表示成功，其余代码见 [docs/diagnostics.md](docs/diagnostics.md)。也支持 Inno Setup 和 NSIS 的常用参数（[详情](docs/project-file.md#setupexe-command-line)）。用 Intune、Configuration Manager 或脚本部署见[企业部署](docs/enterprise.md)。
 
 ## 文档
 
@@ -124,6 +124,8 @@ uninstall.exe /check-update | /install-update [/passive | /quiet] [/relaunch]   
 
 - [项目文件参考](docs/project-file.md)
 - [从 Inno Setup / NSIS 迁移：案例](docs/thrm.md)，以及[导入 .iss / .nsi 脚本](docs/import.md)
+- [应用内更新](docs/updates.md)：在应用中调用 `/check-update` 和 `/install-update`，附 C# 示例
+- [企业部署（Intune、Configuration Manager、脚本）](docs/enterprise.md)：静默命令、检测规则、返回代码
 - [winget 与 Microsoft Store](docs/winget.md)、[MSBuild、.NET 工具与类库](docs/msbuild.md)、[在 Linux 和 macOS 上构建](docs/cross-platform.md)
 - [诊断与退出代码](docs/diagnostics.md)
 - [安全](docs/security.md)

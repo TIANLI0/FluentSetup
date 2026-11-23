@@ -98,6 +98,37 @@ public static partial class Signer
         }
     }
 
+    /// <summary>
+    /// What makes a signature differ besides the signed file: provider, certificate (thumbprint, or the SHA-256 of the
+    /// .pfx), timestamp server, tool, Artifact Signing account and profile, command and arguments, and the description.
+    /// Secrets never go in: of the password variable and the command's environment only the names are used, and the
+    /// result is hashed. Keys the cache of signed copies (signing.files).
+    /// </summary>
+    internal static string CacheIdentity(SigningSettings s, string projectDir, string description)
+    {
+        var parts = new List<string> { "fsetup-signed-1", EffectiveProvider(s), NormalizeThumbprint(s.CertificateThumbprint).ToLowerInvariant(), s.TimestampUrl, s.SignToolPath, s.PasswordEnvironmentVariable, description };
+        if (!string.IsNullOrEmpty(s.CertificateFile))
+        {
+            var pfx = ProjectValidator.Resolve(projectDir, s.CertificateFile);
+            try { parts.Add("pfx:" + Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(pfx)))); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { parts.Add("pfx:" + pfx); }
+        }
+        if (s.TrustedSigning is { } t)
+        {
+            parts.AddRange(["ts", t.Endpoint, t.AccountName, t.CertificateProfile, t.DlibPath]);
+        }
+        if (s.Command is { } c)
+        {
+            parts.Add("cmd");
+            parts.Add(c.Run);
+            parts.AddRange(c.Arguments);
+            parts.AddRange(c.Environment.Keys.Order(StringComparer.Ordinal).Select(k => "env:" + k));
+        }
+        // Length-prefixed, so no two different lists give the same text.
+        var text = string.Concat(parts.Select(p => (p ?? "").Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + p));
+        return Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
+    }
+
     /// <summary>The file carries an Authenticode certificate table (whether it verifies is not checked).</summary>
     public static bool IsSigned(string file)
     {

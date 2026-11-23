@@ -12,9 +12,17 @@
 // Setup.exe from it (or from the Setup.exe that installed the app, if it is still there), byte for byte, fetching only
 // what it does not have with range requests (install::RebuildFromBase). Without it, downloads go to a private
 // temporary folder and are removed after use.
+//
+// Channels (update.channel, /channel): a feed may offer other releases than the stable one under "channels" (feed.h);
+// on GitHub any channel but stable includes pre-releases. A check follows /channel, else the channel recorded at
+// install time (Setup.exe /channel, which /install-update passes on), else update.channel.
+//
+// With administrator rights (an elevated prompt, a deployment tool running as SYSTEM) the verified Setup.exe runs from
+// a private copy in a folder only administrators can change, never from the user's download folders (StartVerified).
 #include "Bootstrapper/updater.h"
 
 #include "Archive/container.h"
+#include "Bootstrapper/feed.h"
 #include "Common/error.h"
 #include "Common/fs.h"
 #include "Common/hash.h"
@@ -50,9 +58,11 @@ constexpr size_t kMaxApiAnswer = 8u * 1024 * 1024;   // GitHub releases JSON
 constexpr size_t kMaxSmallFile = 1u * 1024 * 1024;   // feed, checksums file
 constexpr uint64_t kMaxSetupSize = 4ull * 1024 * 1024 * 1024;
 constexpr wchar_t kDownloadPrefix[] = L"FluentSetup-upd-";
+constexpr wchar_t kRunCopyPrefix[] = L"FluentSetup-n-";  // elevated updates: private copies of the new Setup.exe
 
 struct Source {
     std::wstring github, feed, asset, checksums, signer;
+    std::wstring channel = kStableChannel;  // the channel the check follows (EffectiveChannel)
     bool prerelease = false;
     bool differential = false;  // keep the download and rebuild the next one from it (update.differential)
 };
@@ -65,22 +75,6 @@ struct Release {
 };
 
 enum class Lookup { Found, None, Failed };
-
-bool IsSafeHttpsUrl(std::string_view url) {
-    if (url.size() < 9 || url.size() > 2000 || url.rfind("https://", 0) != 0) return false;
-    for (const char c : url) {
-        const auto u = static_cast<unsigned char>(c);
-        if (u <= 0x20 || u == 0x7F || c == '"' || c == '<' || c == '>' || c == '\\') return false;
-    }
-    return true;
-}
-
-bool ParseDigest(std::string_view hex, Sha256Digest& out) {
-    std::vector<uint8_t> bytes;
-    if (hex.size() != 64 || !FromHex(hex, bytes) || bytes.size() != out.size()) return false;
-    std::copy(bytes.begin(), bytes.end(), out.begin());
-    return true;
-}
 
 std::wstring ReplaceAll(std::wstring s, std::wstring_view from, std::wstring_view to) {
     for (size_t at = s.find(from); at != std::wstring::npos; at = s.find(from, at + to.size())) s.replace(at, from.size(), to);
@@ -109,7 +103,9 @@ std::optional<Source> ReadSource(const install::Package& pkg, std::wstring& why)
     s.signer = u["signer"].asWide();
     s.prerelease = u["prerelease"].asBool();
     s.differential = u["differential"].asBool(false);
+    if (const std::wstring channel = u["channel"].asWide(); !channel.empty()) s.channel = channel;
     if (s.github.empty() == s.feed.empty()) why = L"update needs either github or feed";
+    else if (!install::IsUpdateChannelName(s.channel)) why = L"update.channel is not a channel name";
     else if (!s.github.empty() && !IsRepositoryName(s.github)) why = L"update.github is not owner/name";
     else if (!s.github.empty() && (s.asset.empty() || !path::IsValidComponent(ReplaceAll(s.asset, L"{Version}", L"1.0.0")))) why = L"update.asset is not a file name";
     else if (!s.checksums.empty() && !path::IsValidComponent(s.checksums)) why = L"update.checksums is not a file name";
@@ -204,13 +200,14 @@ Lookup ResolveChecksum(const Source& s, const json::Value& release, bool githubD
 }
 
 Lookup FromGitHub(const Source& s, Release& out, std::wstring& error) {
-    const std::string api = "https://api.github.com/repos/" + WideToUtf8(s.github) + (s.prerelease ? "/releases?per_page=30" : "/releases/latest");
+    const bool prerelease = s.prerelease || s.channel != kStableChannel;  // any channel but stable: pre-releases too
+    const std::string api = "https://api.github.com/repos/" + WideToUtf8(s.github) + (prerelease ? "/releases?per_page=30" : "/releases/latest");
     const wchar_t* headers = L"Accept: application/vnd.github+json\r\nX-GitHub-Api-Version: 2022-11-28\r\n";
     std::string body;
     unsigned long status = 0;
-    log::Info(L"Update source: GitHub %s (%s)", s.github.c_str(), s.prerelease ? L"pre-releases included" : L"latest release");
+    log::Info(L"Update source: GitHub %s (%s, channel %s)", s.github.c_str(), prerelease ? L"pre-releases included" : L"latest release", s.channel.c_str());
     if (!install::HttpGetText(api, headers, kMaxApiAnswer, body, status, error)) {
-        if (status == 404 && !s.prerelease) {
+        if (status == 404 && !prerelease) {
             log::Info(L"GitHub: no published release (or no such repository)");
             return Lookup::None;
         }
@@ -233,7 +230,7 @@ Lookup FromGitHub(const Source& s, Release& out, std::wstring& error) {
     Version best{};
     bool githubDigest = false;
     for (const json::Value* r : releases) {
-        if ((*r)["draft"].asBool() || ((*r)["prerelease"].asBool() && !s.prerelease)) continue;
+        if ((*r)["draft"].asBool() || ((*r)["prerelease"].asBool() && !prerelease)) continue;
         const std::wstring version = VersionFromTag((*r)["tag_name"].asWide());
         Version v;
         if (!Version::Parse(version, v) || (chosen && Compare(v, best) <= 0)) continue;
@@ -291,31 +288,41 @@ Lookup FromGitHubTag(const Source& s, const std::wstring& version, Release& out,
     return Lookup::None;
 }
 
-Lookup FromFeed(const Source& s, const std::wstring& appId, Release& out, std::wstring& error) {
+// The feed document; Failed when it cannot be read or is not JSON.
+Lookup ReadFeed(const Source& s, json::Value& root, std::wstring& error) {
     std::string body;
     unsigned long status = 0;
-    log::Info(L"Update source: feed %s", s.feed.c_str());
+    log::Info(L"Update source: feed %s (channel %s)", s.feed.c_str(), s.channel.c_str());
     if (!install::HttpGetText(WideToUtf8(s.feed), L"Accept: application/json\r\n", kMaxSmallFile, body, status, error)) {
         error = L"Update feed: " + error;
         return Lookup::Failed;
     }
-    json::Value root;
-    Version v;
     if (!json::Parse(body, root) || !root.isObject()) {
         error = L"The update feed is not a JSON object";
         return Lookup::Failed;
     }
-    out.version = root["version"].asWide();
-    out.url = root["url"].asString();
-    out.size = root["size"].asUint();
-    if (!Version::Parse(out.version, v)) error = L"The update feed has no valid \"version\"";
-    else if (!IsSafeHttpsUrl(out.url)) error = L"The update feed's \"url\" is not an https URL";
-    else if (!ParseDigest(root["sha256"].asString(), out.sha256)) error = L"The update feed has no \"sha256\" (64 hex digits)";
-    else if (out.size > kMaxSetupSize) error = L"The update feed announces an unexpected size";
-    if (!error.empty()) return Lookup::Failed;
-    if (IsSafeHttpsUrl(root["notes"].asString())) out.notesUrl = root["notes"].asWide();
+    return Lookup::Found;
+}
+
+Lookup FromFeedRelease(FeedLookup found, FeedRelease&& r, const std::wstring& appId, Release& out) {
+    if (found != FeedLookup::Found) return found == FeedLookup::None ? Lookup::None : Lookup::Failed;
+    if (r.channel != kStableChannel) log::Info(L"Feed channel %s: version %s", r.channel.c_str(), r.version.c_str());
+    out.version = std::move(r.version);
+    out.url = std::move(r.url);
+    out.sha256 = r.sha256;
+    out.size = r.size;
+    out.notesUrl = std::move(r.notesUrl);
     out.fileName = path::SanitizeName(appId + L"-" + out.version + L"-Setup.exe");
     return Lookup::Found;
+}
+
+Lookup FromFeed(const Source& s, const std::wstring& appId, Release& out, std::wstring& error) {
+    json::Value root;
+    if (const Lookup read = ReadFeed(s, root, error); read != Lookup::Found) return read;
+    FeedRelease r;
+    const FeedLookup found = PickFeedRelease(root, s.channel, r, error);
+    if (found == FeedLookup::None) log::Info(L"The update feed has no release for channel %s", s.channel.c_str());
+    return FromFeedRelease(found, std::move(r), appId, out);
 }
 
 // The newest published version, if it is newer than `installed`.
@@ -335,14 +342,11 @@ Lookup FindUpdate(const Source& s, const std::wstring& appId, const std::wstring
 // The release of exactly `version` from the update source (repair).
 Lookup FindExactRelease(const Source& s, const std::wstring& appId, const std::wstring& version, Release& out, std::wstring& error) {
     if (!s.github.empty()) return FromGitHubTag(s, version, out, error);
-    const Lookup found = FromFeed(s, appId, out, error);
-    if (found != Lookup::Found) return found;
-    Version advertised, installed;
-    if (!Version::Parse(version, installed) || !Version::Parse(out.version, advertised) || Compare(advertised, installed) != 0) {
-        error = Printf(L"The update feed offers version %s, not the installed %s", out.version.c_str(), version.c_str());
-        return Lookup::None;
-    }
-    return Lookup::Found;
+    json::Value root;
+    if (const Lookup read = ReadFeed(s, root, error); read != Lookup::Found) return read;
+    FeedRelease r;
+    const FeedLookup found = FindFeedVersion(root, version, r, error);  // in any channel: the installed one may be a beta
+    return FromFeedRelease(found, std::move(r), appId, out);
 }
 
 // Old download folders: a Setup.exe still running from one simply keeps it until next time.
@@ -570,24 +574,134 @@ bool VerifyPackage(const std::wstring& file, const std::wstring& appId, const st
     return true;
 }
 
-// The Setup.exe recorded at install time, if it is still there and unchanged (SHA-256 from the verified record).
+// Copies the file open as `source` (read through that handle, which keeps it from changing) into a new folder only
+// administrators can change (security::CreateRunDirectory) and opens the copy read-only, shared for reading only; it
+// must hash to `expected`. On failure nothing is left behind.
+bool PrivateCopy(HANDLE source, const std::wstring& sourcePath, const Sha256Digest& expected, const wchar_t* prefix, std::wstring& copy,
+                 UniqueHandle& copyLock, std::wstring& why) {
+    DWORD e = 0;
+    const std::wstring dir = security::CreateRunDirectory(prefix, e);
+    if (dir.empty()) return why = L"cannot create a private folder for the setup: " + Win32Message(e), false;
+    const std::wstring file = path::Join(dir, path::FileName(sourcePath));
+    const auto fail = [&](const std::wstring& what) {
+        ::DeleteFileW(path::Long(file).c_str());
+        ::RemoveDirectoryW(path::Long(dir).c_str());
+        why = what;
+        return false;
+    };
+    {
+        UniqueHandle dest(::CreateFileW(path::Long(file).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (!dest) return fail(L"cannot create " + file + L": " + Win32Message(::GetLastError()));
+        std::vector<uint8_t> buffer(4u << 20);
+        for (uint64_t offset = 0;;) {
+            OVERLAPPED ov{};
+            ov.Offset = static_cast<DWORD>(offset);
+            ov.OffsetHigh = static_cast<DWORD>(offset >> 32);
+            DWORD read = 0, written = 0;
+            if (!::ReadFile(source, buffer.data(), static_cast<DWORD>(buffer.size()), &read, &ov) && ::GetLastError() != ERROR_HANDLE_EOF) {
+                return fail(L"cannot read " + sourcePath + L": " + Win32Message(::GetLastError()));
+            }
+            if (read == 0) break;
+            if (!::WriteFile(dest.get(), buffer.data(), read, &written, nullptr) || written != read) {
+                return fail(L"cannot write " + file + L": " + Win32Message(::GetLastError()));
+            }
+            offset += read;
+        }
+    }
+    UniqueHandle lock(::CreateFileW(path::Long(file).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!lock) return fail(L"cannot open " + file + L": " + Win32Message(::GetLastError()));
+    try {
+        if (fs::HashFile(lock.get()) != expected) return fail(L"the copy of " + sourcePath + L" does not match");
+    } catch (const Failure& f) {
+        return fail(f.detail());
+    }
+    copy = file;
+    copyLock = std::move(lock);
+    return true;
+}
+
+// With administrator rights, the setup for a repair runs from a copy in a folder only administrators can change
+// (security::CreateRunDirectory): its own folder (Downloads, %TEMP%, the kept update folder) belongs to the user, who
+// could plant DLLs next to it. The copy is made from the locked original and must hash to `expected`.
+bool CopyToRunDirectory(RepairPackage& out, const Sha256Digest& expected, std::wstring& why) {
+    std::wstring copy;
+    UniqueHandle lock;
+    if (!PrivateCopy(out.lock.get(), out.path, expected, L"FluentSetup-r-", copy, lock, why)) return false;
+    // The original is released and stays where it was; the copy and its folder go with `out`.
+    out.lock = std::move(lock);
+    out.path = copy;
+    out.downloaded = true;
+    log::Info(L"Repair: running a private copy of the setup: %s", copy.c_str());
+    return true;
+}
+
+// Private copies of earlier elevated updates (kRunCopyPrefix in %SystemRoot%\Temp): a setup cannot delete the file it
+// runs from, so each copy is also scheduled for deletion at the next restart; this removes the ones whose setup has
+// ended in the meantime. Only folders that administrators control, never through a link.
+void SweepRunCopies() {
+    wchar_t windows[MAX_PATH + 1] = {};
+    const UINT n = ::GetSystemWindowsDirectoryW(windows, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH) return;
+    const std::wstring temp = path::Join(std::wstring(windows, n), L"Temp");
+    WIN32_FIND_DATAW fd{};
+    UniqueFind find(::FindFirstFileExW(path::Join(temp, std::wstring(kRunCopyPrefix) + L"*").c_str(), FindExInfoBasic, &fd,
+                                       FindExSearchLimitToDirectories, nullptr, 0));
+    for (bool more = find.valid(); more; more = ::FindNextFileW(find.get(), &fd)) {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) continue;
+        const std::wstring dir = path::Join(temp, fd.cFileName);
+        if (!security::IsAdministratorControlled(dir)) continue;
+        {
+            WIN32_FIND_DATAW f{};
+            UniqueFind files(::FindFirstFileExW(path::Join(dir, L"*").c_str(), FindExInfoBasic, &f, FindExSearchNameMatch, nullptr, 0));
+            for (bool m = files.valid(); m; m = ::FindNextFileW(files.get(), &f)) {
+                if (!(f.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))) ::DeleteFileW(path::Join(dir, f.cFileName).c_str());
+            }
+        }
+        ::RemoveDirectoryW(dir.c_str());
+    }
+}
+
+// The Setup.exe recorded at install time, if it is still there and unchanged: the whole file must hash to what the
+// verified install record says (the record is checked against the hash in the Apps & features entry), read through a
+// handle that keeps it from being changed, replaced or renamed until the setup has started from it. A record without
+// that hash (written by FluentSetup 1.5.0 or older, which kept only the header digest, not covering the code in front
+// of the package) never runs the file: the repair downloads the setup instead, as when the file is gone.
 bool RecordedPackage(const install::Package& pkg, const std::wstring& version, const install::InstallRecord& record, RepairPackage& out,
                      std::wstring& why) {
     const std::wstring& file = record.sourcePackage;
     if (file.empty()) return why = L"the install record names no original setup", false;
-    // Kept open read-only (no other writers) from the check until the setup has started from it.
+    Sha256Digest expected{};
+    if (!ParseDigest(WideToUtf8(record.sourcePackageFileSha256), expected)) {
+        return why = L"the install record has no checksum of the whole original setup (installed by an older FluentSetup)", false;
+    }
     UniqueHandle lock(::CreateFileW(path::Long(file).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                                    FILE_ATTRIBUTE_NORMAL, nullptr));
+                                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
     if (!lock) return why = file + L" is no longer available", false;
-    // The record keeps the package's header digest (the footer's header SHA-256), which identifies the exact build:
-    // the header lists the SHA-256 of every stream, and the setup verifies those itself before using them.
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!::GetFileInformationByHandle(lock.get(), &info) || (info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY))) {
+        return why = file + L" is not a plain file", false;
+    }
     try {
-        const auto container = archive::Container::Open(file);
-        if (!EqualsIgnoreCase(container->HeaderDigestHex(), record.sourcePackageSha256)) {
-            return why = file + L" is not the setup that installed this version", false;
-        }
+        if (fs::HashFile(lock.get()) != expected) return why = file + L" is not the setup that installed this version", false;
     } catch (const Failure& f) {
         return why = file + L": " + f.detail(), false;
+    }
+    // The publisher: update.signer when the project pins one, and the signer of the installed uninstall.exe when it
+    // carries a trusted signature (a signed app is repaired only with a setup of the same publisher).
+    std::wstring ignored;
+    const std::optional<Source> source = ReadSource(pkg, ignored);
+    std::vector<std::wstring> signers;
+    if (source && !source->signer.empty()) signers.push_back(source->signer);
+    if (const std::wstring installed = archive::TrustedSignerName(path::Join(record.installDir, install::kUninstallerName)); !installed.empty()) {
+        signers.push_back(installed);
+    }
+    for (const auto& signer : signers) {
+        std::wstring actual;
+        if (!archive::SignedBy(file, signer, &actual, lock.get())) {
+            return why = file + (actual.empty() ? std::wstring(L" carries no trusted signature") : L" is signed by \"" + actual + L"\"") +
+                         L", not by \"" + signer + L"\"",
+                   false;
+        }
     }
     Release r;
     r.version = version;
@@ -595,13 +709,24 @@ bool RecordedPackage(const install::Package& pkg, const std::wstring& version, c
     out.path = file;
     out.lock = std::move(lock);
     out.downloaded = false;
+    if (security::IsElevated()) {
+        if (!CopyToRunDirectory(out, expected, why)) {
+            out.lock.reset();
+            out.path.clear();
+            return false;
+        }
+        out.original = file;  // recorded again by the setup (it checks that the file is still identical)
+    }
     return true;
 }
 
-bool StartSetup(const std::wstring& file, const Args& args, bool quiet, std::wstring& error) {
+// `recordAs`: when `file` is a private copy, the original it was made from (--source-package), may be empty.
+bool StartSetup(const std::wstring& file, const Args& args, bool quiet, const std::wstring& recordAs, std::wstring& error) {
     std::wstring cmd = QuoteArg(file) + (quiet ? L" /quiet" : L" /passive");
     if (args.relaunch) cmd += L" /relaunch";
     if (!args.language.empty()) cmd += L" /lang " + QuoteArg(args.language);
+    if (!args.channel.empty()) cmd += L" /channel " + args.channel;  // recorded: later checks follow it
+    if (!recordAs.empty()) cmd += L" --source-package " + QuoteArg(recordAs);
     log::Info(L"Starting %s", cmd.c_str());
     ::AllowSetForegroundWindow(ASFW_ANY);
     STARTUPINFOW si{sizeof(si)};
@@ -613,6 +738,34 @@ bool StartSetup(const std::wstring& file, const Args& args, bool quiet, std::wst
     }
     ::CloseHandle(pi.hThread);
     ::CloseHandle(pi.hProcess);
+    return true;
+}
+
+// Starts the verified download `d` of release `r`. With administrator rights it does not run from where it was
+// downloaded (the user's %TEMP% or the kept update folder, where the user's own programs could plant DLLs or swap
+// files): it is copied through its deny-write handle into a folder only administrators can change, hashed again there
+// and started from the copy, as for a repair. The copy cannot be deleted while it runs: it goes at the next restart, or
+// with the next elevated update. A kept download stays the file the setup records (--source-package); a temporary one is
+// deleted at once.
+bool StartVerified(Downloaded& d, const Release& r, const Args& args, bool quiet, std::wstring& error) {
+    if (!security::IsElevated()) return StartSetup(d.path, args, quiet, {}, error);
+    SweepRunCopies();
+    std::wstring copy;
+    UniqueHandle lock;
+    if (!PrivateCopy(d.lock.get(), d.path, r.sha256, kRunCopyPrefix, copy, lock, error)) return false;
+    log::Info(L"Running a private copy of the new setup: %s", copy.c_str());
+    const std::wstring recordAs = d.kept ? d.path : std::wstring();
+    if (d.kept) d.lock.reset();
+    else Discard(d);
+    const std::wstring dir = path::Parent(copy);
+    if (!StartSetup(copy, args, quiet, recordAs, error)) {
+        lock.reset();
+        ::DeleteFileW(path::Long(copy).c_str());
+        ::RemoveDirectoryW(path::Long(dir).c_str());
+        return false;
+    }
+    ::MoveFileExW(path::Long(copy).c_str(), nullptr, MOVEFILE_DELAY_UNTIL_REBOOT);
+    ::MoveFileExW(path::Long(dir).c_str(), nullptr, MOVEFILE_DELAY_UNTIL_REBOOT);
     return true;
 }
 
@@ -633,6 +786,7 @@ int CheckOnly(const install::Package& pkg, const Source& s, const std::wstring& 
     const Lookup found = FindUpdate(s, pkg.appId, installed, r, error);
     json::Value result = json::Value::MakeObject();
     result.set("installedVersion", installed);
+    result.set("channel", s.channel);
     if (found == Lookup::Failed) {
         log::Error(L"Update check failed: %s", error.c_str());
         result.set("error", error);
@@ -665,7 +819,7 @@ int InstallQuietly(const install::Package& pkg, const Source& s, const std::wstr
         log::Error(L"Update failed: %s", error.c_str());
         return static_cast<int>(ErrorCode::UpdateFailed);
     }
-    if (!VerifyPackage(d.path, pkg.appId, pkg.architecture, r, s, error) || !StartSetup(d.path, args, true, error)) {
+    if (!VerifyPackage(d.path, pkg.appId, pkg.architecture, r, s, error) || !StartVerified(d, r, args, true, error)) {
         log::Error(L"Update refused: %s", error.c_str());
         Discard(d);
         return static_cast<int>(ErrorCode::UpdateFailed);
@@ -736,7 +890,7 @@ public:
         int code = 0;
         if (end == Phase::Ready && !shared_->cancel) {
             std::wstring error;
-            if (!StartSetup(shared_->download.path, args, false, error)) {
+            if (!StartVerified(shared_->download, shared_->release, args, false, error)) {
                 log::Error(L"%s", error.c_str());
                 Discard(shared_->download);
                 code = static_cast<int>(ErrorCode::UpdateFailed);
@@ -995,12 +1149,24 @@ RepairLookup FindRepairPackage(const install::Package& pkg, const std::wstring& 
     out.path = d.path;
     out.lock = std::move(d.lock);
     out.downloaded = !d.kept;  // a kept download stays: the setup of the installed version, for the next repair or update
+    if (security::IsElevated()) {
+        // Downloads and the kept update folder belong to the user: with administrator rights, run a private copy.
+        const std::wstring original = out.path;
+        const bool temporary = out.downloaded;
+        if (!CopyToRunDirectory(out, r.sha256, error)) return RepairLookup::Failed;  // out deletes a temporary download
+        if (temporary) {
+            ::DeleteFileW(path::Long(original).c_str());
+            ::RemoveDirectoryW(path::Long(path::Parent(original)).c_str());
+        }
+    }
     return RepairLookup::Found;
 }
 
-bool RunSetup(const std::wstring& file, bool quiet, const std::wstring& language, DWORD& exitCode, std::wstring& error) {
+bool RunSetup(const std::wstring& file, bool quiet, const std::wstring& language, const std::wstring& recordAs, DWORD& exitCode,
+              std::wstring& error) {
     std::wstring cmd = QuoteArg(file) + (quiet ? L" /quiet" : L" /passive");
     if (!language.empty()) cmd += L" /lang " + QuoteArg(language);
+    if (!recordAs.empty()) cmd += L" --source-package " + QuoteArg(recordAs);
     log::Info(L"Starting %s", cmd.c_str());
     ::AllowSetForegroundWindow(ASFW_ANY);
     STARTUPINFOW si{sizeof(si)};
@@ -1017,10 +1183,21 @@ bool RunSetup(const std::wstring& file, bool quiet, const std::wstring& language
     return true;
 }
 
+// The update channel recorded at install time (Setup.exe /channel), if the install record can be read.
+std::wstring RecordedChannel(const install::InstalledProduct& product) {
+    try {
+        return install::LoadVerifiedRecord(product).updateChannel;
+    } catch (const Failure& f) {
+        log::Warn(L"Install record unusable (%s); the update channel is the package's", f.detail().c_str());
+        return {};
+    }
+}
+
 std::function<UpdateCheckResult()> MakeUpdateCheck(const install::Package& pkg, const std::wstring& installed) {
     std::wstring why;
-    const std::optional<Source> source = ReadSource(pkg, why);
+    std::optional<Source> source = ReadSource(pkg, why);
     if (!source) return {};
+    if (const auto product = install::FindInstalled(pkg.appId)) source->channel = EffectiveChannel({}, RecordedChannel(*product), source->channel);
     return [s = *source, appId = pkg.appId, installed] {
         UpdateCheckResult r;
         Release release;
@@ -1038,7 +1215,7 @@ std::function<UpdateCheckResult()> MakeUpdateCheck(const install::Package& pkg, 
 
 int RunUpdate(const install::Package& pkg, const Args& args, const Strings& strings) {
     std::wstring why;
-    const std::optional<Source> source = ReadSource(pkg, why);
+    std::optional<Source> source = ReadSource(pkg, why);
     if (!source) {
         log::Error(L"%s", why.c_str());
         return static_cast<int>(ErrorCode::InvalidArguments);
@@ -1048,6 +1225,8 @@ int RunUpdate(const install::Package& pkg, const Args& args, const Strings& stri
         log::Error(L"%s is not installed", pkg.appId.c_str());
         return static_cast<int>(ErrorCode::NotInstalled);
     }
+    // /channel, else the one recorded at install time, else update.channel.
+    source->channel = EffectiveChannel(args.channel, args.channel.empty() ? RecordedChannel(*product) : std::wstring(), source->channel);
     if (args.checkUpdate) return CheckOnly(pkg, *source, product->version);
 
     // One update at a time per app (a second click while the window is open does nothing).

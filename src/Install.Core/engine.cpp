@@ -8,6 +8,7 @@
 #include "Common/version.h"
 #include "Install.Core/integration.h"
 #include "Install.Core/journal.h"
+#include "Install.Core/legacy_msi.h"
 #include "Install.Core/shortcuts.h"
 
 #include <objbase.h>
@@ -83,6 +84,8 @@ json::Value OptionsToJson(const InstallOptions& o) {
     json::Value inputs = json::Value::MakeObject();
     for (const auto& [id, value] : o.inputs) inputs.set(id, value);
     v.set("inputs", inputs);
+    if (!o.sourcePackage.empty()) v.set("sourcePackage", o.sourcePackage);
+    if (!o.updateChannel.empty()) v.set("updateChannel", o.updateChannel);
     return v;
 }
 
@@ -109,6 +112,15 @@ bool OptionsFromJson(const json::Value& v, InstallOptions& o) {
         if (id.empty() || id.size() > 32 || !value.isString() || value.asString().size() > 4096) return false;
         o.inputs[id] = value.asWide();
     }
+    if (v.has("sourcePackage")) {
+        std::wstring source;
+        if (path::ValidateAbsoluteSyntax(v["sourcePackage"].asWide(), source) != path::Problem::None) return false;
+        o.sourcePackage = source;
+    }
+    if (v.has("updateChannel")) {
+        o.updateChannel = v["updateChannel"].asWide();
+        if (!IsUpdateChannelName(o.updateChannel)) return false;
+    }
     return true;
 }
 
@@ -128,6 +140,7 @@ json::Value OutcomeToJson(const Outcome& o) {
     for (const auto& s : o.warnings) w.push(s);
     v.set("warnings", w);
     v.set("rebootRequired", o.rebootRequired);
+    if (!o.messageKey.empty()) v.set("messageKey", o.messageKey);
     return v;
 }
 
@@ -144,6 +157,11 @@ Outcome OutcomeFromJson(const json::Value& v) {
     for (const auto& d : v["deferred"].array()) o.deferredDeletes.push_back(d.asWide());
     for (const auto& w : v["warnings"].array()) o.warnings.push_back(w.asWide().substr(0, 512));
     o.rebootRequired = v["rebootRequired"].asBool(false);
+    // Only the name of a built-in message (from the elevated worker): "error." and letters.
+    if (const std::string& key = v["messageKey"].asString();
+        key.size() <= 64 && key.rfind("error.", 0) == 0 && std::all_of(key.begin() + 6, key.end(), [](char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); })) {
+        o.messageKey = key;
+    }
     return o;
 }
 
@@ -206,6 +224,40 @@ void ThrowMove(DWORD e, const std::wstring& what) {
 
 std::wstring ShortcutName(const Package& pkg) { return path::SanitizeName(pkg.name) + L".lnk"; }
 
+bool HasLegacyMsi(const Extensions& ext) { return !ext.legacyMsiProductCodes.empty() || !ext.legacyMsiUpgradeCodes.empty(); }
+
+// install.legacyMsi: removes the older versions Windows Installer has registered, each through Windows Installer (no UI,
+// no restart). Not installed any more counts as removed; a restart Windows Installer asks for makes setup exit with 3010.
+// Anything else stops the install, which has not changed anything of its own yet.
+void RemoveLegacyMsiProducts(const Extensions& ext, Reporter& rep, Outcome& out) {
+    if (!HasLegacyMsi(ext)) return;
+    const std::vector<MsiProduct> products = FindMsiProducts(ext.legacyMsiProductCodes, ext.legacyMsiUpgradeCodes);
+    if (products.empty()) log::Info(L"No older version installed by Windows Installer (install.legacyMsi)");
+    for (const MsiProduct& p : products) {
+        const std::wstring what = (p.name.empty() ? p.productCode : p.name) + (p.version.empty() ? std::wstring() : L" " + p.version);
+        log::Info(L"Removing %s %s (Windows Installer, %s%s%s)", what.c_str(), p.productCode.c_str(), MsiContextName(p.context),
+                  p.installLocation.empty() ? L"" : L", ", p.installLocation.c_str());
+        rep.Set(State::Preparing, -1, what, false);
+        DWORD code = 0;
+        switch (RemoveMsiProduct(p, code)) {
+            case MsiOutcome::Removed: log::Info(L"Removed %s", what.c_str()); break;
+            case MsiOutcome::NotInstalled: log::Info(L"%s is not installed any more", what.c_str()); break;
+            case MsiOutcome::RebootRequired:
+                log::Warn(L"Removed %s; Windows Installer needs a restart to finish (%lu)", what.c_str(), code);
+                out.rebootRequired = true;
+                break;
+            case MsiOutcome::Busy:
+                out.messageKey = "error.installerBusy";
+                throw Failure(ErrorCode::AlreadyRunning, L"Another installation is in progress (Windows Installer error 1618), so the older version " + what +
+                                                             L" cannot be removed now. Try again when it has finished.");
+            case MsiOutcome::Declined:
+                throw Failure(ErrorCode::ElevationRequired, L"Removing the older version " + what + L", installed for all users, needs administrator rights", code);
+            case MsiOutcome::Failed:
+                throw Failure(ErrorCode::Failed, Printf(L"Windows Installer could not remove the older version %s (error %lu)", what.c_str(), code), code);
+        }
+    }
+}
+
 // Every directory of a set of relative files (and extra directories), deepest first.
 std::vector<std::wstring> ImpliedDirectories(const std::vector<std::wstring>& files, const std::vector<std::wstring>& extra) {
     std::unordered_set<std::wstring> seen;
@@ -257,9 +309,30 @@ bool IsProtectedLocation(const std::wstring& dir) {
     return false;
 }
 
+// A verified file that is about to run: open read-only with writes and deletion denied (so it cannot be changed,
+// replaced or moved away by path) and hashed through that handle.
+struct LockedFile {
+    UniqueHandle lock;
+    Sha256Digest digest{};
+};
+
+LockedFile LockFile(const std::wstring& file) {
+    LockedFile f;
+    f.lock.reset(::CreateFileW(path::Long(file).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                               FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (!f.lock) ThrowWin32(L"Cannot open " + file);
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!::GetFileInformationByHandle(f.lock.get(), &info) || (info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) ||
+        info.nNumberOfLinks != 1) {
+        throw Failure(ErrorCode::UnsafePath, L"Not a plain file: " + file);
+    }
+    f.digest = fs::HashFile(f.lock.get());
+    return f;
+}
+
 // Decodes one file of a file set (the redist set of bundled prerequisite installers) into `dest` (created new),
-// verifying the stream and the file hash.
-void ExtractSetFile(const archive::Container& container, const FileSet& set, const std::wstring& rel, const std::wstring& dest) {
+// verifying the stream and the file hash. Returns that hash.
+Sha256Digest ExtractSetFile(const archive::Container& container, const FileSet& set, const std::wstring& rel, const std::wstring& dest) {
     const auto it = std::find_if(set.files.begin(), set.files.end(), [&](const FileInfo& f) { return EqualsIgnoreCase(f.path, rel); });
     if (it == set.files.end()) throw Failure(ErrorCode::PackageCorrupt, L"Bundled file missing: " + rel);
     const StreamInfo& si = set.streams[it->stream];
@@ -282,6 +355,7 @@ void ExtractSetFile(const archive::Container& container, const FileSet& set, con
         left -= n;
     }
     if (hash.Finish() != it->sha256) throw Failure(ErrorCode::PackageCorrupt, L"Checksum mismatch for " + rel);
+    return it->sha256;
 }
 
 bool InUse(DWORD e) { return e == ERROR_SHARING_VIOLATION || e == ERROR_LOCK_VIOLATION || e == ERROR_USER_MAPPED_FILE || e == ERROR_ACCESS_DENIED; }
@@ -596,6 +670,7 @@ Existing Engine::DetectExisting() const {
 
 bool Engine::SanitizeOptions(InstallOptions& o) const {
     if (!ScopeAllowed(o.scope)) return false;
+    if (!o.updateChannel.empty() && !IsUpdateChannelName(o.updateChannel)) return false;
     const auto existing = FindExisting();
     if (existing && existing->scope != o.scope) return false;
     if ((!pkg_.allowCustomDir || existing) && !EqualsIgnoreCase(o.installDir, DefaultInstallDir(o.scope))) return false;
@@ -662,10 +737,19 @@ DirCheck Engine::CheckInstallDir(const std::wstring& dir, Scope scope, bool prob
                 return r.problem = path::Problem::OtherApp, r;
             }
             // Otherwise allow it (e.g. user data kept by a previous uninstall) as long as setup would not overwrite a
-            // single file it does not own. Preserved files are expected to be there already.
+            // single file it does not own. Preserved files are expected to be there already. An older version that
+            // Windows Installer installed (install.legacyMsi) is removed before the files are written, so its files do
+            // not count; whatever it leaves behind is replaced like any other file (journaled).
+            const bool replacingMsi = HasLegacyMsi(pkg_.ext) && !FindMsiProducts(pkg_.ext.legacyMsiProductCodes, pkg_.ext.legacyMsiUpgradeCodes).empty();
             for (const auto& f : pkg_.payload.files) {
+                if (replacingMsi) break;
                 if (!f.preserve && fs::Exists(path::Join(d, f.path))) return r.problem = path::Problem::NotEmpty, r;
             }
+            // A per-machine install runs with administrator rights later (the app, its services, elevated actions, the
+            // uninstaller). Into a folder that already holds files, only when nobody but administrators can have put
+            // them there or change them: its permissions are kept (the files in it may rely on them), so they must be
+            // safe already. A new or empty folder gets the protected permissions instead.
+            if (scope == Scope::Machine && !security::IsAdministratorControlled(d)) return r.problem = path::Problem::Insecure, r;
         }
     }
     if (scope == Scope::User && probeWritable && !ProbeWritable(d)) return r.problem = path::Problem::NotWritable, r;
@@ -1404,19 +1488,21 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
 
         // Prerequisites without a bundled installer are downloaded now, before anything is changed: a network problem
         // must not leave a half-installed app. Each file is checked against the size and SHA-256 in the package.
+        // Elevated, they go to a folder only administrators can change (CreateRunDirectory): nothing can be planted next
+        // to an installer that runs with administrator rights. Every installer stays open from its check until it has
+        // started (writes and deletion denied) and is hashed again through that handle right before it runs.
         std::map<const Requirement*, std::wstring> downloaded;
         std::wstring downloadDir;
         ScopeExit removeDownloads([&] {
             if (!downloadDir.empty()) fs::DeleteTree(downloadDir);
         });
+        std::map<const Requirement*, LockedFile> locked;  // closed before removeDownloads runs
         for (const Requirement* req : installLater) {
             if (!req->installer.empty()) continue;
             if (downloadDir.empty()) {
-                downloadDir = path::Join(path::TempRoot(), L"FluentSetup-d-" + RandomToken().substr(0, 16));
-                if (const DWORD e = security::CreatePrivateDirectory(downloadDir); e != 0) {
-                    downloadDir.clear();
-                    throw Failure(ErrorCode::IoError, L"Cannot create a download folder", e);
-                }
+                DWORD e = 0;
+                downloadDir = security::CreateRunDirectory(L"FluentSetup-d-", e);
+                if (downloadDir.empty()) throw Failure(ErrorCode::IoError, L"Cannot create a download folder", e);
             }
             // Keep the installer's own file name: some installers behave differently when renamed.
             const std::wstring dest = path::Join(downloadDir, Printf(L"%zu-", downloaded.size() + 1) +
@@ -1425,7 +1511,9 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
                 // Microsoft's installer stored in the package (redist set): decoded and verified, never installed.
                 rep.Set(State::Preparing, -1, req->name);
                 log::Info(L"Extracting the bundled installer of %s", req->name.c_str());
-                ExtractSetFile(container_, pkg_.redist, req->bundled, dest);
+                const Sha256Digest expected = ExtractSetFile(container_, pkg_.redist, req->bundled, dest);
+                LockedFile& file = locked[req] = LockFile(dest);
+                if (file.digest != expected) throw Failure(ErrorCode::PackageCorrupt, L"The extracted installer changed: " + dest);
                 downloaded[req] = dest;
                 continue;
             }
@@ -1439,10 +1527,15 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
                                          }, error);
             ThrowIfCancelled(cancel);
             if (!ok) throw Failure(ErrorCode::PrerequisiteMissing, req->name + L": " + error);
+            // The checks that count are made through the locked handle: what was verified is what runs.
+            LockedFile& file = locked[req] = LockFile(dest);
+            if (req->hasDownloadSha256 && file.digest != req->downloadSha256) {
+                throw Failure(ErrorCode::PrerequisiteMissing, req->name + L": the download changed after its SHA-256 was checked");
+            }
             if (!req->downloadSigner.empty()) {
                 // Vendor links that always serve the newest installer are pinned by their signature, not by a hash.
-                const std::wstring signer = archive::TrustedSignerName(dest);
-                if (signer != req->downloadSigner) {
+                std::wstring signer;
+                if (!archive::SignedBy(dest, req->downloadSigner, &signer, file.lock.get())) {
                     throw Failure(ErrorCode::PrerequisiteMissing, req->name + L": the download is not signed by " + req->downloadSigner +
                                                                   (signer.empty() ? std::wstring(L" (no trusted signature)") : L" (signed by " + signer + L")"));
                 }
@@ -1471,6 +1564,11 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         rep.Set(State::Preparing, -1);
         if (existing.product) RunCloseCommand(existing.product->installDir);
         for (const auto& still : CloseProcesses(pkg_.ext.closeProcesses)) log::Warn(L"%s could not be closed", still.c_str());
+        // install.legacyMsi: after every check that can stop the install and before anything of it is written. Removed
+        // later, Windows Installer would delete the files this install has just put into the same folder; only
+        // overwritten, its registration would restore its own files (self-repair). The rollback cannot bring it back.
+        ThrowIfCancelled(cancel);
+        RemoveLegacyMsiProducts(pkg_.ext, rep, out);
         if (existing.product && security::IsElevated()) {
             // The previous build's native images no longer match the assemblies about to be replaced.
             for (const auto& a : pkg_.ext.ngen) RunNGen(path::Join(dir, a), false);
@@ -1479,19 +1577,23 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         pendingSet = true;
         std::vector<std::wstring> created;
         const bool preexistingEmpty = fs::IsDirectory(dir) && fs::IsDirectoryEmpty(dir);
-        fs::CreateDirectories(dir, &created);
-        if (scope == Scope::Machine && !path::IsSameOrUnder(dir, path::KnownFolder(FOLDERID_ProgramFiles))) {
-            // Outside Program Files the folder inherits whatever its parent allows (often write access for all users),
-            // which would let a standard user replace binaries that admins and elevated actions run. Protect folders we
-            // created and empty folders the user picked; an existing app folder is left alone, because the app may rely
-            // on writing into it (upgrades of apps installed by other installers).
-            const std::wstring target = !created.empty() ? created.front() : preexistingEmpty ? dir : std::wstring();
-            if (!target.empty()) {
-                if (const DWORD e = security::ApplyMachineInstallAcl(target); e != 0) {
-                    log::Warn(L"Could not apply the protected ACL to %s (error %lu)", target.c_str(), e);
+        // Outside Program Files a folder inherits whatever its parent allows (often write access for all users), which
+        // would let a standard user replace binaries that admins and elevated actions run. Folders we create get the
+        // protected security as they are created (owner Administrators, nothing inherited), so nothing can be planted
+        // in between; an empty folder the user picked gets it before anything is written. A folder that already holds
+        // files keeps its permissions (the app may rely on writing into it: upgrades of apps installed by other
+        // installers); a fresh install only goes there when administrators alone control it (CheckInstallDir).
+        const bool protect = scope == Scope::Machine && !path::IsSameOrUnder(dir, path::KnownFolder(FOLDERID_ProgramFiles));
+        security::MachineInstallSecurity machineSecurity;
+        if (protect && !machineSecurity.get()) throw Failure(ErrorCode::Internal, L"Cannot build the security descriptor of the install folder");
+        fs::CreateDirectories(dir, &created, protect ? machineSecurity.get() : nullptr);
+        if (protect && created.empty()) {
+            if (preexistingEmpty) {
+                if (const DWORD e = security::ApplyMachineInstallAcl(dir); e != 0) {
+                    throw Failure(ErrorCode::UnsafePath, L"Cannot protect the install folder " + dir + L" from changes by other users", e);
                 }
-            } else {
-                log::Warn(L"Per-machine install into the existing folder %s keeps that folder's permissions", dir.c_str());
+            } else if (!security::IsAdministratorControlled(dir)) {
+                log::Warn(L"Per-machine install into the existing folder %s keeps that folder's permissions (other users can change it)", dir.c_str());
             }
         }
         {
@@ -1681,6 +1783,22 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
         record.inputs = Remembered(pkg_, inputs);
         record.sourcePackage = path::ModulePath();
         record.sourcePackageSha256 = container_.HeaderDigestHex();
+        // The whole file, read through the container's handle (writes and deletion denied while setup runs): a repair
+        // runs this file again, possibly with administrator rights, so the code in front of the package counts too.
+        const Sha256Digest setupDigest = container_.FileDigest();
+        record.sourcePackageFileSha256 = Utf8ToWide(ToHex(setupDigest));
+        if (!options.sourcePackage.empty() && !EqualsIgnoreCase(options.sourcePackage, record.sourcePackage)) {
+            // An elevated repair runs a private copy of the original Setup.exe; the original stays the one to record,
+            // if it is still exactly this file.
+            try {
+                if (LockFile(options.sourcePackage).digest == setupDigest) record.sourcePackage = options.sourcePackage;
+                else log::Warn(L"%s differs from the running setup; recording the running file", options.sourcePackage.c_str());
+            } catch (const Failure& f) {
+                log::Warn(L"Not recording %s as this version's setup: %s", options.sourcePackage.c_str(), f.detail().c_str());
+            }
+        }
+        record.updateChannel = !options.updateChannel.empty() ? options.updateChannel : oldRecord ? oldRecord->updateChannel : std::wstring();
+        if (!record.updateChannel.empty()) log::Info(L"Update channel: %s", record.updateChannel.c_str());
         record.registry = registry;
         record.environment = PlannedEnvironment(pkg_, options.choices, ctx);
         const std::vector<FirewallRule> firewall = machineAdmin ? PlannedFirewall(pkg_, dir, options.choices) : std::vector<FirewallRule>();
@@ -1732,7 +1850,11 @@ Outcome Engine::Install(const InstallOptions& options, IProgressSink& sink, cons
             }
             rep.Update(-1, req->name);
             log::Info(L"Installing prerequisite %s from %s", req->name.c_str(), exe.c_str());
+            if (const auto it = locked.find(req); it != locked.end() && fs::HashFile(it->second.lock.get()) != it->second.digest) {
+                throw Failure(ErrorCode::PackageCorrupt, req->name + L": the installer changed after it was verified: " + exe);
+            }
             const ActionResult r = RunProgram(exe, req->installerArgs, 1800);
+            locked.erase(req);  // it has run; the folder can go
             if (!r.ok || !RequirementSatisfied(*req)) {
                 const std::wstring found = InstalledRequirementVersion(*req);
                 const std::wstring why = req->name + (found.empty() ? std::wstring() : L" " + found + L" < " + req->minVersionText) + L": " +

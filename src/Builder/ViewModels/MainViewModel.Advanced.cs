@@ -27,6 +27,8 @@ public sealed partial class MainViewModel
     // ---- Upgrade -------------------------------------------------------------------------------------------------
     [ObservableProperty] public partial bool AdoptExistingInstall { get; set; }
     [ObservableProperty] public partial string LegacyUninstallKeysText { get; set; } = "";
+    [ObservableProperty] public partial string LegacyMsiProductCodesText { get; set; } = "";
+    [ObservableProperty] public partial string LegacyMsiUpgradeCodesText { get; set; } = "";
     [ObservableProperty] public partial string CloseProcessesText { get; set; } = "";
     [ObservableProperty] public partial bool HasCloseCommand { get; set; }
     [ObservableProperty] public partial string CloseCommandRun { get; set; } = "";
@@ -47,6 +49,7 @@ public sealed partial class MainViewModel
     [ObservableProperty] public partial string UpdateChecksums { get; set; } = "";
     [ObservableProperty] public partial string UpdateSigner { get; set; } = "";
     [ObservableProperty] public partial bool UpdateDifferential { get; set; }
+    [ObservableProperty] public partial string UpdateChannel { get; set; } = "";
     public bool UpdateIsOn => UpdateSourceIndex != 0;
     public bool UpdateIsGitHub => UpdateSourceIndex == 1;
     public bool UpdateIsFeed => UpdateSourceIndex == 2;
@@ -94,6 +97,10 @@ public sealed partial class MainViewModel
 
     // ---- Files: variants -----------------------------------------------------------------------------------------
     public ObservableCollection<VariantRow> VariantRows { get; } = [];
+    private static readonly string[] VariantSelections = ["user", "auto"];
+    /// <summary>files.variantSelection: 0 = the user picks, 1 = setup picks from what is installed; -1 = a stored value
+    /// the Builder does not know (kept).</summary>
+    [ObservableProperty] public partial int VariantSelectionIndex { get; set; }
     [ObservableProperty] public partial string OutputVariantsText { get; set; } = "";
 
     // ---- Appearance: license and languages -----------------------------------------------------------------------
@@ -165,6 +172,8 @@ public sealed partial class MainViewModel
         NgenText = TextForms.Lines(inst.Ngen);
         AdoptExistingInstall = inst.AdoptExistingInstall;
         LegacyUninstallKeysText = TextForms.Lines(inst.LegacyUninstallKeys);
+        LegacyMsiProductCodesText = TextForms.Lines(inst.LegacyMsi?.ProductCodes);
+        LegacyMsiUpgradeCodesText = TextForms.Lines(inst.LegacyMsi?.UpgradeCodes);
         CloseProcessesText = TextForms.Lines(inst.CloseProcesses);
         HasCloseCommand = inst.CloseCommand is not null;
         CloseCommandRun = inst.CloseCommand?.Run ?? "";
@@ -212,6 +221,7 @@ public sealed partial class MainViewModel
         SyncIfOptionChoices();
 
         Fill(VariantRows, Each(p.Files.Variants).Select(VariantRow.From), this);
+        VariantSelectionIndex = TextForms.Find(VariantSelections, p.Files.VariantSelection);
         OutputVariantsText = TextForms.Csv(p.Output.Variants);
 
         LicenseModeIndex = TextForms.Find(LicenseModes, p.Ui.LicenseMode);
@@ -232,6 +242,7 @@ public sealed partial class MainViewModel
         UpdateChecksums = upd.Checksums ?? "";
         UpdateSigner = upd.Signer ?? "";
         UpdateDifferential = upd.Differential;
+        UpdateChannel = upd.Channel ?? "";
 
         LoadIntegration(p);
     }
@@ -245,6 +256,9 @@ public sealed partial class MainViewModel
         inst.Ngen = TextForms.FromLines(NgenText, inst.Ngen);
         inst.AdoptExistingInstall = AdoptExistingInstall;
         inst.LegacyUninstallKeys = TextForms.FromLines(LegacyUninstallKeysText, inst.LegacyUninstallKeys);
+        var msiProducts = TextForms.FromLines(LegacyMsiProductCodesText, inst.LegacyMsi?.ProductCodes);
+        var msiUpgrades = TextForms.FromLines(LegacyMsiUpgradeCodesText, inst.LegacyMsi?.UpgradeCodes);
+        inst.LegacyMsi = msiProducts.Count > 0 || msiUpgrades.Count > 0 ? new LegacyMsiSettings { ProductCodes = msiProducts, UpgradeCodes = msiUpgrades } : null;
         inst.CloseProcesses = TextForms.FromLines(CloseProcessesText, inst.CloseProcesses);
         inst.CloseCommand = HasCloseCommand
             ? new CommandSettings
@@ -303,6 +317,7 @@ public sealed partial class MainViewModel
         p.Actions = ActionRows.Select(a => a.ToModel()).ToList();
 
         p.Files.Variants = VariantRows.Select(v => v.ToModel()).ToList();
+        p.Files.VariantSelection = TextForms.Pick(VariantSelections, VariantSelectionIndex, p.Files.VariantSelection);
         p.Output.Variants = TextForms.FromCsv(OutputVariantsText, p.Output.Variants);
 
         p.Ui.LicenseMode = TextForms.Pick(LicenseModes, LicenseModeIndex, p.Ui.LicenseMode);
@@ -326,6 +341,7 @@ public sealed partial class MainViewModel
         upd.Checksums = github ? TextForms.Keep(UpdateChecksums, upd.Checksums) : "";
         upd.Signer = github || feed ? TextForms.Keep(UpdateSigner, upd.Signer) : "";
         upd.Differential = (github || feed) && UpdateDifferential;
+        upd.Channel = TextForms.Keep(UpdateChannel, upd.Channel);
 
         ApplyIntegration(p);
     }

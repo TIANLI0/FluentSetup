@@ -14,6 +14,8 @@ public partial class MainViewModel
     [ObservableProperty] public partial string TrustedSigningProfile { get; set; } = "";
     [ObservableProperty] public partial string TrustedSigningDlib { get; set; } = "";
     [ObservableProperty] public partial string TrustedSigningCorrelationId { get; set; } = "";
+    /// <summary>DefaultAzureCredential sources to skip (signing.trustedSigning.excludeCredentials), one per line.</summary>
+    [ObservableProperty] public partial string TrustedSigningExcludeCredentials { get; set; } = "";
     [ObservableProperty] public partial string SigningCommandRun { get; set; } = "";
     /// <summary>One argument per line ({file}, {output}, {description}, {timestampUrl}).</summary>
     [ObservableProperty] public partial string SigningCommandArguments { get; set; } = "";
@@ -44,6 +46,7 @@ public partial class MainViewModel
         TrustedSigningProfile = ts?.CertificateProfile ?? "";
         TrustedSigningDlib = ts?.DlibPath ?? "";
         TrustedSigningCorrelationId = ts?.CorrelationId ?? "";
+        TrustedSigningExcludeCredentials = TextForms.Lines(ts?.ExcludeCredentials);
         var cmd = p.Signing.Command;
         SigningCommandRun = cmd?.Run ?? "";
         SigningCommandArguments = cmd is null ? "" : string.Join(Environment.NewLine, cmd.Arguments);
@@ -54,15 +57,19 @@ public partial class MainViewModel
     private void ApplySigning(SetupProject p)
     {
         p.Signing.Provider = SigningProviderIndex is >= 0 and < 3 ? SigningProviders[SigningProviderIndex] : p.Signing.Provider;
-        var anyTrusted = new[] { TrustedSigningEndpoint, TrustedSigningAccount, TrustedSigningProfile, TrustedSigningDlib, TrustedSigningCorrelationId }.Any(s => s.Trim().Length > 0);
+        var anyTrusted = new[] { TrustedSigningEndpoint, TrustedSigningAccount, TrustedSigningProfile, TrustedSigningDlib, TrustedSigningCorrelationId, TrustedSigningExcludeCredentials }.Any(s => s.Trim().Length > 0);
         if (anyTrusted || p.Signing.TrustedSigning is not null)
         {
-            var ts = p.Signing.TrustedSigning ?? new TrustedSigningSettings();  // keeps excludeCredentials
+            var ts = p.Signing.TrustedSigning ?? new TrustedSigningSettings();
             ts.Endpoint = TrustedSigningEndpoint.Trim();
             ts.AccountName = TrustedSigningAccount.Trim();
             ts.CertificateProfile = TrustedSigningProfile.Trim();
             ts.DlibPath = TrustedSigningDlib.Trim();
             ts.CorrelationId = TrustedSigningCorrelationId.Trim();
+            // One name per line (commas and spaces also separate them); unchanged text keeps the list as stored.
+            ts.ExcludeCredentials = TextForms.Same(TrustedSigningExcludeCredentials, TextForms.Lines(ts.ExcludeCredentials))
+                ? [.. ts.ExcludeCredentials]
+                : TextForms.FromCsv(TrustedSigningExcludeCredentials, null);
             p.Signing.TrustedSigning = ts;
         }
         static List<string> Lines(string text) => [.. text.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Trim().Length > 0)];

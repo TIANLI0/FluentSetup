@@ -13,6 +13,8 @@ install and how the generated `Setup.exe` behaves. The builder (GUI and `fsetup`
 JSON Schema: [`shared/schemas/fluentsetup.project.schema.json`](../shared/schemas/fluentsetup.project.schema.json)
 (draft 2020-12). To get completion and validation in editors, add this line to the file:
 `"$schema": "../../shared/schemas/fluentsetup.project.schema.json"`. The builder ignores it.
+The schema accepts what the builder writes (`null` for unset optional sections, `""` for unset text) and a `$(Name)`
+placeholder in any checked string (such a value is checked after the placeholders are filled in, at build time).
 
 ## Minimal example
 
@@ -118,6 +120,8 @@ links open in the user's browser, never with administrator rights (also when set
 | `extra[].source` | string | `""` | File or folder. A file is installed as `<target>\<file name>`. For a folder, its contents are installed under `<target>` **without** include/exclude filtering. |
 | `extra[].target` | string | `""` | Relative target folder. Empty means the install folder itself. |
 | `emptyDirectories` | string[] | `[]` | Relative folders to create even if they stay empty. They are removed on uninstall if they are still empty. |
+| `variants` | object[] | `[]` | Several builds of the app in one package. See [Variants](#variants-self-contained-or-shared-runtimes). |
+| `variantSelection` | string | `"user"` | `"user"`: the user picks the variant. `"auto"`: setup picks it from what is installed. See [Variants](#variants-self-contained-or-shared-runtimes). |
 
 ### Variants (self-contained or shared runtimes)
 
@@ -125,6 +129,9 @@ links open in the user's browser, never with administrator rights (also when set
 framework-dependent (`shared`: needs .NET and the Windows App Runtime) and self-contained (`selfContained`: carries
 both). Each variant names its own `source` folder; `files.include`, `exclude` and `preserve` apply to every variant
 and `files.extra` is added to every variant. With variants, `files.source` is not used.
+
+`files.variantSelection` decides who picks the variant: `"user"` (default) shows the choice with the default
+pre-selected; `"auto"` lets setup pick from what is installed on the PC (see *Automatic selection* below).
 
 | Property | Type | Default | Meaning |
 |---|---|---|---|
@@ -141,8 +148,19 @@ How it works:
   decompresses the other's data. `output.variants` (or `fsetup build --variant id[,id]`) limits which variants go
   into a package: with one variant the package has no choice at all.
 - **Install time.** The first page shows a *Runtime* choice when the package has more than one variant;
-  `Setup.exe /variant <id>` selects one from the command line (also in quiet mode). An update keeps the variant that is
-  installed unless another one is chosen. Switching variants removes the files the new choice does not need.
+  `Setup.exe /variant <id>` selects one from the command line (also in quiet mode) and always wins. With
+  `variantSelection: "user"` an update keeps the variant that is installed unless another one is chosen. Switching
+  variants removes the files the new choice does not need.
+- **Automatic selection (`variantSelection: "auto"`).** Setup pre-selects the first variant other than the default
+  whose requirements limited to it (`requirements.*.variants`) are all on the PC already; otherwise the default, which
+  is the fallback. Only variants the PC can run without installing anything are offered, so the *Runtime* choice
+  appears only where there is one, and quiet installs take the pre-selected variant. A typical .NET app makes the
+  self-contained variant the default and limits the .NET and Windows App Runtime requirements to the `shared` variant:
+  PCs that have the runtimes get the small build, the others the self-contained one, and no runtime is installed.
+  Updates keep a variant the user (or `/variant`) picked while the PC can still run it and pick again otherwise
+  (recorded as `FluentSetupVariantChosen` in the uninstall key); a repair or change keeps the installed variant.
+  Checks: FS1117 (a value other than `user` or `auto`, error), FS1118 (`auto` with fewer than two variants has no
+  effect), FS1119 (a non-default variant with no requirement limited to it would always be chosen over the default).
 - **Prerequisites per variant.** `requirements.*.variants` limits a prerequisite to some variants, e.g. the .NET runtime
   and the Windows App Runtime only for `shared`. The notice on the first page follows the selected variant.
 
@@ -177,14 +195,14 @@ How the rules are applied (`FileCollector.cs`):
 1. The collector walks `files.source`. A folder is skipped entirely if an `exclude` glob matches its relative path followed by `/`. So `**/.git/**` or `cache/` excludes the whole folder, but a bare `cache` only excludes *files* named `cache`.
 2. A file is installed when it matches at least one `include` glob and no `exclude` glob.
 3. `extra` sources are added after that, unfiltered.
-4. Symbolic links and junctions are never followed. They are skipped with warning FS1112.
+4. Symbolic links and junctions are never followed. They are skipped with warning FS1121.
 5. If the output folder lies inside the source, it is skipped.
 6. Errors:
    - Two sources map to the same target path (FS1109).
-   - A path is both a file and a folder (FS1114).
+   - A path is both a file and a folder (FS1123).
    - A path is not a valid relative path (FS1107).
    - A path is reserved by the installer: `uninstall.exe`, `uninstall.json` or anything under `.fsetup` (FS1108).
-   - No files are left to install (FS1115).
+   - No files are left to install (FS1124).
 7. Read-only and hidden attributes are kept.
 
 ### preserve
@@ -214,6 +232,7 @@ syntax as above. A preserved file:
 | `closeProcesses` | string[] | `[]` | Up to 32 bare `.exe` names, e.g. `"MyApp.exe"`. Before install and before uninstall these processes get `WM_CLOSE` and are terminated if still running after a grace period. |
 | `adoptExistingInstall` | bool | `false` | Takes over an installation made by a previous, non-FluentSetup installer that registered the uninstall key named `app.id`. Its folder and version count as the existing installation. Files of the old version that the new one does not ship are left in place, because no FluentSetup install record exists for them. |
 | `legacyUninstallKeys` | string[] | `[]` | Uninstall key names of **older product names** (e.g. before a rename). If the app is not installed under its own id, the first of these keys that points at an existing folder is adopted the same way (folder from `InstallLocation`, else from `UninstallString` or `DisplayIcon`). After a successful install these keys are deleted. Keys written by FluentSetup are never touched; the app's own id is not allowed here (FS1650). |
+| `legacyMsi` | object \| null | `null` | An older version installed by an **MSI** (WiX, InstallShield, Visual Studio installer projects): `{ "upgradeCodes": ["{GUID}"], "productCodes": ["{GUID}"] }`, up to 16 codes each, GUIDs in braces (FS1684; FS1685 warns when both lists are empty). The Windows Installer products registered under these codes are removed through Windows Installer, with no UI and no restart, after setup's checks and before it writes its own files. See [Moving from WiX / an MSI](#moving-from-wix--an-msi). |
 | `ngen` | string[] | `[]` | .NET Framework assemblies among the installed files (`.exe`/`.dll`, max 16). After install they are queued with `ngen install /queue` (compiled when the PC is idle); before an upgrade replaces them and before uninstall, `ngen uninstall` drops the old native images. Only in elevated (per-machine) installs; failures are only logged. |
 | `addToPath` | string[] | `[]` | Folders of the app put on PATH (relative; `""` = the install folder): the user PATH for per-user installs, the machine PATH for per-machine. Added after the install is committed, removed on uninstall; new terminals see it. |
 | `relaunchArguments` | string[] | `[]` | Arguments for the app when an in-app updater ran `Setup.exe /relaunch` (Inno `/RELAUNCH=1`) in quiet mode, e.g. `["--updated"]`. |
@@ -287,6 +306,76 @@ by their dot-separated parts.
 
 The whole operation is journaled. Any failure before the final commit rolls back to the previous state, and that
 includes a failing `afterInstall` action with `onFailure: "fail"`.
+
+### Moving from WiX / an MSI
+
+An app installed from an MSI is registered with Windows Installer: its product code, components and files. Deleting
+only its Apps & features entry (what `legacyUninstallKeys` and `cleanup.removeUninstallKeys` do) would leave that
+registration behind, and Windows Installer could put the old files back later (self-repair, started for example by an
+advertised shortcut or COM registration of the old version). `install.legacyMsi` removes such an installation through
+Windows Installer itself:
+
+```json
+"install": {
+  "scope": "machine",
+  "machineDir": "{ProgramFiles}\\Contoso\\Notes",
+  "legacyMsi": { "upgradeCodes": ["{11111111-2222-3333-4444-555555555555}"] }
+}
+```
+
+- **Codes.** The upgrade code is the same for every version of a product: WiX `<Package UpgradeCode="…">` (WiX 4 and
+  later) or `<Product UpgradeCode="…">` (WiX 3), `UpgradeCode` in the MSI's Property table otherwise (Orca, lessmsi).
+  Setup finds every installed product of that family (`MsiEnumRelatedProducts`). `productCodes` names single products,
+  e.g. MSIs built without an upgrade code; the product code is also the name of the MSI's key under
+  `…\CurrentVersion\Uninstall`.
+- **When.** Setup looks for the products while it installs, after everything that can stop it early (prerequisite
+  checks and downloads, the install folder check) and after closing the running app (`closeProcesses`,
+  `closeCommand`), and removes them before it writes any file of its own. Not afterwards: Windows Installer deletes
+  its components' files by path, so removing the MSI after the new files are in place would delete those of them that
+  have the same name. The removal is therefore not part of FluentSetup's rollback: if the install fails later, the new
+  version is rolled back and the old one stays removed; running setup again installs the new one.
+- **Per machine or per user.** Setup finds products installed for all users and the current user's per-user products
+  (other users' per-user installs are not visible). Per-user products of the current user are removed without
+  administrator rights. A product installed for all users needs them: a per-machine FluentSetup install has them
+  already (the removal runs in the elevated process, `MsiConfigureProductEx`); a per-user install starts Windows' own
+  `%SystemRoot%\System32\msiexec.exe /x {code} /qn REBOOT=ReallySuppress` with a UAC prompt, also in `/quiet` mode.
+  Declining it stops setup with exit code 6 before anything is installed.
+- **Results.** A product that is no longer installed (Windows Installer error 1605) counts as removed. A removal that
+  needs a restart to finish (3010, 1641) lets setup complete and exit with 3010; nothing restarts the PC. Another
+  installation in progress (1618) stops setup with exit code 16 and the message to try again when it has finished. Any
+  other error stops setup (exit code 1, the Windows Installer error in the log) before the new version is installed.
+  The log names every product found, its context, folder and result.
+- **Folder.** The new version goes to `userDir`/`machineDir`, not automatically to the MSI's folder. Set `machineDir`
+  (or `userDir`) to the folder the MSI used to keep the app where it was. Files the MSI leaves there (data the app
+  created) do not block the install while an MSI product of the setting is still installed; a file setup writes over
+  is backed up and restored on rollback like any other.
+- **Everything else** the MSI installed (shortcuts, file types, services, its Apps & features entry) is removed by its
+  own uninstall, including its custom actions, as in a quiet uninstall from Apps & features.
+
+`legacyMsi` is the only setting that runs another installer's uninstall. It does not adopt anything: `app.id` is the
+new uninstall key, and the upgrade from the MSI shows as a first install of the new version.
+
+### Moving from Squirrel or Velopack
+
+Squirrel.Windows and Velopack install per user into `%LocalAppData%\<id>` (the app in `app-<version>` or `current`
+subfolders, `Update.exe` next to them) and register an uninstall key named after their package id in
+`HKEY_CURRENT_USER`, with `Update.exe --uninstall` as the uninstall command. Check the key name and the shortcut names
+on a PC with the old version installed. FluentSetup has no setting that runs that command: actions only run programs
+of the new package, and `legacyUninstallKeys` and `cleanup` never start another installer. With the existing
+settings:
+
+- Install the new version into its own folder (`install.scope: "user"`, the default `userDir`) and remove what would
+  otherwise run alongside it: `install.cleanup.removeUninstallKeys: ["<package id>"]` (the old Apps & features entry,
+  in the hive of the install's scope), `install.cleanup.removeShortcuts` with the old shortcut names (`"Contoso\\Notes.lnk"`
+  for one in a Start menu folder; not a name the new version uses itself: a shortcut of the same path is simply
+  replaced) and `install.cleanup.removeRunValues` if the old version started with Windows.
+- The old files stay in `%LocalAppData%\<id>`: no install setting deletes a folder outside the install folder. To
+  remove them, have the new app run `%LocalAppData%\<id>\Update.exe --uninstall` itself (for example at its first
+  start, or from an `afterInstall` action that runs the app with a switch of your own). Squirrel and Velopack then also
+  remove their shortcuts by path, so give the new shortcut another name or Start menu folder, or recreate it.
+- Adopting the old folder with `legacyUninstallKeys: ["<package id>"]` and `userDir: "{LocalAppData}\\<id>"` also
+  works (the folder comes from the key's `InstallLocation` or the folder of `Update.exe`), but leaves the `app-*`
+  folders and `Update.exe` in it; `install.cleanup.removeFiles` only matches files, with `*` in the file name only.
 
 ## requirements
 
@@ -626,9 +715,10 @@ published, shows "A newer version (1.1.0) is available" with an **Update** butto
 | Property | Type | Default | Meaning |
 |---|---|---|---|
 | `github` | string | `""` | GitHub repository `owner/name`. The latest release (`/releases/latest`) is used; with `prerelease`, the newest of the recent releases. Its version is the tag without a leading `v`. |
-| `feed` | string | `""` | Instead of `github`: an https URL of a JSON document `{ "version": "1.2.0", "url": "https://…/Setup.exe", "sha256": "<64 hex digits>", "size": 12345678, "notes": "https://…" }` (`size` and `notes` optional). For your own server or a CDN. |
+| `feed` | string | `""` | Instead of `github`: an https URL of a JSON document `{ "version": "1.2.0", "url": "https://…/Setup.exe", "sha256": "<64 hex digits>", "size": 12345678, "notes": "https://…" }` (`size` and `notes` optional), the stable release. Other [channels](#update-channels) go under `"channels"`. For your own server or a CDN. |
 | `asset` | string | `""` | `github`: the file name of Setup.exe in a release, with `{Version}` for the release's version, e.g. `"MyApp-{Version}-Setup.exe"`. Empty = `output.fileName` (its other placeholders are filled in at build time). A name that contains the version literally (from `$(Version)`) gets warning FS1705: the next release has another name. |
 | `prerelease` | bool | `false` | `github`: also offer pre-releases. |
+| `channel` | string | `"stable"` | The [update channel](#update-channels) installations follow unless they were given another one: `"stable"` (also `""`) or a name such as `"beta"` (lower-case letters, digits and `-`, starting with a letter, at most 32; FS1711). |
 | `checksums` | string | `""` | `github`: a release file with `<sha256>  <file name>` lines (`sha256sum` format), e.g. `SHA256SUMS.txt`. Empty = GitHub's own SHA-256 digest of the asset. When both exist they must agree. |
 | `signer` | string | `""` | If set, an update only runs when its Authenticode signature is valid with a trusted chain and the certificate is issued to this name (subject common name, e.g. `"Contoso Ltd"`). Use it when you sign (`signing.enabled`); FS1710 warns otherwise. |
 | `differential` | bool | `false` | Opt-in: download only what changed. The downloaded Setup.exe is kept **on the user's PC**, per user (`%LocalAppData%\FluentSetup\updates\<app id>`, the last one only), which costs the size of one Setup.exe on their disk; the next update rebuilds the new Setup.exe from it (or from the Setup.exe that installed the app, if it is still there): streams it already has are copied, everything else comes with HTTP range requests. The rebuilt file must match the published SHA-256 and `signer` like any download; when the server ignores range requests or little is in common, the whole file is downloaded. The kept file is also the repair source. `false` (default): the whole file into a temporary folder, removed after use. |
@@ -642,13 +732,46 @@ installed one; and carry the pinned signature if `signer` is set. The new Setup.
 
 | Command | What it does |
 |---|---|
-| `uninstall.exe /check-update` | No UI. Exit code 0 = up to date, 18 = a newer version is published, 19 = the source could not be read. Prints one JSON line on standard output if it is redirected: `{"installedVersion":"1.0.0","updateAvailable":true,"latestVersion":"1.1.0","notes":"https://…"}`. |
+| `uninstall.exe /check-update` | No UI. Exit code 0 = up to date, 18 = a newer version is published, 19 = the source could not be read. Prints one JSON line on standard output if it is redirected: `{"installedVersion":"1.0.0","channel":"stable","updateAvailable":true,"latestVersion":"1.1.0","notes":"https://…"}`. |
 | `uninstall.exe /install-update` | A small window: checking, then "1.1.0 is available" with **Update** / **Not now** and a link to the release notes, then the download progress. Exit code 0 (up to date, or the new Setup.exe was started), 2 (Not now / cancelled) or 19. |
 | `uninstall.exe /install-update /passive` | Progress only: no question; closes by itself when there is no update. |
 | `uninstall.exe /install-update /quiet` | No UI: downloads, verifies and starts `Setup.exe /quiet`. Exit code 0 when there is no update or the new setup was started. |
 
 Add `/relaunch` to start the app again after the update, and `/lang` to choose the language. GitHub allows 60 API
 requests per hour per address without a token, enough for checks at start-up or once a day.
+
+### Update channels
+
+A feed can offer more than one release: the top-level fields are the **stable** release (what every FluentSetup reads,
+1.5 included), and each other channel is an entry of the same shape under `"channels"`:
+
+```json
+{
+  "version": "1.2.0", "url": "https://contoso.com/Notes-1.2.0-Setup.exe", "sha256": "…", "size": 41234567,
+  "channels": {
+    "beta": { "version": "1.3.0-beta.2", "url": "https://contoso.com/Notes-1.3.0-beta.2-Setup.exe", "sha256": "…", "size": 41300012 }
+  }
+}
+```
+
+- A PC on the `beta` channel gets the newer of the beta entry and the stable release, so it moves on to the stable
+  release once that has caught up (`1.3.0` is newer than `1.3.0-beta.2`). A channel the feed has no entry for gets the
+  stable release. A feed without a stable release (only `"channels"`, or `"channels": { "stable": … }` instead of
+  top-level fields) is fine for the channels it has.
+- With `github`, every channel but `stable` also offers pre-releases (like `prerelease: true`).
+- Which channel: `/channel <name>` on the command line, else the channel recorded at install time, else
+  `update.channel`, else `stable`. `Setup.exe /channel beta` records the channel in the install record, and
+  `uninstall.exe /install-update /channel beta` passes it to the new Setup.exe, which records it: from then on that PC
+  follows `beta` without `/channel`, also through later updates. Back to stable takes an update from that channel:
+  updates only go forward, so `/install-update /channel stable` installs (and records `stable`) once a stable release
+  is newer than the installed beta; until then the PC still follows `beta`. `/check-update /channel beta` only checks
+  and records nothing.
+- `fsetup build --feed latest.json --feed-url https://…/{FileName} --feed-channel beta` writes only the `beta` entry of
+  an existing `latest.json` (and creates the file if it is missing); without `--feed-channel` it writes the stable
+  release and keeps the channels.
+
+How an app finds `uninstall.exe`, reads the result of `/check-update` and starts `/install-update`, with a C# example:
+[Updating from inside the app](updates.md). Managed deployments: [built-in updates](enterprise.md#built-in-updates).
 
 ## ui
 
@@ -733,7 +856,7 @@ signature afterwards. `provider` picks the tool:
 | `passwordEnvironmentVariable` | string | `""` | signtool: name of an environment variable that holds the PFX password (see [Secrets](#secrets)). |
 | `timestampUrl` | string | `"http://timestamp.digicert.com"` | RFC 3161 timestamp server. Empty means no timestamp. For Artifact Signing use `http://timestamp.acs.microsoft.com`. The command provider gets it as `{timestampUrl}`. |
 | `signToolPath` | string | `""` | signtool, trustedSigning: path of `signtool.exe`. Empty means the Windows 10/11 SDK and `PATH` are searched. |
-| `files` | string[] | `[]` | The app's own programs and DLLs to sign too, as patterns over the installed paths (`"MyApp.exe"`, `"MyApp*.dll"`, `"bin/**/*.dll"`). The builder signs copies in one batch (one signtool call for many files) and puts them into the package; the build output folder is not changed. Files that already carry a signature (other vendors' DLLs, the .NET runtime) are skipped; a file that is no Windows program gets warning FS2005, patterns that match nothing to sign FS2006. A rebuild signs again, so blocks with signed files are compressed again too. |
+| `files` | string[] | `[]` | The app's own programs and DLLs to sign too, as patterns over the installed paths (`"MyApp.exe"`, `"MyApp*.dll"`, `"bin/**/*.dll"`). The builder signs copies in one batch (one signtool call for many files) and puts them into the package; the build output folder is not changed. Files that already carry a signature (other vendors' DLLs, the .NET runtime) are skipped; a file that is no Windows program gets warning FS2005, patterns that match nothing to sign FS2006. Signed copies are kept in the build cache (`%LocalAppData%\FluentSetup\cache\streams`, `FLUENTSETUP_CACHE` moves it), keyed by the unsigned file and the signing settings (provider, certificate, timestamp server, tool, command; never passwords or environment values): a rebuild reuses the signed copy of an unchanged program instead of signing it again with a new timestamp, so its bytes stay the same for the stream cache and differential updates. `build --no-cache` signs everything again. |
 | `signUninstaller` | bool | `true` | Also sign the `uninstall.exe` that setup writes into the install folder, with the same provider, so UAC and SmartScreen show the publisher when the app is removed. The builder produces the exact uninstaller setup will write, signs it, and stores its certificate table in the package (a few KB); setup appends it and checks the result against the recorded SHA-256 (else it writes an unsigned uninstaller and logs why). The signing tool must only append the certificate table (signtool, osslsigncode and jsign do). |
 | `trustedSigning` | object | `null` | Settings of the trustedSigning provider ([below](#trustedsigning)). |
 | `command` | object | `null` | Settings of the command provider ([below](#command)). |
@@ -863,10 +986,11 @@ fsetup build [project] [options]      project: a fluentsetup.json or a folder wi
     --json                  Print the build report as JSON instead of text
     --non-interactive       Accepted for CI scripts (the CLI never prompts)
     --refresh-installers    Download official prerequisite installers ("auto": "bundle") again
-    --no-cache              Compress every stream again instead of reusing unchanged ones of earlier builds
-    --feed <file.json> --feed-url <https URL> [--feed-notes <https URL>]
+    --no-cache              Compress every stream and sign every signing.files program again instead of reusing earlier builds' results
+    --feed <file.json> --feed-url <https URL> [--feed-notes <https URL>] [--feed-channel <name>]
                             Also write the update feed for update.feed ({ version, url, sha256, size, notes });
-                            {Version} and {FileName} in the URLs are filled in
+                            {Version} and {FileName} in the URLs are filled in. An existing file is updated:
+                            --feed-channel (default stable) names the entry to write, the others are kept
     --msbuild               Diagnostics in MSBuild's format (used by the FluentSetup.MSBuild targets)
 fsetup validate <project.json> [--json] [-D <name>=<value> ...]
 fsetup inspect <Setup.exe> [--verify] [--json] [--diff <older Setup.exe>]
@@ -919,6 +1043,7 @@ The installed `uninstall.exe` accepts the same switches.
 | `/relaunch`, `/update` | After a quiet or passive install, start the app with `install.relaunchArguments` (for in-app updaters; `/update` is the NSIS-style spelling, `Setup.exe /S /UPDATE`). |
 | `/check-update` | Installed app with an `update` source: exit code 18 if a newer version is published, 0 if not (see *update*). |
 | `/install-update` | Download, verify and install the newest version (see *update*); with `/passive` or `/quiet` without questions. |
+| `/channel <name>` | [Update channel](#update-channels) (`stable`, `beta`, …) for `/check-update` and `/install-update`. On an install (and the setup `/install-update` starts) it is recorded, so later updates follow it. Not with `/uninstall` or `/modify`. |
 | Inno / NSIS switches | `/VERYSILENT`, `/SILENT` (passive), `/DIR=`, `/LOG=`, `/LANG=english`, `/TASKS=`, `/MERGETASKS=`, `/NOICONS`, `/CURRENTUSER`, `/ALLUSERS`, `/RELAUNCH=1`, `/S`, `/D=path` (last, may contain spaces) are understood; `/SUPPRESSMSGBOXES`, `/NORESTART`, `/CLOSEAPPLICATIONS`, `/SP-`, `/NCRC`, `_?=` are accepted and have no effect. Upgrades also pre-fill choices from an adopted Inno install's saved tasks. |
 | `/option <id>=yes\|no` | Value of a package option. Can be repeated. Ids the package does not define are ignored. |
 | `/input <id>=<value>` | Value of a package input (`inputs`, the Settings page); everything after the first `=` is the value and may be empty. Can be repeated (at most 8 ids). Install and `/modify` only. An id the package does not define is an error (exit code 3); the value is checked like on the Settings page (required, choices, pattern), and a quiet or passive install with a missing or invalid value fails with exit code 3 and the input named in the log. Without `/input` an update uses the value remembered from the previous install (never for passwords), else the default. Quote values with spaces: `"/input=note=two words"`. |

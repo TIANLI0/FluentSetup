@@ -32,6 +32,17 @@ public static class Ui
     public static Task<ContentDialogResult> MessageAsync(string title, string message) =>
         ShowDialogAsync(new ContentDialog { Title = title, Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true }, CloseButtonText = Loc.Get("Common_Close") });
 
+    /// <summary>A question with one action: true if the user chose <paramref name="primary"/>.</summary>
+    public static async Task<bool> ConfirmAsync(string title, string message, string primary, string? close = null) =>
+        await ShowDialogAsync(new ContentDialog
+        {
+            Title = title,
+            Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true },
+            PrimaryButtonText = primary,
+            CloseButtonText = close ?? Loc.Get("Common_Cancel"),
+            DefaultButton = ContentDialogButton.Close,
+        }) == ContentDialogResult.Primary;
+
     /// <summary>Returns Primary = save, Secondary = discard, None = cancel.</summary>
     public static Task<ContentDialogResult> ConfirmUnsavedAsync() =>
         ShowDialogAsync(new ContentDialog

@@ -62,6 +62,18 @@ void Container::ReadAt(uint64_t offset, void* buffer, size_t size) const {
     }
 }
 
+Sha256Digest Container::FileDigest() const {
+    Sha256 hash;
+    std::vector<uint8_t> buffer(static_cast<size_t>(std::min<uint64_t>(fileSize_, 4ull << 20)));
+    for (uint64_t done = 0; done < fileSize_;) {
+        const size_t chunk = static_cast<size_t>(std::min<uint64_t>(buffer.size(), fileSize_ - done));
+        ReadAt(done, buffer.data(), chunk);
+        hash.Update(buffer.data(), chunk);
+        done += chunk;
+    }
+    return hash.Finish();
+}
+
 void Container::LocateFooter() {
     // --- PE headers ---------------------------------------------------------------------------------------------
     IMAGE_DOS_HEADER dos{};
@@ -284,10 +296,14 @@ SignatureState CheckSignature(const std::wstring& path, long* status) {
     return SignatureState::Tampered;
 }
 
-std::wstring TrustedSignerName(const std::wstring& path) {
+namespace {
+
+// Name of the leaf certificate of a valid, trusted signature; "" otherwise. `type`/`param` as in CertGetNameStringW.
+std::wstring SignerName(const std::wstring& path, HANDLE file, DWORD type, void* param) {
     WINTRUST_FILE_INFO info{};
     info.cbStruct = sizeof(info);
     info.pcwszFilePath = path.c_str();
+    info.hFile = file;
     GUID action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
     WINTRUST_DATA data{};
     data.cbStruct = sizeof(data);
@@ -303,7 +319,7 @@ std::wstring TrustedSignerName(const std::wstring& path) {
             CRYPT_PROVIDER_SGNR* signer = ::WTHelperGetProvSignerFromChain(provider, 0, FALSE, 0);
             if (signer && signer->csCertChain > 0 && signer->pasCertChain && signer->pasCertChain[0].pCert) {
                 wchar_t buffer[512] = {};
-                if (::CertGetNameStringW(signer->pasCertChain[0].pCert, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, nullptr, buffer, ARRAYSIZE(buffer)) > 1) {
+                if (::CertGetNameStringW(signer->pasCertChain[0].pCert, type, 0, param, buffer, ARRAYSIZE(buffer)) > 1) {
                     name = buffer;
                 }
             }
@@ -314,11 +330,26 @@ std::wstring TrustedSignerName(const std::wstring& path) {
     return name;
 }
 
+}  // namespace
+
+std::wstring TrustedSignerName(const std::wstring& path, HANDLE file) {
+    // The subject's common name and nothing else: the simple display name falls back to other fields (OU, O, e-mail)
+    // when a certificate has no CN, which a pin must not match.
+    return SignerName(path, file, CERT_NAME_ATTR_TYPE, const_cast<char*>(szOID_COMMON_NAME));
+}
+
+bool SignedBy(const std::wstring& path, std::wstring_view expected, std::wstring* actual, HANDLE file) {
+    const std::wstring name = TrustedSignerName(path, file);
+    if (actual) *actual = name;
+    return !name.empty() && !expected.empty() && EqualsIgnoreCase(name, expected);
+}
+
 SignerInfo GetSignerInfo(const std::wstring& path) {
     SignerInfo info;
     info.state = CheckSignature(path);
     if (info.state == SignatureState::Valid) {
-        info.publisher = TrustedSignerName(path);
+        // Shown to the user only, so the display name (CN, or the organization when there is none) is fine here.
+        info.publisher = SignerName(path, nullptr, CERT_NAME_SIMPLE_DISPLAY_TYPE, nullptr);
         if (info.publisher.empty()) info.state = SignatureState::Intact;
     }
     return info;

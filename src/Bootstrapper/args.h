@@ -14,11 +14,14 @@
 //   /lang en-US|zh-CN         UI language
 //   /option <id>=yes|no       package-defined option (repeatable), e.g. /option autostart=no
 //   /input <id>=<value>       value of a package-defined input (repeatable), e.g. /input server=https://x
+//   /channel <name>           update channel (stable, beta, ...): /check-update and /install-update follow it; an
+//                             install records it, so later updates follow it too
 //   /ui auto|winui|win32      front-end selection (diagnostics)
 //   /help | /?
 // Internal switches (used between FluentSetup processes, documented in docs/architecture.md):
-//   --worker --pipe <name> --parent-pid <n> [--origin-dir <dir>] [--wait-pid <n>]
+//   --worker --pipe <name> --parent-pid <n> [--origin-dir <dir>] [--wait-pid <n>] [--log-handle <handle>]
 //   --phase2 --origin-dir <dir> --origin-process <handle> --result-pipe <handle>
+//   --source-package <file>   (a repair running a private copy: the original Setup.exe to record)
 //   --ui-simulate <mode>
 #pragma once
 
@@ -54,6 +57,7 @@ struct Args {
     bool tasksMerge = false;
     bool checkUpdate = false;    // /check-update: report whether the update source has a newer version (exit 0 or 18)
     bool installUpdate = false;  // /install-update: download, verify and run the newer Setup.exe
+    std::wstring channel;        // /channel: update channel (lower case; "" = the recorded one, else update.channel)
     std::wstring uiSimulate;
 
     // internal
@@ -65,10 +69,17 @@ struct Args {
     bool phase2 = false;
     unsigned long long originProcess = 0;  // inherited handle value
     unsigned long long resultPipe = 0;     // inherited handle value
+    unsigned long long logHandle = 0;      // worker: the parent's open log file, a handle value in the parent process
+    std::wstring sourcePackage;            // --source-package: recorded for repairs if it is identical to this file
 };
 
 // Returns false and sets `error` on any invalid input.
 bool ParseArgs(const wchar_t* commandLine, Args& out, std::wstring& error);
+
+// The elevated worker opens a /log path itself only when it lies below its own <temp>\FluentSetup (where setup puts its
+// logs by default): the path comes from an unelevated process, which must not get an administrator to create or append
+// to files elsewhere. `tempRoot`: path::TempRoot() of the worker.
+bool IsWorkerLogPath(const std::wstring& logPath, const std::wstring& tempRoot);
 
 std::wstring QuoteArg(const std::wstring& arg);
 
