@@ -12,7 +12,7 @@ result still needs Windows.
   .NET needed), with the installer runtime in `runtime/` next to the executable:
 
   ```sh
-  mkdir -p ~/fluentsetup && tar -xzf fluentsetup-1.5.0-linux-x64.tar.gz -C ~/fluentsetup
+  mkdir -p ~/fluentsetup && tar -xzf fluentsetup-1.6.0-linux-x64.tar.gz -C ~/fluentsetup
   ~/fluentsetup/fsetup --version
   ```
 

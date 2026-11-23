@@ -3,6 +3,70 @@
 All notable changes to FluentSetup are listed here. Versions follow [Semantic Versioning](https://semver.org/); the
 release workflow publishes the section of the pushed tag as the release notes.
 
+## [1.6.0] - 2026-11-23
+
+### Security
+
+- Setup.exe, the elevated worker, the relocated uninstaller and the WinUI front end no longer load `version.dll`,
+  `RstrtMgr.dll` or `propsys.dll` from their own folder (Downloads, `%TEMP%`): they are delay-loaded after the
+  system32-only DLL search is set, and every program is linked with `/DEPENDENTLOADFLAG:0x800`. CI checks that the
+  shipped programs import nothing else statically (`scripts/check-imports.ps1`).
+- Repair runs the original Setup.exe only when the whole file matches the SHA-256 recorded at install time, is signed
+  by `update.signer` (and by the installed uninstaller's signer when that one is signed), and, when elevated, only
+  from a copy in an administrators-only folder. Installs recorded by 1.5.0 or older repair from the update source
+  instead. Elevated `/install-update` runs the downloaded setup from such a copy too.
+- Data folders removed with administrator rights are deleted through handles and never through a junction or
+  symbolic link swapped in during the removal.
+- Prerequisite installers stay locked from verification until they have started, and elevated setups keep them in an
+  administrators-only folder.
+- A per-machine install takes ownership of an empty install folder chosen by the user before writing to it, and
+  refuses a non-empty existing folder that standard users can change (`path.insecure`).
+- The elevated worker writes its log through a handle from the setup that started it instead of a path given on the
+  command line.
+- `update.signer` and prerequisite `signer` are compared with the certificate's subject common name only.
+- JSON numbers that are not integers or out of range are rejected instead of truncated.
+
+### Added
+
+- `install.legacyMsi` (`productCodes`, `upgradeCodes`): setup removes an earlier version installed by an MSI (WiX
+  and others) before writing files, per user or per machine, and reports a needed restart with exit code 3010. New
+  checks FS1684, FS1685. The project file reference has sections on moving from WiX / an MSI and from Squirrel or
+  Velopack.
+- Update channels: `update.channel` (default `stable`), a `channels` object in the update feed next to the stable
+  fields older versions read, `/channel` for Setup.exe, `/check-update` and `/install-update` (Setup.exe and
+  `/install-update` remember it for later updates), and `fsetup build --feed latest.json --feed-channel beta`, which updates only that channel of an existing
+  feed. FS1711.
+- `signing.files` reuses signed copies of unchanged files (`%LocalAppData%\FluentSetup\cache`, `--no-cache` signs
+  again), so a timestamp no longer changes them on every build: rebuilds, differential updates and upgrades treat
+  them as unchanged.
+- New guides: `docs/enterprise.md` (Intune, Configuration Manager, Group Policy) and `docs/updates.md` (checking for
+  and installing updates from the app).
+- Builder app: `files.variantSelection`, `output.codeFilter`, `signing.trustedSigning.excludeCredentials`, any
+  `ui.defaultLanguage`, MSI migration and the update channel can be edited; the Problems list is translated.
+
+### Changed
+
+- The JSON schema accepts what the builder writes (`null` for unset objects, `""` for unset strings) and `$(Name)`
+  placeholders wherever a value is checked against a pattern; `fsetup init` output validates without errors.
+- File collection diagnostics have their own codes: FS1111 → FS1120, FS1112 → FS1121, FS1113 → FS1122,
+  FS1114 → FS1123, FS1115 → FS1124 (FS1111–FS1119 stay the variant checks).
+- Builder app: Save As to another folder rewrites the project's relative paths; New, Open and recent projects are
+  unavailable during a build and closing the window asks to cancel the build and lets it clean up; text that cannot
+  be read back (installer strings, multi-language texts, exit codes) is reported as an error (FS0901–FS0904) instead
+  of being dropped on save; validation runs in the background.
+
+### Fixed
+
+- `--arch` (and the architecture MSBuild passes from the runtime identifier) now also applies to `{Architecture}` in
+  `output.fileName` and the update asset name: x64 and Arm64 builds of one project no longer overwrite each other.
+- With variants, a Setup.exe built earlier into a variant's folder is no longer packed, and FS1110 (main program
+  missing) is checked for every variant.
+- `fsetup build --feed-url` / `--feed-notes` are checked before the build instead of after writing Setup.exe;
+  `--define=Name=Value` is accepted.
+- FluentSetup.MSBuild: a `FluentSetupDefines` value ending in `\` no longer swallows the next argument.
+- Documentation: `files.variantSelection` is documented in the project file reference; leftovers of the `fluentsetup`
+  command name and broken links are fixed.
+
 ## [1.5.0] - 2026-11-19
 
 ### Added

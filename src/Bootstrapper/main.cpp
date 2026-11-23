@@ -29,7 +29,7 @@ using namespace fsetup;
 
 namespace {
 
-constexpr wchar_t kProductVersion[] = L"1.5.0";
+constexpr wchar_t kProductVersion[] = L"1.6.0";
 
 DWORD OsBuild() {
     using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
